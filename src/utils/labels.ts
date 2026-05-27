@@ -1,0 +1,61 @@
+import { CourtZone, ErrorType, FrameSide, MatchEvent, MatchStatus, PlayerPosition, PlayerUsualZone } from '../domain/types';
+
+export const statusLabel: Record<MatchStatus, string> = {
+  draft: 'Borrador',
+  live: 'En vivo',
+  period_break: 'Entretiempo',
+  finished: 'Finalizado',
+  cancelled: 'Cancelado',
+};
+
+export const positionLabel: Record<PlayerPosition, string> = {
+  Wing: 'Ala',
+  Center: 'Centro',
+  Shooter: 'Atacante',
+  Defender: 'Defensa',
+  Pivot: 'Pivote',
+};
+
+export const usualZoneLabel: Record<PlayerUsualZone, string> = {
+  izquierda: 'Izquierda',
+  central: 'Central',
+  derecha: 'Derecha',
+};
+
+export const zoneLabel: Record<CourtZone, string> = {
+  'left-wing': 'Zona izquierda',
+  'left-center': 'Zona izquierda',
+  center: 'Zona central',
+  'right-center': 'Zona derecha',
+  'right-wing': 'Zona derecha',
+  backcourt: 'Fondo',
+};
+
+export const frameLabel: Record<FrameSide, string> = {
+  'left-frame': 'Marco izquierdo',
+  'right-frame': 'Marco derecho',
+};
+
+export const errorLabel: Record<ErrorType, string> = {
+  'missed-frame': 'No toca el marco',
+  'forbidden-zone': 'Zona prohibida',
+  'bad-rebound': 'Rebote inválido',
+  'dropped-ball': 'Pelota caída',
+  'third-pass': 'Tercer pase',
+  turnover: 'Pérdida',
+  'defensive-block': 'Bloqueo defensivo',
+  other: 'Error propio',
+};
+
+export const eventKindLabel = (event: MatchEvent) => {
+  switch (event.kind) {
+    case 'point':
+      return event.scoringTeam === 'uruguay' ? 'Punto Uruguay' : 'Punto rival';
+    case 'error':
+      return event.team === 'uruguay' ? 'Error propio' : 'Error rival';
+    case 'substitution':
+      return 'Cambio';
+    default:
+      return 'Acción';
+  }
+};
