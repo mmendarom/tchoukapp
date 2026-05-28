@@ -45,6 +45,16 @@ Notas:
 - No hay lint configurado actualmente.
 - Exportacion del resumen final figura como pendiente / futura iteracion.
 
+## 2026-05-28 - Codex development operating system
+
+Se creo una capa liviana de documentacion para que el trabajo futuro con Codex siga Spec Driven Development y proteja el MVP estable.
+
+- `AGENTS.md` ahora funciona como entrada concisa para Codex.
+- Se agregaron guias de roles en `docs/agents` para producto/dominio, arquitectura, UX mobile, estado/persistencia, QA/testing y release/git.
+- Se agregaron workflows en `docs/workflows` para SDD, implementacion de features, bugfixes y feedback de campo.
+- Se agregaron checklists en `docs/checklists` para pre-implementacion, pre-release y field testing.
+- No se cambio comportamiento de la app ni codigo de produccion.
+
 ## 2026-05-27 - Court map accuracy, landscape and animations
 
 Se implemento la spec `docs/specs/001-court-map-landscape-accuracy-animations.md`.
