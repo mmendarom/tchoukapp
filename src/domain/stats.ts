@@ -1,6 +1,8 @@
 import {
   CourtZone,
+  DefenseEvent,
   ErrorEvent,
+  ErrorType,
   LineupSnapshot,
   Match,
   MatchEvent,
@@ -11,6 +13,13 @@ import {
 
 export type PlayerStat = {
   playerId: string;
+  total: number;
+};
+
+export type PlayerErrorSummary = {
+  playerId: string;
+  faltas: number;
+  puntosEnContra: number;
   total: number;
 };
 
@@ -31,13 +40,18 @@ const isPointEvent = (event: MatchEvent): event is PointEvent => event.kind === 
 
 const isErrorEvent = (event: MatchEvent): event is ErrorEvent => event.kind === 'error';
 
+const isDefenseEvent = (event: MatchEvent): event is DefenseEvent => event.kind === 'defense';
+
+export const isTrackedErrorType = (errorType: ErrorType | string | undefined): errorType is 'falta' | 'punto_en_contra' =>
+  errorType === 'falta' || errorType === 'punto_en_contra';
+
 const getScoringTeam = (event: MatchEvent): TeamSide | undefined => {
   if (isPointEvent(event)) {
     return event.scoringTeam;
   }
 
-  if (isErrorEvent(event)) {
-    return event.pointAwardedTo;
+  if (isErrorEvent(event) && event.team === 'uruguay' && event.errorType === 'punto_en_contra') {
+    return 'opponent';
   }
 
   return undefined;
@@ -86,7 +100,7 @@ export function getErrorsByPlayer(events: MatchEvent[]): PlayerStat[] {
   const totals = new Map<string, number>();
 
   events.filter(isErrorEvent).forEach((event) => {
-    if (event.team !== 'uruguay' || !event.playerId) {
+    if (event.team !== 'uruguay' || !event.playerId || !isTrackedErrorType(event.errorType)) {
       return;
     }
 
@@ -94,6 +108,50 @@ export function getErrorsByPlayer(events: MatchEvent[]): PlayerStat[] {
   });
 
   return sortByTotalDesc(Array.from(totals, ([playerId, total]) => ({ playerId, total })));
+}
+
+export function getDefensesByPlayer(events: MatchEvent[]): PlayerStat[] {
+  const totals = new Map<string, number>();
+
+  events.filter(isDefenseEvent).forEach((event) => {
+    totals.set(event.playerId, (totals.get(event.playerId) ?? 0) + 1);
+  });
+
+  return sortByTotalDesc(Array.from(totals, ([playerId, total]) => ({ playerId, total })));
+}
+
+export function getErrorsByTypeByPlayer(events: MatchEvent[]): PlayerErrorSummary[] {
+  const totals = new Map<string, PlayerErrorSummary>();
+
+  events.filter(isErrorEvent).forEach((event) => {
+    if (event.team !== 'uruguay' || !event.playerId || !isTrackedErrorType(event.errorType)) {
+      return;
+    }
+
+    const summary = totals.get(event.playerId) ?? {
+      playerId: event.playerId,
+      faltas: 0,
+      puntosEnContra: 0,
+      total: 0,
+    };
+
+    if (event.errorType === 'falta') {
+      summary.faltas += 1;
+    }
+
+    if (event.errorType === 'punto_en_contra') {
+      summary.puntosEnContra += 1;
+    }
+
+    summary.total += 1;
+    totals.set(event.playerId, summary);
+  });
+
+  return sortByTotalDesc(Array.from(totals.values()));
+}
+
+export function getPlayerErrorSummary(events: MatchEvent[]) {
+  return getErrorsByTypeByPlayer(events);
 }
 
 export function getPointsByZone(events: MatchEvent[], team: TeamSide = 'uruguay'): ZoneStat[] {

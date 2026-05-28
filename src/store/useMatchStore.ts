@@ -20,6 +20,7 @@ import { getCurrentLineup } from '../domain/stats';
 import { appStorage, STORAGE_KEYS } from '../storage/asyncStorage';
 
 type LiveEventAction = 'goal' | 'miss' | 'block' | 'fault' | 'turnover';
+type TrackableErrorType = 'falta' | 'punto_en_contra';
 
 type MatchState = {
   players: Player[];
@@ -41,6 +42,8 @@ type MatchState = {
     frame?: FrameSide;
     landingLocation?: CourtLocation;
   }) => void;
+  recordDefense: (playerId: string) => void;
+  recordError: (playerId: string, errorType: TrackableErrorType) => void;
   substitutePlayer: (input: { playerOutId: string; playerInId: string }) => void;
   undoLastEvent: () => void;
   advancePeriod: () => void;
@@ -106,6 +109,14 @@ const getCurrentPeriod = (match: Match) =>
 const canRecordInMatch = (match: Match) =>
   match.status === 'live' && getCurrentPeriod(match)?.status === 'live';
 
+const isPlayerOnCourt = (match: Match, playerId?: string) => {
+  if (!playerId) {
+    return false;
+  }
+
+  return Boolean(getCurrentLineup(match, 'uruguay')?.playerIds.includes(playerId));
+};
+
 const getPeriodRemainingSeconds = (period: MatchPeriodState, nowMs = Date.now()) => {
   if (!period.periodStartedAt) {
     return Math.max(period.remainingSeconds, 0);
@@ -130,15 +141,9 @@ const stopPeriodTimer = (period: MatchPeriodState, nowIso = new Date().toISOStri
 
 const getErrorType = (type: LiveEventAction): ErrorType => {
   switch (type) {
-    case 'miss':
-      return 'missed-frame';
-    case 'block':
-      return 'defensive-block';
-    case 'turnover':
-      return 'turnover';
     case 'fault':
     default:
-      return 'other';
+      return 'falta';
   }
 };
 
@@ -378,6 +383,10 @@ export const useMatchStore = create<MatchState>()(
               return match;
             }
 
+            if (type !== 'goal' && !isPlayerOnCourt(normalized, playerId)) {
+              return match;
+            }
+
             const lineupSnapshotId = getCurrentLineup(normalized, 'uruguay')?.id;
             const baseEvent = {
               id: createId(),
@@ -404,11 +413,79 @@ export const useMatchStore = create<MatchState>()(
                     kind: 'error',
                     team: side,
                     playerId,
-                    zone,
-                    frame,
                     errorType: getErrorType(type),
-                    pointAwardedTo: undefined,
+                    pointAwardedTo: getErrorType(type) === 'punto_en_contra' ? 'opponent' : undefined,
                   };
+
+            return {
+              ...normalized,
+              events: [event, ...normalized.events],
+            };
+          }),
+        }));
+      },
+      recordDefense: (playerId) => {
+        const { activeMatchId } = get();
+
+        if (!activeMatchId) {
+          return;
+        }
+
+        set((state) => ({
+          matches: state.matches.map((match) => {
+            const normalized = normalizeMatch(match);
+
+            if (normalized.id !== activeMatchId || !canRecordInMatch(normalized) || !isPlayerOnCourt(normalized, playerId)) {
+              return match;
+            }
+
+            const event: MatchEvent = {
+              id: createId(),
+              matchId: normalized.id,
+              periodNumber: normalized.currentPeriod,
+              timestamp: new Date().toISOString(),
+              clock: { ...normalized.clock, period: normalized.currentPeriod },
+              lineupSnapshotId: getCurrentLineup(normalized, 'uruguay')?.id,
+              kind: 'defense',
+              team: 'uruguay',
+              playerId,
+            };
+
+            return {
+              ...normalized,
+              events: [event, ...normalized.events],
+            };
+          }),
+        }));
+      },
+      recordError: (playerId, errorType) => {
+        const { activeMatchId } = get();
+
+        if (!activeMatchId) {
+          return;
+        }
+
+        set((state) => ({
+          matches: state.matches.map((match) => {
+            const normalized = normalizeMatch(match);
+
+            if (normalized.id !== activeMatchId || !canRecordInMatch(normalized) || !isPlayerOnCourt(normalized, playerId)) {
+              return match;
+            }
+
+            const event: MatchEvent = {
+              id: createId(),
+              matchId: normalized.id,
+              periodNumber: normalized.currentPeriod,
+              timestamp: new Date().toISOString(),
+              clock: { ...normalized.clock, period: normalized.currentPeriod },
+              lineupSnapshotId: getCurrentLineup(normalized, 'uruguay')?.id,
+              kind: 'error',
+              team: 'uruguay',
+              playerId,
+              errorType,
+              pointAwardedTo: errorType === 'punto_en_contra' ? 'opponent' : undefined,
+            };
 
             return {
               ...normalized,

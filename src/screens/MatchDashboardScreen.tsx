@@ -7,7 +7,9 @@ import { StatCard } from '../components/StatCard';
 import { createTacticalInsights } from '../domain/insights';
 import {
   calculateScore,
+  getDefensesByPlayer,
   getErrorsByPlayer,
+  getErrorsByTypeByPlayer,
   getOpponentPointsByZone,
   getPlusMinusByLineup,
   getPointsByZone,
@@ -43,6 +45,8 @@ export function MatchDashboardScreen({ navigation, route }: Props) {
   const score = calculateScore(match.events);
   const topScorers = getTopScorers(match.events);
   const errorsByPlayer = getErrorsByPlayer(match.events);
+  const errorBreakdown = getErrorsByTypeByPlayer(match.events);
+  const defensesByPlayer = getDefensesByPlayer(match.events);
   const pointsByZone = getPointsByZone(match.events);
   const opponentPointsByZone = getOpponentPointsByZone(match.events);
   const plusMinusByLineup = getPlusMinusByLineup(match);
@@ -73,6 +77,30 @@ export function MatchDashboardScreen({ navigation, route }: Props) {
           {topScorers.map((stat) => (
             <Text key={stat.playerId} style={styles.metric}>
               {playerLabel(stat.playerId)}: {stat.total}
+            </Text>
+          ))}
+        </View>
+        <View style={[styles.panel, isPhone && styles.panelPhone]}>
+          <Text style={styles.sectionTitle}>Defensas</Text>
+          {defensesByPlayer.map((stat) => (
+            <Text key={stat.playerId} style={styles.metric}>
+              {playerLabel(stat.playerId)}: {stat.total}
+            </Text>
+          ))}
+        </View>
+        <View style={[styles.panel, isPhone && styles.panelPhone]}>
+          <Text style={styles.sectionTitle}>Faltas</Text>
+          {errorBreakdown.filter((stat) => stat.faltas > 0).map((stat) => (
+            <Text key={stat.playerId} style={styles.metric}>
+              {playerLabel(stat.playerId)}: {stat.faltas}
+            </Text>
+          ))}
+        </View>
+        <View style={[styles.panel, isPhone && styles.panelPhone]}>
+          <Text style={styles.sectionTitle}>Puntos en contra</Text>
+          {errorBreakdown.filter((stat) => stat.puntosEnContra > 0).map((stat) => (
+            <Text key={stat.playerId} style={styles.metric}>
+              {playerLabel(stat.playerId)}: {stat.puntosEnContra}
             </Text>
           ))}
         </View>

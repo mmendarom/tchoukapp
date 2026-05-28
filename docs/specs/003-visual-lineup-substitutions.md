@@ -1,0 +1,230 @@
+# Spec: Visual Lineup Substitutions
+
+## Estado
+
+Draft
+
+## Contexto
+
+Field testing showed that the current substitution flow works but is not visual enough for live match use.
+
+Current implementation observed:
+
+- `LineupSnapshot` stores `playerIds: string[]` with no explicit court position slots.
+- Initial lineups use 7 Uruguay players in `src/domain/mockData.ts` and `createDemoMatch`.
+- `getCurrentLineup` returns the latest lineup snapshot for Uruguay.
+- `LiveMatchScreen` derives:
+  - `onCourtPlayers` from current lineup `playerIds`.
+  - `benchPlayers` from players not in the current lineup.
+- Current substitution flow:
+  - Tap an on-court player to set `subOutId`.
+  - Tap a bench player to set `subInId`.
+  - Tap `Cambio`.
+- `substitutePlayer` replaces `playerOutId` with `playerInId` inside the current `playerIds` array.
+- A substitution event logs `playerOutId`, `playerInId`, and the new `lineupSnapshotId`.
+- Undo after substitution removes the substitution event and the created lineup snapshot.
+- Player `usualPlayingZone` exists as metadata only and must not restrict where players can play.
+
+## Problema
+
+During practice, staff needs to understand the current lineup visually. The current list-based substitution flow does not show players positioned on a court and makes it harder to reason about who is occupying each area.
+
+Drag and drop could feel natural, but it may add gesture risk on phones, interact poorly with scroll/tap layers, and slow live recording if introduced too early.
+
+## Objetivos
+
+- Show a small court with current Uruguay players positioned on it.
+- Represent each player with a small avatar/card using initials and player name.
+- Show bench players separately.
+- Implement Stage 1 as tap-to-swap.
+- Record the existing substitution event when a swap is confirmed.
+- Keep all players eligible for any position.
+- Keep preferred position as metadata only.
+- Preserve undo, cancel, timer, point recording, court map, period summaries, and final summaries.
+- Keep the UI usable on phone and tablet.
+
+## No objetivos
+
+- No drag/drop in Stage 1 unless implementation risk is clearly low.
+- No real player photos now.
+- No backend, auth, cloud sync, paid services, or remote roster storage.
+- No restrictions based on preferred position.
+- No complete tactical formation engine.
+- No changes to point `landingLocation`.
+
+## Usuarios / Casos de uso
+
+- Uruguay coaching staff checking the current lineup during live play.
+- Staff taps a player on the visual court, taps a bench player, and records a substitution.
+- Staff reviews the current lineup without reading a dense list.
+- Staff can place any bench player into any current slot regardless of preferred position.
+
+## Flujo esperado
+
+### Stage 1: tap-to-swap
+
+1. See current players on a small court.
+2. See bench players in a separate list.
+3. Tap an on-court player/slot.
+4. Tap a bench player.
+5. Tap `Cambio` or confirm the swap.
+6. Store a substitution event using current compatibility fields.
+
+Rules:
+
+- Selected on-court slot is required.
+- Selected bench player is required.
+- Player preferred position does not block selection.
+- The player entering replaces the player currently in that slot.
+- Undo restores the previous lineup by removing the latest lineup snapshot.
+
+### Stage 2: drag/drop
+
+1. Drag a bench player onto a court slot.
+2. Automatically swap with the player currently there.
+3. Keep tap-to-swap as fallback if drag/drop is added.
+
+Stage 2 should happen only after Stage 1 is stable on real devices.
+
+## Requisitos funcionales
+
+- Add a visual lineup court component or section.
+- Show 7 current court slots based on the current app assumption that lineups contain 7 player IDs.
+- Keep the 7 slots neutral for now; do not name them as tactical positions.
+- Use initials plus first/last name for player avatar cards.
+- Show bench list separately.
+- Implement tap-to-swap in Stage 1.
+- Continue recording substitution events with `playerOutId`, `playerInId`, and `lineupSnapshotId`.
+- Preserve current substitution compatibility for summaries and plus/minus.
+- Keep all players available for all slots.
+- Preferred position can be displayed as metadata if useful, but cannot restrict substitutions.
+- Empty or legacy lineups without slot metadata must still render safely.
+
+## Requisitos no funcionales
+
+- Offline-first.
+- TypeScript strict.
+- No unnecessary dependencies in Stage 1.
+- Keep touch targets comfortable on phone and tablet.
+- Respect safe areas and native system bars.
+- Keep visible UI text in Spanish.
+- Keep substitution recording fast during a live match.
+
+## Impacto en modelo de datos
+
+Current lineup model:
+
+```ts
+type LineupSnapshot = {
+  id: string;
+  matchId: string;
+  team: TeamSide;
+  playerIds: string[];
+  capturedAt: string;
+  clock: MatchClock;
+};
+```
+
+There are no explicit court position slots today.
+
+Stage 1 options:
+
+- Preferred safe option: keep `playerIds` as the persisted source of lineup order and derive 7 visual slots from array index.
+- Optional future enhancement: add explicit slot metadata only if field testing proves the app needs named tactical positions.
+
+Because current lineups store 7 players, Stage 1 should represent 7 slots. These slots must be neutral visual positions, not named tactical roles and not restrictions.
+
+Compatibility:
+
+- Existing `SubstitutionEvent` can remain compatible.
+- Existing lineup snapshots without slot metadata can render from `playerIds`.
+- If slot metadata is introduced later, old snapshots must still render.
+
+## Impacto en UI
+
+- Replace or augment the current `Jugador en cancha` list with a small court lineup.
+- Court should show 7 stable player cards with initials and name.
+- Bench list remains separate.
+- Selection state should clearly show:
+  - selected court player/slot.
+  - selected bench player.
+  - pending swap.
+- `Cambio` action should remain obvious and tappable.
+- Layout must work on phone portrait, phone landscape, and tablet.
+- Visual layers must not break tap accuracy for the point court map.
+
+## Impacto en estado/persistencia
+
+- Stage 1 can reuse current `substitutePlayer` behavior.
+- No need to persist derived UI selection state.
+- Event stream and lineup snapshots remain the source of truth.
+- Undo behavior should remain unchanged.
+- Cancel/reset behavior should remain unchanged.
+- If future explicit slots are introduced, migration/normalization must preserve old snapshots.
+
+## Testing plan
+
+Unit/domain tests:
+
+- `getCurrentLineup` still returns the latest snapshot.
+- Tap-to-swap helper, if extracted, replaces the selected slot/player and preserves lineup length.
+- Any player can enter any slot regardless of `usualPlayingZone`.
+- Legacy lineup snapshots with only `playerIds` render or derive slots safely.
+
+Store tests:
+
+- Substitution creates a new lineup snapshot.
+- Substitution event references the new snapshot.
+- Undo after substitution removes the event and snapshot.
+- Substitution cannot happen outside a live period.
+
+Manual QA:
+
+- Start match and period.
+- Verify 7 current players on the visual court.
+- Verify bench list.
+- Tap court player and bench player.
+- Record substitution.
+- Verify the players swap visually.
+- Undo and verify previous lineup returns.
+- Rotate phone and verify touch targets and layout.
+- Confirm point recording/court map still works.
+
+## Riesgos
+
+- Introducing named slots too early may imply tactical restrictions the product does not yet validate.
+- Drag/drop can conflict with scrolling and safe areas.
+- Drag/drop can be hard to use under field pressure.
+- Visual lineup can crowd the live match screen on small phones.
+- If lineup order is treated as tactical truth without validation, summaries may mislead staff.
+
+## Preguntas abiertas
+
+- Is the current `playerIds` order meaningful enough to map to visual slots?
+- Should the user be able to reorder two on-court players without recording a substitution?
+- Should substitutions require confirmation, or should tapping a bench player after selecting a court slot immediately record the swap?
+- Should the bench show jersey number, initials, full name, and preferred zone metadata?
+
+## Plan de implementacion
+
+See `docs/plans/003-visual-lineup-substitutions-plan.md`.
+
+## Checklist de aceptacion
+
+- [ ] Current lineup is shown on a small court.
+- [ ] 7 current players are represented from the current app lineup assumption.
+- [ ] Slots are neutral and unnamed for now.
+- [ ] Player cards show initials and name.
+- [ ] Bench players are shown separately.
+- [ ] Tap-to-swap works in Stage 1.
+- [ ] Substitution event is recorded.
+- [ ] New lineup snapshot is created.
+- [ ] Undo after substitution restores the previous lineup.
+- [ ] All players can play any position.
+- [ ] Preferred position remains metadata only.
+- [ ] No real photos are required.
+- [ ] Drag/drop is not included in Stage 1 unless explicitly approved after risk review.
+- [ ] Existing summaries and plus/minus remain compatible.
+- [ ] Point recording, court map, timer, undo, cancel, period summaries, and final summaries still work.
+- [ ] `npm test` passes.
+- [ ] `npx tsc --noEmit` passes.

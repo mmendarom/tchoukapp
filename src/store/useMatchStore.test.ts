@@ -1,6 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { calculatePeriodScore, calculateTotalScore, getErrorsByPlayerByPeriod, getScoreByPeriod } from '../domain/periodStats';
+import {
+  calculatePeriodScore,
+  calculateTotalScore,
+  getDefensesByPlayerByPeriod,
+  getErrorsByPlayerByPeriod,
+  getErrorsByTypeByPlayer,
+  getScoreByPeriod,
+} from '../domain/periodStats';
 import { useMatchStore } from './useMatchStore';
 
 const landingLocation = { x: 0.72, y: 0.44 };
@@ -68,10 +75,70 @@ describe('useMatchStore period stability', () => {
 
   it('undo after error updates period error stats', () => {
     createLivePeriodMatch();
-    useMatchStore.getState().recordEvent({ type: 'fault', side: 'uruguay', playerId: 'uru-01' });
+    useMatchStore.getState().recordError('mauro', 'falta');
     useMatchStore.getState().undoLastEvent();
 
     expect(getErrorsByPlayerByPeriod(getActiveMatch().events, 1)).toEqual([]);
+  });
+
+  it('records defense events for on-court players and undo removes them', () => {
+    createLivePeriodMatch();
+    useMatchStore.getState().recordDefense('mauro');
+
+    expect(getActiveMatch().events[0]).toMatchObject({ kind: 'defense', playerId: 'mauro', team: 'uruguay' });
+    expect(getDefensesByPlayerByPeriod(getActiveMatch().events, 1)).toEqual([{ playerId: 'mauro', total: 1 }]);
+
+    useMatchStore.getState().undoLastEvent();
+    expect(getDefensesByPlayerByPeriod(getActiveMatch().events, 1)).toEqual([]);
+  });
+
+  it('records falta without changing score', () => {
+    createLivePeriodMatch();
+    useMatchStore.getState().recordError('mauro', 'falta');
+
+    expect(getActiveMatch().events[0]).toMatchObject({ kind: 'error', playerId: 'mauro', errorType: 'falta' });
+    expect(calculateTotalScore(getActiveMatch().events)).toEqual({ uruguay: 0, opponent: 0 });
+    expect(getErrorsByTypeByPlayer(getActiveMatch().events)).toEqual([
+      { playerId: 'mauro', faltas: 1, puntosEnContra: 0, total: 1 },
+    ]);
+  });
+
+  it('records punto en contra without landingLocation and adds one rival point', () => {
+    createLivePeriodMatch();
+    useMatchStore.getState().recordError('mauro', 'punto_en_contra');
+
+    const event = getActiveMatch().events[0];
+    expect(event).toMatchObject({ kind: 'error', playerId: 'mauro', errorType: 'punto_en_contra', pointAwardedTo: 'opponent' });
+    expect('landingLocation' in event).toBe(false);
+    expect(calculateTotalScore(getActiveMatch().events)).toEqual({ uruguay: 0, opponent: 1 });
+  });
+
+  it('undo after punto en contra subtracts the rival point', () => {
+    createLivePeriodMatch();
+    useMatchStore.getState().recordError('mauro', 'punto_en_contra');
+    useMatchStore.getState().undoLastEvent();
+
+    expect(calculateTotalScore(getActiveMatch().events)).toEqual({ uruguay: 0, opponent: 0 });
+  });
+
+  it('does not record defense or errors for bench players', () => {
+    createLivePeriodMatch();
+    useMatchStore.getState().recordDefense('tadeo');
+    useMatchStore.getState().recordError('tadeo', 'falta');
+    useMatchStore.getState().recordError('tadeo', 'punto_en_contra');
+
+    expect(getActiveMatch().events).toHaveLength(0);
+  });
+
+  it('prevents defense and error events outside a live period', () => {
+    const state = useMatchStore.getState();
+    const matchId = state.createDemoMatch();
+    state.startMatch(matchId);
+
+    useMatchStore.getState().recordDefense('mauro');
+    useMatchStore.getState().recordError('mauro', 'falta');
+
+    expect(getActiveMatch().events).toHaveLength(0);
   });
 
   it('cancelling a draft match discards it and clears active state', () => {

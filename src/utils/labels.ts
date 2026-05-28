@@ -37,6 +37,8 @@ export const frameLabel: Record<FrameSide, string> = {
 };
 
 export const errorLabel: Record<ErrorType, string> = {
+  falta: 'Falta',
+  punto_en_contra: 'Punto en contra',
   'missed-frame': 'No toca el marco',
   'forbidden-zone': 'Zona prohibida',
   'bad-rebound': 'Rebote inválido',
@@ -47,12 +49,26 @@ export const errorLabel: Record<ErrorType, string> = {
   other: 'Error propio',
 };
 
+export const safeErrorLabel = (errorType: ErrorType | string | undefined) => {
+  if (errorType === 'falta') {
+    return 'Falta';
+  }
+
+  if (errorType === 'punto_en_contra') {
+    return 'Punto en contra';
+  }
+
+  return 'Error anterior';
+};
+
 export const eventKindLabel = (event: MatchEvent) => {
   switch (event.kind) {
     case 'point':
       return event.scoringTeam === 'uruguay' ? 'Punto Uruguay' : 'Punto rival';
     case 'error':
-      return event.team === 'uruguay' ? 'Error propio' : 'Error rival';
+      return event.team === 'uruguay' ? safeErrorLabel(event.errorType) : 'Error rival';
+    case 'defense':
+      return 'Defensa';
     case 'substitution':
       return 'Cambio';
     default:

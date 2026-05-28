@@ -56,4 +56,29 @@ describe('createTacticalInsights zone labels', () => {
 
     expect(insights.some((insight) => insight.id.startsWith('opponent-zone'))).toBe(false);
   });
+
+  it('creates defense and typed error insights without raw legacy values', () => {
+    const events: MatchEvent[] = [
+      point({ id: 'd-1', kind: 'defense', team: 'uruguay', playerId: 'p1' } as Partial<MatchEvent>),
+      point({ id: 'd-2', kind: 'defense', team: 'uruguay', playerId: 'p1' } as Partial<MatchEvent>),
+      point({ id: 'd-3', kind: 'defense', team: 'uruguay', playerId: 'p1' } as Partial<MatchEvent>),
+      point({ id: 'f-1', kind: 'error', team: 'uruguay', playerId: 'p2', errorType: 'falta' } as Partial<MatchEvent>),
+      point({ id: 'f-2', kind: 'error', team: 'uruguay', playerId: 'p2', errorType: 'falta' } as Partial<MatchEvent>),
+      point({ id: 'p-1', kind: 'error', team: 'uruguay', playerId: 'p3', errorType: 'punto_en_contra' } as Partial<MatchEvent>),
+      point({ id: 'p-2', kind: 'error', team: 'uruguay', playerId: 'p3', errorType: 'punto_en_contra' } as Partial<MatchEvent>),
+      point({ id: 'p-3', kind: 'error', team: 'uruguay', playerId: 'p4', errorType: 'punto_en_contra' } as Partial<MatchEvent>),
+      point({ id: 'legacy', kind: 'error', team: 'uruguay', playerId: 'p5', errorType: 'turnover' } as Partial<MatchEvent>),
+    ];
+
+    const text = createTacticalInsights({ events, lineupSnapshots: [], players: [] })
+      .map((insight) => `${insight.title} ${insight.description}`)
+      .join(' ');
+
+    expect(text).toContain('Defensor clave');
+    expect(text).toContain('Atencion con faltas');
+    expect(text).toContain('Puntos en contra acumulados');
+    expect(text).toContain('Puntos regalados');
+    expect(text).not.toContain('turnover');
+    expect(text).not.toContain('punto_en_contra');
+  });
 });

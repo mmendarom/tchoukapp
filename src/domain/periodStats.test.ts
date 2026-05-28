@@ -4,8 +4,12 @@ import {
   calculatePeriodScore,
   calculateTotalScore,
   generatePeriodInsights,
+  getDefensesByPlayer,
+  getDefensesByPlayerByPeriod,
   getErrorsByPlayerByPeriod,
+  getErrorsByTypeByPlayer,
   getEventsByPeriod,
+  getPlayerErrorSummary,
   getTopScorersByPeriod,
 } from './periodStats';
 import { Match, MatchEvent } from './types';
@@ -36,7 +40,7 @@ const baseEvents: MatchEvent[] = [
     clock: { period: 1, secondsElapsed: 4 },
     team: 'uruguay',
     playerId: 'p1',
-    errorType: 'turnover',
+    errorType: 'falta',
   }),
 ];
 
@@ -80,6 +84,54 @@ describe('periodStats', () => {
 
   it('getErrorsByPlayerByPeriod returns errors for the period', () => {
     expect(getErrorsByPlayerByPeriod(baseEvents, 1)).toEqual([{ playerId: 'p1', total: 1 }]);
+  });
+
+  it('counts defenses by player and period', () => {
+    const defenseEvents: MatchEvent[] = [
+      event({ id: 'd-1', kind: 'defense', playerId: 'p1', team: 'uruguay' } as Partial<MatchEvent>),
+      event({ id: 'd-2', kind: 'defense', playerId: 'p1', team: 'uruguay' } as Partial<MatchEvent>),
+      event({ id: 'd-3', kind: 'defense', periodNumber: 2, clock: { period: 2, secondsElapsed: 1 }, playerId: 'p2', team: 'uruguay' } as Partial<MatchEvent>),
+    ];
+
+    expect(getDefensesByPlayer(defenseEvents)).toEqual([
+      { playerId: 'p1', total: 2 },
+      { playerId: 'p2', total: 1 },
+    ]);
+    expect(getDefensesByPlayerByPeriod(defenseEvents, 1)).toEqual([{ playerId: 'p1', total: 2 }]);
+  });
+
+  it('counts typed errors by player and keeps total errors', () => {
+    const errorEvents: MatchEvent[] = [
+      event({ id: 'f-1', kind: 'error', team: 'uruguay', playerId: 'p1', errorType: 'falta' } as Partial<MatchEvent>),
+      event({ id: 'p-1', kind: 'error', team: 'uruguay', playerId: 'p1', errorType: 'punto_en_contra' } as Partial<MatchEvent>),
+      event({ id: 'p-2', kind: 'error', team: 'uruguay', playerId: 'p2', errorType: 'punto_en_contra' } as Partial<MatchEvent>),
+    ];
+
+    expect(getErrorsByTypeByPlayer(errorEvents)).toEqual([
+      { playerId: 'p1', faltas: 1, puntosEnContra: 1, total: 2 },
+      { playerId: 'p2', faltas: 0, puntosEnContra: 1, total: 1 },
+    ]);
+    expect(getPlayerErrorSummary(errorEvents)[0]).toMatchObject({ playerId: 'p1', total: 2 });
+  });
+
+  it('punto en contra adds one opponent point and falta does not change score', () => {
+    const errorEvents: MatchEvent[] = [
+      event({ id: 'f-1', kind: 'error', team: 'uruguay', playerId: 'p1', errorType: 'falta' } as Partial<MatchEvent>),
+      event({ id: 'p-1', kind: 'error', team: 'uruguay', playerId: 'p1', errorType: 'punto_en_contra' } as Partial<MatchEvent>),
+    ];
+
+    expect(calculateTotalScore(errorEvents)).toEqual({ uruguay: 0, opponent: 1 });
+    expect(calculatePeriodScore(errorEvents, 1)).toEqual({ uruguay: 0, opponent: 1 });
+  });
+
+  it('legacy errors are safe and do not affect score or typed totals', () => {
+    const legacyEvents: MatchEvent[] = [
+      event({ id: 'legacy-1', kind: 'error', team: 'uruguay', playerId: 'p1', errorType: 'turnover' } as Partial<MatchEvent>),
+    ];
+
+    expect(calculateTotalScore(legacyEvents)).toEqual({ uruguay: 0, opponent: 0 });
+    expect(getErrorsByPlayerByPeriod(legacyEvents, 1)).toEqual([]);
+    expect(getErrorsByTypeByPlayer(legacyEvents)).toEqual([]);
   });
 
   it('generatePeriodInsights creates transparent period-break cards', () => {

@@ -1,6 +1,8 @@
 import {
   CourtZone,
+  DefenseEvent,
   ErrorEvent,
+  ErrorType,
   Match,
   MatchEvent,
   MatchPeriod,
@@ -13,6 +15,13 @@ import { getMostFrequentLandingZones } from './court';
 
 export type PlayerPeriodStat = {
   playerId: string;
+  total: number;
+};
+
+export type PlayerErrorPeriodSummary = {
+  playerId: string;
+  faltas: number;
+  puntosEnContra: number;
   total: number;
 };
 
@@ -32,7 +41,11 @@ export const PERIOD_DURATION_SECONDS = 15 * 60;
 
 const isPointEvent = (event: MatchEvent): event is PointEvent => event.kind === 'point';
 const isErrorEvent = (event: MatchEvent): event is ErrorEvent => event.kind === 'error';
+const isDefenseEvent = (event: MatchEvent): event is DefenseEvent => event.kind === 'defense';
 const isSubstitutionEvent = (event: MatchEvent): event is SubstitutionEvent => event.kind === 'substitution';
+
+const isTrackedErrorType = (errorType: ErrorType | string | undefined): errorType is 'falta' | 'punto_en_contra' =>
+  errorType === 'falta' || errorType === 'punto_en_contra';
 
 const getEventPeriod = (event: MatchEvent): MatchPeriod => event.periodNumber ?? event.clock.period;
 
@@ -43,8 +56,8 @@ const scoringTeamForEvent = (event: MatchEvent): TeamSide | undefined => {
     return event.scoringTeam;
   }
 
-  if (isErrorEvent(event)) {
-    return event.pointAwardedTo;
+  if (isErrorEvent(event) && event.team === 'uruguay' && event.errorType === 'punto_en_contra') {
+    return 'opponent';
   }
 
   return undefined;
@@ -115,12 +128,64 @@ export function getErrorsByPlayer(events: MatchEvent[]): PlayerPeriodStat[] {
   const totals = new Map<string, number>();
 
   events.filter(isErrorEvent).forEach((event) => {
-    if (event.team === 'uruguay') {
+    if (event.team === 'uruguay' && isTrackedErrorType(event.errorType)) {
       increment(totals, event.playerId);
     }
   });
 
   return toSortedStats(totals).map(({ key, total }) => ({ playerId: key, total }));
+}
+
+export function getDefensesByPlayerByPeriod(events: MatchEvent[], periodNumber: MatchPeriod): PlayerPeriodStat[] {
+  return getDefensesByPlayer(getEventsByPeriod(events, periodNumber));
+}
+
+export function getDefensesByPlayer(events: MatchEvent[]): PlayerPeriodStat[] {
+  const totals = new Map<string, number>();
+
+  events.filter(isDefenseEvent).forEach((event) => {
+    increment(totals, event.playerId);
+  });
+
+  return toSortedStats(totals).map(({ key, total }) => ({ playerId: key, total }));
+}
+
+export function getErrorsByTypeByPlayerByPeriod(events: MatchEvent[], periodNumber: MatchPeriod): PlayerErrorPeriodSummary[] {
+  return getErrorsByTypeByPlayer(getEventsByPeriod(events, periodNumber));
+}
+
+export function getErrorsByTypeByPlayer(events: MatchEvent[]): PlayerErrorPeriodSummary[] {
+  const totals = new Map<string, PlayerErrorPeriodSummary>();
+
+  events.filter(isErrorEvent).forEach((event) => {
+    if (event.team !== 'uruguay' || !event.playerId || !isTrackedErrorType(event.errorType)) {
+      return;
+    }
+
+    const summary = totals.get(event.playerId) ?? {
+      playerId: event.playerId,
+      faltas: 0,
+      puntosEnContra: 0,
+      total: 0,
+    };
+
+    if (event.errorType === 'falta') {
+      summary.faltas += 1;
+    }
+
+    if (event.errorType === 'punto_en_contra') {
+      summary.puntosEnContra += 1;
+    }
+
+    summary.total += 1;
+    totals.set(event.playerId, summary);
+  });
+
+  return Array.from(totals.values()).sort((a, b) => b.total - a.total);
+}
+
+export function getPlayerErrorSummary(events: MatchEvent[]) {
+  return getErrorsByTypeByPlayer(events);
 }
 
 export function getPointsByZoneForEvents(events: MatchEvent[], team: TeamSide = 'uruguay'): ZonePeriodStat[] {
@@ -176,6 +241,11 @@ export function generatePeriodInsights(match: Match, periodNumber: MatchPeriod, 
   const periodScore = calculatePeriodScore(match.events, periodNumber);
   const topScorer = getTopScorersByPeriod(match.events, periodNumber)[0];
   const topError = getErrorsByPlayerByPeriod(match.events, periodNumber)[0];
+  const topDefense = getDefensesByPlayerByPeriod(match.events, periodNumber)[0];
+  const errorBreakdown = getErrorsByTypeByPlayerByPeriod(match.events, periodNumber);
+  const topFalta = [...errorBreakdown].sort((a, b) => b.faltas - a.faltas)[0];
+  const topPuntoEnContra = [...errorBreakdown].sort((a, b) => b.puntosEnContra - a.puntosEnContra)[0];
+  const puntosEnContraTotal = errorBreakdown.reduce((sum, stat) => sum + stat.puntosEnContra, 0);
   const opponentZone = getMostFrequentLandingZones(periodEvents, 'opponent')[0];
   const uruguayZone = getMostFrequentLandingZones(periodEvents, 'uruguay')[0];
   const insights: PeriodInsight[] = [];
@@ -195,6 +265,42 @@ export function generatePeriodInsights(match: Match, periodNumber: MatchPeriod, 
       title: 'Atencion con errores',
       description: `${getPlayerName(topError.playerId)} acumulo ${topError.total} errores en este tiempo.`,
       suggestedAction: 'Considerar bajarle carga o hacer un cambio temporal.',
+    });
+  }
+
+  if (topDefense && topDefense.total >= 3) {
+    insights.push({
+      severity: 'info',
+      title: 'Defensor clave',
+      description: `${getPlayerName(topDefense.playerId)} sumo ${topDefense.total} defensas en este tiempo.`,
+      suggestedAction: 'Mantenerlo como referencia defensiva si sostiene la cobertura.',
+    });
+  }
+
+  if (topFalta && topFalta.faltas >= 2) {
+    insights.push({
+      severity: topFalta.faltas >= 3 ? 'critical' : 'warning',
+      title: 'Atencion con faltas',
+      description: `${getPlayerName(topFalta.playerId)} acumulo ${topFalta.faltas} faltas.`,
+      suggestedAction: 'Revisar timing y toma de decisiones.',
+    });
+  }
+
+  if (topPuntoEnContra && topPuntoEnContra.puntosEnContra >= 2) {
+    insights.push({
+      severity: topPuntoEnContra.puntosEnContra >= 3 ? 'critical' : 'warning',
+      title: 'Puntos en contra acumulados',
+      description: `${getPlayerName(topPuntoEnContra.playerId)} acumula ${topPuntoEnContra.puntosEnContra} puntos en contra.`,
+      suggestedAction: 'Considerar ajuste defensivo o cambio temporal.',
+    });
+  }
+
+  if (puntosEnContraTotal >= 3) {
+    insights.push({
+      severity: puntosEnContraTotal >= 4 ? 'critical' : 'warning',
+      title: 'Puntos regalados',
+      description: `Uruguay entrego ${puntosEnContraTotal} puntos en contra en este tiempo.`,
+      suggestedAction: 'Bajar riesgo en los tiros y priorizar seguridad.',
     });
   }
 

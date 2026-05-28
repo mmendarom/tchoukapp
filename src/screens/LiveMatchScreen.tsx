@@ -1,6 +1,6 @@
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { useEffect, useMemo, useState } from 'react';
-import { Alert, Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { Alert, Animated, Modal, Pressable, SafeAreaView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 
 import { ActionButton } from '../components/ActionButton';
 import { CourtMapInput } from '../components/CourtMapInput';
@@ -9,7 +9,7 @@ import { calculateTotalScore, formatPeriodName, formatTimer } from '../domain/pe
 import { getCurrentLineup } from '../domain/stats';
 import { CourtLocation, MatchEvent, Player } from '../domain/types';
 import { useMatchStore } from '../store/useMatchStore';
-import { errorLabel, eventKindLabel, statusLabel, zoneLabel } from '../utils/labels';
+import { eventKindLabel, safeErrorLabel, statusLabel, zoneLabel } from '../utils/labels';
 import { RootStackParamList } from '../utils/navigation';
 import { fontSize, spacing } from '../utils/responsive';
 
@@ -20,12 +20,21 @@ const getPlayerName = (players: Player[], playerId?: string) => {
   return player ? `#${player.number} ${player.lastName || player.firstName}` : 'Equipo';
 };
 
+const getPlayerShortName = (players: Player[], playerId?: string) => {
+  const player = players.find((item) => item.id === playerId);
+  return player ? player.lastName || player.firstName : 'Equipo';
+};
+
 const describeEvent = (event: MatchEvent, players: Player[]) => {
   switch (event.kind) {
     case 'point':
       return `${eventKindLabel(event)} - ${getPlayerName(players, event.playerId)} - ${zoneLabel[event.zone]}`;
     case 'error':
-      return `${eventKindLabel(event)} - ${getPlayerName(players, event.playerId)} - ${errorLabel[event.errorType]}`;
+      return event.errorType === 'punto_en_contra'
+        ? `Punto en contra de ${getPlayerName(players, event.playerId)} (+1 rival)`
+        : `${safeErrorLabel(event.errorType)} de ${getPlayerName(players, event.playerId)}`;
+    case 'defense':
+      return `Defensa de ${getPlayerName(players, event.playerId)}`;
     case 'substitution':
       return `Cambio - sale ${getPlayerName(players, event.playerOutId)}, entra ${getPlayerName(players, event.playerInId)}`;
     default:
@@ -40,7 +49,12 @@ export function LiveMatchScreen({ navigation, route }: Props) {
   const [subOutId, setSubOutId] = useState<string | undefined>();
   const [subInId, setSubInId] = useState<string | undefined>();
   const [pointMode, setPointMode] = useState<'uruguay_point' | 'opponent_point' | undefined>();
+  const [errorModalVisible, setErrorModalVisible] = useState(false);
+  const [selectedErrorPlayerId, setSelectedErrorPlayerId] = useState<string | undefined>();
+  const [feedbackMessage, setFeedbackMessage] = useState<string | undefined>();
   const [selectedLandingLocation, setSelectedLandingLocation] = useState<CourtLocation | undefined>();
+  const feedbackOpacity = useRef(new Animated.Value(0)).current;
+  const feedbackTranslateY = useRef(new Animated.Value(-8)).current;
   const players = useMatchStore((state) => state.players);
   const matches = useMatchStore((state) => state.matches);
   const activeMatchId = useMatchStore((state) => state.activeMatchId);
@@ -51,6 +65,8 @@ export function LiveMatchScreen({ navigation, route }: Props) {
   const resumeTimer = useMatchStore((state) => state.resumeTimer);
   const tickTimer = useMatchStore((state) => state.tickTimer);
   const recordEvent = useMatchStore((state) => state.recordEvent);
+  const recordDefense = useMatchStore((state) => state.recordDefense);
+  const recordError = useMatchStore((state) => state.recordError);
   const substitutePlayer = useMatchStore((state) => state.substitutePlayer);
   const undoLastEvent = useMatchStore((state) => state.undoLastEvent);
   const advancePeriod = useMatchStore((state) => state.advancePeriod);
@@ -82,12 +98,55 @@ export function LiveMatchScreen({ navigation, route }: Props) {
   const currentLineup = match ? getCurrentLineup(match, 'uruguay') : undefined;
   const onCourtPlayers = players.filter((player) => currentLineup?.playerIds.includes(player.id));
   const benchPlayers = players.filter((player) => !currentLineup?.playerIds.includes(player.id));
+  const selectedOnCourtPlayer = onCourtPlayers.find((player) => player.id === selectedPlayerId);
 
   useEffect(() => {
     if (!selectedPlayerId && onCourtPlayers[0]) {
       setSelectedPlayerId(onCourtPlayers[0].id);
     }
   }, [onCourtPlayers, selectedPlayerId]);
+
+  useEffect(() => {
+    if (!feedbackMessage) {
+      return undefined;
+    }
+
+    feedbackOpacity.setValue(0);
+    feedbackTranslateY.setValue(-8);
+    Animated.parallel([
+      Animated.timing(feedbackOpacity, {
+        toValue: 1,
+        duration: 140,
+        useNativeDriver: true,
+      }),
+      Animated.timing(feedbackTranslateY, {
+        toValue: 0,
+        duration: 140,
+        useNativeDriver: true,
+      }),
+    ]).start();
+
+    const timeoutId = setTimeout(() => {
+      Animated.parallel([
+        Animated.timing(feedbackOpacity, {
+          toValue: 0,
+          duration: 180,
+          useNativeDriver: true,
+        }),
+        Animated.timing(feedbackTranslateY, {
+          toValue: -8,
+          duration: 180,
+          useNativeDriver: true,
+        }),
+      ]).start(({ finished }) => {
+        if (finished) {
+          setFeedbackMessage(undefined);
+        }
+      });
+    }, 1800);
+
+    return () => clearTimeout(timeoutId);
+  }, [feedbackMessage, feedbackOpacity, feedbackTranslateY]);
 
   if (!match) {
     return (
@@ -113,6 +172,8 @@ export function LiveMatchScreen({ navigation, route }: Props) {
           text: 'Sí, cancelar partido',
           style: 'destructive',
           onPress: () => {
+            resetErrorModal();
+            setFeedbackMessage(undefined);
             cancelMatch(match.id);
             navigation.navigate('Home');
           },
@@ -140,6 +201,64 @@ export function LiveMatchScreen({ navigation, route }: Props) {
     });
     setPointMode(undefined);
     setSelectedLandingLocation(undefined);
+  };
+
+  const resetErrorModal = () => {
+    setErrorModalVisible(false);
+    setSelectedErrorPlayerId(undefined);
+  };
+
+  const getSelectedActionPlayer = () => {
+    if (!selectedPlayerId) {
+      setFeedbackMessage('Seleccioná primero un jugador en cancha.');
+      return undefined;
+    }
+
+    if (!selectedOnCourtPlayer) {
+      setFeedbackMessage('Seleccioná un jugador en cancha.');
+      return undefined;
+    }
+
+    return selectedOnCourtPlayer;
+  };
+
+  const openErrorModal = () => {
+    const player = getSelectedActionPlayer();
+
+    if (!player) {
+      return;
+    }
+
+    setPointMode(undefined);
+    setSelectedLandingLocation(undefined);
+    setSelectedErrorPlayerId(player.id);
+    setErrorModalVisible(true);
+  };
+
+  const recordSelectedDefense = () => {
+    const player = getSelectedActionPlayer();
+
+    if (!player) {
+      return;
+    }
+
+    recordDefense(player.id);
+    setFeedbackMessage(`+1 defensa · ${getPlayerShortName(players, player.id)}`);
+  };
+
+  const confirmError = (errorType: 'falta' | 'punto_en_contra') => {
+    if (!selectedErrorPlayerId) {
+      return;
+    }
+
+    recordError(selectedErrorPlayerId, errorType);
+    setSelectedPlayerId(selectedErrorPlayerId);
+    setFeedbackMessage(
+      errorType === 'punto_en_contra'
+        ? `Punto en contra de ${getPlayerName(players, selectedErrorPlayerId)} (+1 rival)`
+        : `Falta registrada: ${getPlayerName(players, selectedErrorPlayerId)}`,
+    );
+    resetErrorModal();
   };
 
   return (
@@ -223,6 +342,50 @@ export function LiveMatchScreen({ navigation, route }: Props) {
         />
       )}
 
+      <Modal visible={errorModalVisible} animationType="fade" transparent onRequestClose={resetErrorModal}>
+        <SafeAreaView style={styles.modalBackdrop}>
+          <View style={styles.errorModal}>
+            <Text style={styles.modalTitle}>Registrar error</Text>
+            <Text style={styles.errorPlayerText}>Error de {getPlayerName(players, selectedErrorPlayerId)}</Text>
+            <View style={styles.errorTypeRow}>
+              <Pressable
+                onPress={() => confirmError('falta')}
+                style={styles.errorTypeButton}
+              >
+                <Text style={styles.errorTypeText}>Falta</Text>
+                <Text style={styles.errorTypeHint}>No cambia el marcador</Text>
+              </Pressable>
+              <Pressable
+                onPress={() => confirmError('punto_en_contra')}
+                style={[styles.errorTypeButton, styles.errorTypeDanger]}
+              >
+                <Text style={[styles.errorTypeText, styles.errorTypeDangerText]}>Punto en contra</Text>
+                <Text style={styles.errorTypeHint}>Suma +1 al rival</Text>
+              </Pressable>
+            </View>
+
+            <View style={styles.modalActions}>
+              <ActionButton label="Cancelar" onPress={resetErrorModal} variant="secondary" />
+            </View>
+          </View>
+        </SafeAreaView>
+      </Modal>
+
+      {feedbackMessage && (
+        <Animated.View
+          pointerEvents="none"
+          style={[
+            styles.feedbackBanner,
+            {
+              opacity: feedbackOpacity,
+              transform: [{ translateY: feedbackTranslateY }],
+            },
+          ]}
+        >
+          <Text style={styles.feedbackText}>{feedbackMessage}</Text>
+        </Animated.View>
+      )}
+
       <View style={[styles.mainGrid, isPhone && styles.mainGridPhone]}>
         <View style={styles.leftColumn}>
           <View style={styles.bigActionGrid}>
@@ -252,10 +415,19 @@ export function LiveMatchScreen({ navigation, route }: Props) {
 
             <Pressable
               disabled={!canRecord}
-              onPress={() => recordEvent({ type: 'fault', side: 'uruguay', playerId: selectedPlayerId })}
+              onPress={recordSelectedDefense}
+              style={({ pressed }) => [styles.bigButton, styles.defenseButton, !canRecord && styles.disabledButton, pressed && styles.pressed]}
+            >
+              <Text style={styles.bigButtonLabel}>Defensa</Text>
+              <Text style={styles.bigButtonHint}>{getPlayerName(players, selectedPlayerId)}</Text>
+            </Pressable>
+
+            <Pressable
+              disabled={!canRecord}
+              onPress={openErrorModal}
               style={({ pressed }) => [styles.bigButton, styles.errorButton, !canRecord && styles.disabledButton, pressed && styles.pressed]}
             >
-              <Text style={styles.bigButtonLabel}>Error propio</Text>
+              <Text style={styles.bigButtonLabel}>Error</Text>
               <Text style={styles.bigButtonHint}>{getPlayerName(players, selectedPlayerId)}</Text>
             </Pressable>
 
@@ -472,6 +644,9 @@ const styles = StyleSheet.create({
   opponentButton: {
     backgroundColor: '#2f4358',
   },
+  defenseButton: {
+    backgroundColor: '#0f766e',
+  },
   errorButton: {
     backgroundColor: '#b42318',
   },
@@ -483,6 +658,94 @@ const styles = StyleSheet.create({
   },
   pressed: {
     opacity: 0.82,
+  },
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(11, 31, 51, 0.72)',
+    justifyContent: 'center',
+    padding: spacing.md,
+  },
+  errorModal: {
+    width: '100%',
+    maxWidth: 560,
+    alignSelf: 'center',
+    borderRadius: 8,
+    backgroundColor: '#ffffff',
+    borderWidth: 1,
+    borderColor: '#dbe4ef',
+    padding: spacing.md,
+    gap: spacing.sm,
+  },
+  modalTitle: {
+    color: '#0b1f33',
+    fontSize: fontSize.title,
+    fontWeight: '900',
+  },
+  errorPlayerText: {
+    color: '#5d6b7a',
+    fontSize: fontSize.body,
+    fontWeight: '900',
+  },
+  errorTypeRow: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+  },
+  errorTypeButton: {
+    flex: 1,
+    minHeight: 56,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#c9d7e5',
+    backgroundColor: '#f7fafc',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: spacing.sm,
+  },
+  errorTypeDanger: {
+    backgroundColor: '#fff5f5',
+    borderColor: '#b42318',
+  },
+  errorTypeText: {
+    color: '#0b1f33',
+    fontSize: fontSize.body,
+    fontWeight: '900',
+    textAlign: 'center',
+  },
+  errorTypeDangerText: {
+    color: '#b42318',
+  },
+  errorTypeHint: {
+    color: '#5d6b7a',
+    fontSize: fontSize.small,
+    fontWeight: '800',
+    marginTop: 4,
+    textAlign: 'center',
+  },
+  modalActions: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'flex-end',
+    gap: spacing.sm,
+  },
+  feedbackBanner: {
+    position: 'absolute',
+    top: spacing.md,
+    left: spacing.md,
+    right: spacing.md,
+    zIndex: 20,
+    alignSelf: 'center',
+    borderRadius: 8,
+    backgroundColor: '#0f766e',
+    borderWidth: 1,
+    borderColor: '#0b5f59',
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+  },
+  feedbackText: {
+    color: '#ffffff',
+    fontSize: fontSize.body,
+    fontWeight: '900',
+    textAlign: 'center',
   },
   bigButtonLabel: {
     color: '#ffffff',

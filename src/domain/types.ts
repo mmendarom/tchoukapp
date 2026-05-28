@@ -89,6 +89,8 @@ export type PointEvent = BaseMatchEvent & {
 };
 
 export type ErrorType =
+  | 'falta'
+  | 'punto_en_contra'
   | 'missed-frame'
   | 'forbidden-zone'
   | 'bad-rebound'
@@ -108,6 +110,12 @@ export type ErrorEvent = BaseMatchEvent & {
   pointAwardedTo?: TeamSide;
 };
 
+export type DefenseEvent = BaseMatchEvent & {
+  kind: 'defense';
+  team: 'uruguay';
+  playerId: string;
+};
+
 export type SubstitutionEvent = BaseMatchEvent & {
   kind: 'substitution';
   team: TeamSide;
@@ -116,7 +124,7 @@ export type SubstitutionEvent = BaseMatchEvent & {
   lineupSnapshotId: string;
 };
 
-export type MatchEvent = PointEvent | ErrorEvent | SubstitutionEvent;
+export type MatchEvent = PointEvent | ErrorEvent | DefenseEvent | SubstitutionEvent;
 
 export type LineupSnapshot = {
   id: string;

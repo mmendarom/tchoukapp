@@ -1,6 +1,7 @@
 ﻿import { getMostFrequentLandingZones } from './court';
 import { calculateScore, getCurrentLineup } from './stats';
 import {
+  DefenseEvent,
   ErrorEvent,
   LineupSnapshot,
   Match,
@@ -59,6 +60,11 @@ const defaultRules: TacticalInsightRules = {
 const isPointEvent = (event: MatchEvent): event is PointEvent => event.kind === 'point';
 
 const isErrorEvent = (event: MatchEvent): event is ErrorEvent => event.kind === 'error';
+
+const isDefenseEvent = (event: MatchEvent): event is DefenseEvent => event.kind === 'defense';
+
+const isTrackedErrorEvent = (event: MatchEvent): event is ErrorEvent =>
+  isErrorEvent(event) && (event.errorType === 'falta' || event.errorType === 'punto_en_contra');
 
 const sortNewestFirst = (events: MatchEvent[]) =>
   [...events].sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
@@ -147,7 +153,7 @@ const createRecentErrorInsights = (
   rules: TacticalInsightRules,
 ): InsightCard[] => {
   const errorCounts = countBy(
-    recentEvents.filter(isErrorEvent).filter((event) => event.team === team),
+    recentEvents.filter(isTrackedErrorEvent).filter((event) => event.team === team),
     (event) => event.playerId,
   );
 
@@ -160,6 +166,76 @@ const createRecentErrorInsights = (
       description: `${getPlayerLabel(players, playerId)} cometiÃ³ ${total} errores en las Ãºltimas ${rules.recentEventLimit} acciones registradas.`,
       suggestedAction: 'Bajar el riesgo en las prÃ³ximas posesiones, simplificar pases o considerar un cambio corto.',
     }));
+};
+
+const createDefenseInsights = (
+  recentEvents: MatchEvent[],
+  players: Player[] | undefined,
+  team: TeamSide,
+): InsightCard[] => {
+  if (team !== 'uruguay') {
+    return [];
+  }
+
+  const defenseCounts = countBy(recentEvents.filter(isDefenseEvent), (event) => event.playerId);
+
+  return Array.from(defenseCounts)
+    .filter(([, total]) => total >= 3)
+    .map(([playerId, total]) => ({
+      id: `key-defender-${playerId}`,
+      severity: 'info',
+      title: 'Defensor clave',
+      description: `${getPlayerLabel(players, playerId)} sumo ${total} defensas en la secuencia reciente.`,
+      suggestedAction: 'Mantenerlo como referencia defensiva si sostiene la cobertura.',
+    }));
+};
+
+const createTypedErrorInsights = (
+  recentEvents: MatchEvent[],
+  players: Player[] | undefined,
+  team: TeamSide,
+): InsightCard[] => {
+  const teamErrors = recentEvents.filter(isTrackedErrorEvent).filter((event) => event.team === team);
+  const faltaCounts = countBy(teamErrors.filter((event) => event.errorType === 'falta'), (event) => event.playerId);
+  const puntosEnContraCounts = countBy(teamErrors.filter((event) => event.errorType === 'punto_en_contra'), (event) => event.playerId);
+  const puntosEnContraTotal = teamErrors.filter((event) => event.errorType === 'punto_en_contra').length;
+  const insights: InsightCard[] = [];
+
+  Array.from(faltaCounts)
+    .filter(([, total]) => total >= 2)
+    .forEach(([playerId, total]) => {
+      insights.push({
+        id: `faltas-${playerId}`,
+        severity: total >= 3 ? 'critical' : 'warning',
+        title: 'Atencion con faltas',
+        description: `${getPlayerLabel(players, playerId)} acumulo ${total} faltas.`,
+        suggestedAction: 'Revisar timing y toma de decisiones.',
+      });
+    });
+
+  Array.from(puntosEnContraCounts)
+    .filter(([, total]) => total >= 2)
+    .forEach(([playerId, total]) => {
+      insights.push({
+        id: `puntos-en-contra-${playerId}`,
+        severity: total >= 3 ? 'critical' : 'warning',
+        title: 'Puntos en contra acumulados',
+        description: `${getPlayerLabel(players, playerId)} acumula ${total} puntos en contra.`,
+        suggestedAction: 'Considerar ajuste defensivo o cambio temporal.',
+      });
+    });
+
+  if (puntosEnContraTotal >= 3) {
+    insights.push({
+      id: 'team-puntos-regalados',
+      severity: puntosEnContraTotal >= 4 ? 'critical' : 'warning',
+      title: 'Puntos regalados',
+      description: `Uruguay entrego ${puntosEnContraTotal} puntos en contra en la secuencia reciente.`,
+      suggestedAction: 'Bajar riesgo en los tiros y priorizar seguridad.',
+    });
+  }
+
+  return insights;
 };
 
 const createOpponentZoneInsights = (
@@ -273,6 +349,8 @@ export function createTacticalInsights(
   const insightGroups = [
     createFrequentScorerInsights(recentEvents, input.players, team, rules),
     createRecentErrorInsights(recentEvents, input.players, team, rules),
+    createDefenseInsights(recentEvents, input.players, team),
+    createTypedErrorInsights(recentEvents, input.players, team),
     createOpponentZoneInsights(recentEvents, opponentName, rules),
     createCurrentLineupInsight(input.events, input.lineupSnapshots, team, rules),
     createLowInvolvementInsights(input.events, input.lineupSnapshots, input.players, team, rules),

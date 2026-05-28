@@ -55,6 +55,60 @@ Se creo una capa liviana de documentacion para que el trabajo futuro con Codex s
 - Se agregaron checklists en `docs/checklists` para pre-implementacion, pre-release y field testing.
 - No se cambio comportamiento de la app ni codigo de produccion.
 
+## 2026-05-28 - Field testing feedback specs
+
+Se convirtio feedback de una practica real en specs y planes Draft para las proximas mejoras sin implementar cambios de app.
+
+- `docs/specs/002-defense-and-error-tracking.md` cubre defensas, errores `Falta` / `Punto en contra`, estadisticas por jugador, undo, resumenes y compatibilidad con eventos viejos.
+- `docs/plans/002-defense-and-error-tracking-plan.md` divide la implementacion en tipos de eventos, stats, store, UI, resumenes, tests y log.
+- `docs/specs/003-visual-lineup-substitutions.md` cubre alineacion visual, banco, tap-to-swap, compatibilidad de cambios y preferred position como metadata.
+- `docs/plans/003-visual-lineup-substitutions-plan.md` propone Stage 1 con tap-to-swap y deja drag/drop, animaciones y fotos para Stage 2.
+- Se aclararon reglas de producto: `Punto en contra` suma un punto al rival sin ubicacion de caida, defensas/errores solo se registran para jugadores en cancha y los 7 slots visuales quedan neutrales por ahora.
+
+## 2026-05-28 - Defense and typed error tracking
+
+Se implemento la spec `docs/specs/002-defense-and-error-tracking.md`.
+
+- `Defensa` registra que jugador de Uruguay en cancha hizo la accion defensiva, sin ubicacion de cancha.
+- `Falta` queda como estadistica de error por jugador y no afecta el tanteador.
+- `Punto en contra` queda como estadistica de error por jugador y suma automaticamente 1 punto al rival.
+- `Punto en contra` no requiere `landingLocation` porque surge de una accion propia, no de la ubicacion de caida de un ataque rival.
+- Las defensas, faltas y puntos en contra se muestran en vivo, dashboard, resumen del tiempo y resumen final.
+- Los eventos legacy de error se ignoran para score, se evitan en insights nuevos y se muestran con fallback seguro cuando corresponde.
+- Se agregaron tests de dominio, store e insights para score, undo, agrupaciones por jugador, jugadores en cancha y compatibilidad legacy.
+
+## 2026-05-28 - Error modal and defense feedback UX
+
+Se refino la UX de la feature de defensas y errores tipados sin cambiar reglas de dominio ni score.
+
+- `Defensa` ahora es una accion de un toque usando el jugador seleccionado en cancha.
+- Si no hay jugador valido seleccionado, se muestra feedback: `Seleccioná primero un jugador en cancha.` o `Seleccioná un jugador en cancha.`
+- El flujo `Error` ahora abre un modal enfocado solo para elegir tipo de error del jugador seleccionado.
+- El modal muestra `Error de {jugador}`, botones grandes `Falta` y `Punto en contra`, ayudas `No cambia el marcador` y `Suma +1 al rival`, y `Cancelar`.
+- Cancelar el modal no registra eventos; tocar un tipo de error guarda y cierra el modal.
+- `Defensa` muestra un feedback temporal: `+1 defensa · {jugador}`.
+- Los errores registrados muestran feedback temporal para `Falta` y `Punto en contra`.
+- No se modifico el flujo de puntos, mapa de cancha, `landingLocation`, sustituciones ni reglas de score.
+
+QA manual sugerida:
+
+- Iniciar partido y tiempo.
+- Tocar `Defensa` sin jugador seleccionado y confirmar `Seleccioná primero un jugador en cancha.` si aplica.
+- Seleccionar Mauro.
+- Tocar `Defensa` y confirmar que se registra inmediatamente.
+- Confirmar feedback `+1 defensa · Mauro` o similar.
+- Confirmar que no aparece panel inline de defensa.
+- Tocar `Error` y confirmar que el modal dice `Error de Mauro`.
+- Confirmar que no aparece grilla de jugadores en el modal.
+- Cancelar y verificar que no se registra evento.
+- Tocar `Error`, tocar `Falta` y verificar que el score no cambia.
+- Seleccionar otro jugador.
+- Tocar `Error`, tocar `Punto en contra` y verificar que el rival suma +1.
+- Usar `Deshacer` y verificar que el punto rival vuelve atras.
+- Confirmar que `Ultimas acciones` se actualiza.
+- Probar portrait y landscape.
+- Verificar que los botones no quedan tapados por barras nativas.
+
 ## 2026-05-27 - Court map accuracy, landscape and animations
 
 Se implemento la spec `docs/specs/001-court-map-landscape-accuracy-animations.md`.

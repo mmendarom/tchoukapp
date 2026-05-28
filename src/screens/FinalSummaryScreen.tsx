@@ -7,7 +7,9 @@ import { groupOpponentPointsByZone, groupPointsByZone } from '../domain/court';
 import { createTacticalInsights } from '../domain/insights';
 import {
   calculateTotalScore,
+  getDefensesByPlayer,
   getErrorsByPlayer,
+  getErrorsByTypeByPlayer,
   getPointsByPlayer,
   getScoreByPeriod,
   getSubstitutions,
@@ -40,6 +42,8 @@ export function FinalSummaryScreen({ route }: Props) {
   const scoreByPeriod = getScoreByPeriod(match.events);
   const scorers = getPointsByPlayer(match.events);
   const errors = getErrorsByPlayer(match.events);
+  const errorBreakdown = getErrorsByTypeByPlayer(match.events);
+  const defenses = getDefensesByPlayer(match.events);
   const zones = groupPointsByZone(match.events);
   const opponentZones = groupOpponentPointsByZone(match.events);
   const substitutions = getSubstitutions(match.events);
@@ -85,8 +89,26 @@ export function FinalSummaryScreen({ route }: Props) {
         {scorers.map((stat) => <Text key={stat.playerId} style={styles.metric}>{playerName(stat.playerId)}: {stat.total}</Text>)}
       </View>
       <View style={styles.card}>
+        <Text style={styles.sectionTitle}>Defensas totales</Text>
+        {defenses.length === 0 ? <Text style={styles.metric}>Sin defensas registradas.</Text> : defenses.map((stat) => (
+          <Text key={stat.playerId} style={styles.metric}>{playerName(stat.playerId)}: {stat.total}</Text>
+        ))}
+      </View>
+      <View style={styles.card}>
+        <Text style={styles.sectionTitle}>Faltas totales</Text>
+        {errorBreakdown.filter((stat) => stat.faltas > 0).length === 0 ? <Text style={styles.metric}>Sin faltas registradas.</Text> : errorBreakdown.filter((stat) => stat.faltas > 0).map((stat) => (
+          <Text key={stat.playerId} style={styles.metric}>{playerName(stat.playerId)}: {stat.faltas}</Text>
+        ))}
+      </View>
+      <View style={styles.card}>
+        <Text style={styles.sectionTitle}>Puntos en contra totales</Text>
+        {errorBreakdown.filter((stat) => stat.puntosEnContra > 0).length === 0 ? <Text style={styles.metric}>Sin puntos en contra.</Text> : errorBreakdown.filter((stat) => stat.puntosEnContra > 0).map((stat) => (
+          <Text key={stat.playerId} style={styles.metric}>{playerName(stat.playerId)}: {stat.puntosEnContra}</Text>
+        ))}
+      </View>
+      <View style={styles.card}>
         <Text style={styles.sectionTitle}>Errores</Text>
-        {errors.map((stat) => <Text key={stat.playerId} style={styles.metric}>{playerName(stat.playerId)}: {stat.total}</Text>)}
+        {errors.length === 0 ? <Text style={styles.metric}>Sin errores registrados.</Text> : errors.map((stat) => <Text key={stat.playerId} style={styles.metric}>{playerName(stat.playerId)}: {stat.total}</Text>)}
       </View>
       <View style={styles.card}>
         <Text style={styles.sectionTitle}>Zonas efectivas</Text>
