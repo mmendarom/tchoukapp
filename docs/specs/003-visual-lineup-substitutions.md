@@ -2,7 +2,17 @@
 
 ## Estado
 
-Draft
+Stage 1 implemented
+
+## Implementacion Stage 1
+
+- Se implemento una cancha visual de cambios con 7 slots neutrales derivados del orden de `playerIds`.
+- Se agrego una lista separada de banco/suplentes con iniciales, nombre y numero.
+- El flujo de cambio es tap-to-swap: abrir `Cambio`, seleccionar suplente, tocar un slot en cancha.
+- Cada cambio sigue creando un evento de sustitucion y un nuevo `LineupSnapshot`.
+- El drag/drop queda intencionalmente diferido a Stage 2.
+- Las fotos de jugadores, upload de imagenes y slots tacticos quedan fuera de Stage 1.
+- La posicion habitual del jugador sigue siendo metadata solamente y no restringe la ubicacion en cancha.
 
 ## Contexto
 
@@ -211,20 +221,20 @@ See `docs/plans/003-visual-lineup-substitutions-plan.md`.
 
 ## Checklist de aceptacion
 
-- [ ] Current lineup is shown on a small court.
-- [ ] 7 current players are represented from the current app lineup assumption.
-- [ ] Slots are neutral and unnamed for now.
-- [ ] Player cards show initials and name.
-- [ ] Bench players are shown separately.
-- [ ] Tap-to-swap works in Stage 1.
-- [ ] Substitution event is recorded.
-- [ ] New lineup snapshot is created.
-- [ ] Undo after substitution restores the previous lineup.
-- [ ] All players can play any position.
-- [ ] Preferred position remains metadata only.
-- [ ] No real photos are required.
-- [ ] Drag/drop is not included in Stage 1 unless explicitly approved after risk review.
-- [ ] Existing summaries and plus/minus remain compatible.
-- [ ] Point recording, court map, timer, undo, cancel, period summaries, and final summaries still work.
-- [ ] `npm test` passes.
-- [ ] `npx tsc --noEmit` passes.
+- [x] Current lineup is shown on a small court.
+- [x] 7 current players are represented from the current app lineup assumption.
+- [x] Slots are neutral and unnamed for now.
+- [x] Player cards show initials and name.
+- [x] Bench players are shown separately.
+- [x] Tap-to-swap works in Stage 1.
+- [x] Substitution event is recorded.
+- [x] New lineup snapshot is created.
+- [x] Undo after substitution restores the previous lineup.
+- [x] All players can play any position.
+- [x] Preferred position remains metadata only.
+- [x] No real photos are required.
+- [x] Drag/drop is not included in Stage 1 unless explicitly approved after risk review.
+- [x] Existing summaries and plus/minus remain compatible.
+- [x] Point recording, court map, timer, undo, cancel, period summaries, and final summaries still work.
+- [x] `npm test` passes.
+- [x] `npx tsc --noEmit` passes.

@@ -1,5 +1,25 @@
 # Implementation Log
 
+## 2026-05-28 - Visual lineup substitutions Stage 1
+
+Se implemento Stage 1 de cambios visuales.
+
+- La pantalla de partido en vivo ahora muestra una cancha visual con 7 slots neutrales.
+- Los slots se derivan del orden actual de `LineupSnapshot.playerIds`; no se agregaron nombres tacticos ni restricciones por posicion.
+- Se agrego lista separada de `Banco` / `Suplentes` con iniciales, nombre y numero.
+- El boton `Cambio` abre un flujo enfocado tap-to-swap: seleccionar jugador del banco y tocar una posicion en cancha.
+- El cambio registra el evento de sustitucion y crea un nuevo snapshot de alineacion.
+- Deshacer sigue removiendo el evento de sustitucion y el snapshot creado.
+- La posicion habitual del jugador queda como metadata solamente y no limita donde puede entrar.
+- Drag/drop queda intencionalmente diferido a Stage 2.
+- No se agregaron fotos, upload de imagenes, backend ni dependencias nuevas.
+- Se preservan registro de puntos, mapa de cancha, defensa/error, timer, cancelacion, resumenes por tiempo y resumen final.
+
+Validacion:
+
+- `npm test`: pasa.
+- `npx tsc --noEmit`: pasa.
+
 ## Current MVP Summary
 
 Fecha inicial del log: 2026-05-27

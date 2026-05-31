@@ -3,6 +3,7 @@ import { createJSONStorage, persist } from 'zustand/middleware';
 
 import { initialMatches, upcomingFixtures, uruguayPlayers } from '../domain/mockData';
 import { PERIOD_DURATION_SECONDS } from '../domain/periodStats';
+import { replaceLineupSlotPlayer } from '../domain/lineupSlots';
 import {
   CourtZone,
   ErrorType,
@@ -44,7 +45,7 @@ type MatchState = {
   }) => void;
   recordDefense: (playerId: string) => void;
   recordError: (playerId: string, errorType: TrackableErrorType) => void;
-  substitutePlayer: (input: { playerOutId: string; playerInId: string }) => void;
+  substitutePlayer: (input: { playerInId: string; playerOutId?: string; slotIndex?: number }) => void;
   undoLastEvent: () => void;
   advancePeriod: () => void;
   completeActiveMatch: () => void;
@@ -494,7 +495,7 @@ export const useMatchStore = create<MatchState>()(
           }),
         }));
       },
-      substitutePlayer: ({ playerOutId, playerInId }) => {
+      substitutePlayer: ({ playerOutId, playerInId, slotIndex }) => {
         const { activeMatchId } = get();
 
         if (!activeMatchId) {
@@ -515,13 +516,25 @@ export const useMatchStore = create<MatchState>()(
               return match;
             }
 
+            const targetSlotIndex = slotIndex ?? currentLineup.playerIds.findIndex((id) => id === playerOutId);
+
+            if (targetSlotIndex < 0 || targetSlotIndex >= 7) {
+              return match;
+            }
+
+            const currentPlayerOutId = currentLineup.playerIds[targetSlotIndex];
+
+            if (currentPlayerOutId === playerInId || currentLineup.playerIds.includes(playerInId)) {
+              return match;
+            }
+
             const nextLineupId = createId();
             const nextLineup = {
               ...currentLineup,
               id: nextLineupId,
               capturedAt: new Date().toISOString(),
               clock: { ...normalized.clock, period: normalized.currentPeriod },
-              playerIds: currentLineup.playerIds.map((id) => (id === playerOutId ? playerInId : id)),
+              playerIds: replaceLineupSlotPlayer(currentLineup.playerIds, targetSlotIndex, playerInId),
             };
             const event: MatchEvent = {
               id: createId(),
@@ -529,7 +542,7 @@ export const useMatchStore = create<MatchState>()(
               periodNumber: normalized.currentPeriod,
               kind: 'substitution',
               team: 'uruguay',
-              playerOutId,
+              playerOutId: currentPlayerOutId || playerOutId,
               playerInId,
               lineupSnapshotId: nextLineupId,
               timestamp: nextLineup.capturedAt,

@@ -3,8 +3,11 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, Animated, Modal, Pressable, SafeAreaView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 
 import { ActionButton } from '../components/ActionButton';
+import { BenchList } from '../components/BenchList';
 import { CourtMapInput } from '../components/CourtMapInput';
+import { LineupCourt } from '../components/LineupCourt';
 import { Screen } from '../components/Screen';
+import { createLineupSlots, getBenchPlayers, LineupSlot } from '../domain/lineupSlots';
 import { calculateTotalScore, formatPeriodName, formatTimer } from '../domain/periodStats';
 import { getCurrentLineup } from '../domain/stats';
 import { CourtLocation, MatchEvent, Player } from '../domain/types';
@@ -36,7 +39,9 @@ const describeEvent = (event: MatchEvent, players: Player[]) => {
     case 'defense':
       return `Defensa de ${getPlayerName(players, event.playerId)}`;
     case 'substitution':
-      return `Cambio - sale ${getPlayerName(players, event.playerOutId)}, entra ${getPlayerName(players, event.playerInId)}`;
+      return event.playerOutId
+        ? `Cambio - sale ${getPlayerName(players, event.playerOutId)}, entra ${getPlayerName(players, event.playerInId)}`
+        : `Cambio - entra ${getPlayerName(players, event.playerInId)}`;
     default:
       return 'Accion registrada';
   }
@@ -46,8 +51,8 @@ export function LiveMatchScreen({ navigation, route }: Props) {
   const { width } = useWindowDimensions();
   const isPhone = width < 768;
   const [selectedPlayerId, setSelectedPlayerId] = useState<string | undefined>();
-  const [subOutId, setSubOutId] = useState<string | undefined>();
-  const [subInId, setSubInId] = useState<string | undefined>();
+  const [substitutionModalVisible, setSubstitutionModalVisible] = useState(false);
+  const [selectedBenchPlayerId, setSelectedBenchPlayerId] = useState<string | undefined>();
   const [pointMode, setPointMode] = useState<'uruguay_point' | 'opponent_point' | undefined>();
   const [errorModalVisible, setErrorModalVisible] = useState(false);
   const [selectedErrorPlayerId, setSelectedErrorPlayerId] = useState<string | undefined>();
@@ -96,8 +101,9 @@ export function LiveMatchScreen({ navigation, route }: Props) {
   }, [currentPeriodState?.timerRunning, tickTimer]);
 
   const currentLineup = match ? getCurrentLineup(match, 'uruguay') : undefined;
+  const lineupSlots = createLineupSlots(currentLineup, players);
   const onCourtPlayers = players.filter((player) => currentLineup?.playerIds.includes(player.id));
-  const benchPlayers = players.filter((player) => !currentLineup?.playerIds.includes(player.id));
+  const benchPlayers = getBenchPlayers(players, currentLineup);
   const selectedOnCourtPlayer = onCourtPlayers.find((player) => player.id === selectedPlayerId);
 
   useEffect(() => {
@@ -105,6 +111,12 @@ export function LiveMatchScreen({ navigation, route }: Props) {
       setSelectedPlayerId(onCourtPlayers[0].id);
     }
   }, [onCourtPlayers, selectedPlayerId]);
+
+  useEffect(() => {
+    if (selectedPlayerId && !currentLineup?.playerIds.includes(selectedPlayerId)) {
+      setSelectedPlayerId(onCourtPlayers[0]?.id);
+    }
+  }, [currentLineup?.playerIds, onCourtPlayers, selectedPlayerId]);
 
   useEffect(() => {
     if (!feedbackMessage) {
@@ -158,7 +170,6 @@ export function LiveMatchScreen({ navigation, route }: Props) {
 
   const score = calculateTotalScore(match.events);
   const canRecord = match.status === 'live' && currentPeriodState?.status === 'live';
-  const canSubstitute = Boolean(canRecord && subOutId && subInId);
   const lastFiveEvents = match.events.slice(0, 5);
   const timerText = currentPeriodState?.remainingSeconds === 0 ? 'Tiempo cumplido' : formatTimer(currentPeriodState?.remainingSeconds ?? 0);
 
@@ -173,6 +184,7 @@ export function LiveMatchScreen({ navigation, route }: Props) {
           style: 'destructive',
           onPress: () => {
             resetErrorModal();
+            resetSubstitutionFlow();
             setFeedbackMessage(undefined);
             cancelMatch(match.id);
             navigation.navigate('Home');
@@ -259,6 +271,53 @@ export function LiveMatchScreen({ navigation, route }: Props) {
         : `Falta registrada: ${getPlayerName(players, selectedErrorPlayerId)}`,
     );
     resetErrorModal();
+  };
+
+  const resetSubstitutionFlow = () => {
+    setSubstitutionModalVisible(false);
+    setSelectedBenchPlayerId(undefined);
+  };
+
+  const openSubstitutionFlow = () => {
+    if (!canRecord) {
+      setFeedbackMessage('Iniciá el tiempo para registrar cambios.');
+      return;
+    }
+
+    setPointMode(undefined);
+    setSelectedLandingLocation(undefined);
+    setErrorModalVisible(false);
+    setSelectedErrorPlayerId(undefined);
+    setSelectedBenchPlayerId(undefined);
+    setSubstitutionModalVisible(true);
+  };
+
+  const cancelSubstitutionFlow = () => {
+    resetSubstitutionFlow();
+    setFeedbackMessage('Cambio cancelado');
+  };
+
+  const confirmSlotSubstitution = (slot: LineupSlot) => {
+    if (!selectedBenchPlayerId) {
+      setFeedbackMessage('Seleccioná primero un jugador del banco.');
+      return;
+    }
+
+    const playerInName = getPlayerName(players, selectedBenchPlayerId);
+    const playerOutName = slot.playerId ? getPlayerName(players, slot.playerId) : undefined;
+
+    substitutePlayer({ playerInId: selectedBenchPlayerId, playerOutId: slot.playerId, slotIndex: slot.index });
+
+    if (!selectedPlayerId || selectedPlayerId === slot.playerId) {
+      setSelectedPlayerId(selectedBenchPlayerId);
+    }
+
+    resetSubstitutionFlow();
+    setFeedbackMessage(
+      playerOutName
+        ? `Cambio realizado: entra ${playerInName}, sale ${playerOutName}`
+        : `Entra ${playerInName}`,
+    );
   };
 
   return (
@@ -371,6 +430,45 @@ export function LiveMatchScreen({ navigation, route }: Props) {
         </SafeAreaView>
       </Modal>
 
+      <Modal visible={substitutionModalVisible} animationType="slide" transparent onRequestClose={cancelSubstitutionFlow}>
+        <SafeAreaView style={styles.modalBackdrop}>
+          <View style={styles.substitutionModal}>
+            <View style={styles.modalHeader}>
+              <View>
+                <Text style={styles.modalTitle}>Cambio</Text>
+                <Text style={styles.modalHint}>
+                  {selectedBenchPlayerId ? 'Tocá una posición en cancha' : 'Seleccioná un jugador del banco'}
+                </Text>
+              </View>
+              <ActionButton label="Cancelar cambio" onPress={cancelSubstitutionFlow} variant="secondary" />
+            </View>
+
+            <View style={[styles.substitutionGrid, !isPhone && styles.substitutionGridWide]}>
+              <View style={styles.substitutionPane}>
+                <Text style={styles.panelTitle}>Cancha</Text>
+                <Text style={styles.sectionLabel}>Jugadores en cancha</Text>
+                <LineupCourt
+                  slots={lineupSlots}
+                  selectedPlayerId={selectedPlayerId}
+                  highlightSlots={Boolean(selectedBenchPlayerId)}
+                  onSlotPress={confirmSlotSubstitution}
+                />
+              </View>
+
+              <View style={styles.substitutionPane}>
+                <Text style={styles.panelTitle}>Banco</Text>
+                <Text style={styles.sectionLabel}>Suplentes</Text>
+                <BenchList
+                  players={benchPlayers}
+                  selectedPlayerId={selectedBenchPlayerId}
+                  onPlayerPress={(player) => setSelectedBenchPlayerId((current) => (current === player.id ? undefined : player.id))}
+                />
+              </View>
+            </View>
+          </View>
+        </SafeAreaView>
+      </Modal>
+
       {feedbackMessage && (
         <Animated.View
           pointerEvents="none"
@@ -432,28 +530,17 @@ export function LiveMatchScreen({ navigation, route }: Props) {
             </Pressable>
 
             <Pressable
-              disabled={!canSubstitute}
-              onPress={() => {
-                if (!subOutId || !subInId) {
-                  return;
-                }
-
-                substitutePlayer({ playerOutId: subOutId, playerInId: subInId });
-                setSelectedPlayerId(subInId);
-                setSubOutId(undefined);
-                setSubInId(undefined);
-              }}
+              disabled={!canRecord}
+              onPress={openSubstitutionFlow}
               style={({ pressed }) => [
                 styles.bigButton,
                 styles.subButton,
-                !canSubstitute && styles.disabledButton,
+                !canRecord && styles.disabledButton,
                 pressed && styles.pressed,
               ]}
             >
               <Text style={styles.bigButtonLabel}>Cambio</Text>
-              <Text style={styles.bigButtonHint}>
-                {canSubstitute ? `${getPlayerName(players, subOutId)} -> ${getPlayerName(players, subInId)}` : 'Elegí cancha y banco'}
-              </Text>
+              <Text style={styles.bigButtonHint}>Cancha y banco</Text>
             </Pressable>
           </View>
 
@@ -473,46 +560,23 @@ export function LiveMatchScreen({ navigation, route }: Props) {
 
         <View style={styles.rightColumn}>
           <View style={styles.panel}>
-            <Text style={styles.panelTitle}>Jugador en cancha</Text>
-            <View style={styles.rosterGrid}>
-              {onCourtPlayers.map((player) => (
-                <Pressable
-                  key={player.id}
-                  onPress={() => {
-                    setSelectedPlayerId(player.id);
-                    setSubOutId(player.id);
-                  }}
-                  style={[
-                    styles.playerTile,
-                    selectedPlayerId === player.id && styles.selectedTile,
-                    subOutId === player.id && styles.subOutTile,
-                  ]}
-                >
-                  <Text style={[styles.playerNumber, (selectedPlayerId === player.id || subOutId === player.id) && styles.selectedText]}>
-                    #{player.number}
-                  </Text>
-                  <Text style={[styles.playerName, (selectedPlayerId === player.id || subOutId === player.id) && styles.selectedText]}>
-                    {player.lastName || player.firstName}
-                  </Text>
-                </Pressable>
-              ))}
-            </View>
+            <Text style={styles.panelTitle}>Cancha</Text>
+            <Text style={styles.sectionLabel}>Jugadores en cancha</Text>
+            <LineupCourt
+              slots={lineupSlots}
+              selectedPlayerId={selectedPlayerId}
+              onSlotPress={(slot) => {
+                if (slot.playerId) {
+                  setSelectedPlayerId(slot.playerId);
+                }
+              }}
+            />
           </View>
 
           <View style={styles.panel}>
             <Text style={styles.panelTitle}>Banco</Text>
-            <View style={styles.rosterGrid}>
-              {benchPlayers.map((player) => (
-                <Pressable
-                  key={player.id}
-                  onPress={() => setSubInId(player.id)}
-                  style={[styles.playerTile, subInId === player.id && styles.benchSelectedTile]}
-                >
-                  <Text style={[styles.playerNumber, subInId === player.id && styles.selectedText]}>#{player.number}</Text>
-                  <Text style={[styles.playerName, subInId === player.id && styles.selectedText]}>{player.lastName || player.firstName}</Text>
-                </Pressable>
-              ))}
-            </View>
+            <Text style={styles.sectionLabel}>Suplentes</Text>
+            <BenchList players={benchPlayers} />
           </View>
 
           <View style={styles.panel}>
@@ -676,10 +740,47 @@ const styles = StyleSheet.create({
     padding: spacing.md,
     gap: spacing.sm,
   },
+  substitutionModal: {
+    width: '100%',
+    maxWidth: 920,
+    maxHeight: '96%',
+    alignSelf: 'center',
+    borderRadius: 8,
+    backgroundColor: '#ffffff',
+    borderWidth: 1,
+    borderColor: '#dbe4ef',
+    padding: spacing.md,
+    gap: spacing.sm,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
+  },
   modalTitle: {
     color: '#0b1f33',
     fontSize: fontSize.title,
     fontWeight: '900',
+  },
+  modalHint: {
+    color: '#5d6b7a',
+    fontSize: fontSize.body,
+    fontWeight: '800',
+    marginTop: spacing.xs,
+  },
+  substitutionGrid: {
+    gap: spacing.sm,
+  },
+  substitutionGridWide: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+  },
+  substitutionPane: {
+    flex: 1,
+    gap: spacing.xs,
+    minWidth: 260,
   },
   errorPlayerText: {
     color: '#5d6b7a',
@@ -775,6 +876,11 @@ const styles = StyleSheet.create({
     color: '#0b1f33',
     fontSize: fontSize.section,
     fontWeight: '900',
+  },
+  sectionLabel: {
+    color: '#5d6b7a',
+    fontSize: fontSize.small,
+    fontWeight: '800',
   },
   rosterGrid: {
     flexDirection: 'row',

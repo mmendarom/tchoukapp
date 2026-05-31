@@ -119,7 +119,7 @@ export type DefenseEvent = BaseMatchEvent & {
 export type SubstitutionEvent = BaseMatchEvent & {
   kind: 'substitution';
   team: TeamSide;
-  playerOutId: string;
+  playerOutId?: string;
   playerInId: string;
   lineupSnapshotId: string;
 };

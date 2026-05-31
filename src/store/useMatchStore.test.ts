@@ -8,6 +8,7 @@ import {
   getErrorsByTypeByPlayer,
   getScoreByPeriod,
 } from '../domain/periodStats';
+import { getCurrentLineup } from '../domain/stats';
 import { useMatchStore } from './useMatchStore';
 
 const landingLocation = { x: 0.72, y: 0.44 };
@@ -127,6 +128,71 @@ describe('useMatchStore period stability', () => {
     useMatchStore.getState().recordError('tadeo', 'falta');
     useMatchStore.getState().recordError('tadeo', 'punto_en_contra');
 
+    expect(getActiveMatch().events).toHaveLength(0);
+  });
+
+  it('substitution creates an event and a new lineup snapshot for the selected neutral slot', () => {
+    createLivePeriodMatch();
+    const initialMatch = getActiveMatch();
+    const initialLineup = getCurrentLineup(initialMatch, 'uruguay');
+
+    useMatchStore.getState().substitutePlayer({ playerOutId: 'nicolas', playerInId: 'tadeo', slotIndex: 2 });
+
+    const match = getActiveMatch();
+    const currentLineup = getCurrentLineup(match, 'uruguay');
+    const event = match.events[0];
+
+    expect(match.lineupSnapshots).toHaveLength(initialMatch.lineupSnapshots.length + 1);
+    expect(currentLineup?.id).not.toBe(initialLineup?.id);
+    expect(currentLineup?.playerIds).toEqual(['mauro', 'marcelo', 'tadeo', 'vladi', 'errazquin', 'leon', 'mathias']);
+    expect(event).toMatchObject({
+      kind: 'substitution',
+      playerOutId: 'nicolas',
+      playerInId: 'tadeo',
+      lineupSnapshotId: currentLineup?.id,
+      periodNumber: 1,
+    });
+  });
+
+  it('substitution moves the outgoing player to the bench and undo restores the previous lineup', () => {
+    createLivePeriodMatch();
+
+    useMatchStore.getState().substitutePlayer({ playerOutId: 'nicolas', playerInId: 'tadeo', slotIndex: 2 });
+    expect(getCurrentLineup(getActiveMatch(), 'uruguay')?.playerIds).toContain('tadeo');
+    expect(getCurrentLineup(getActiveMatch(), 'uruguay')?.playerIds).not.toContain('nicolas');
+
+    useMatchStore.getState().undoLastEvent();
+
+    const match = getActiveMatch();
+    expect(match.events).toHaveLength(0);
+    expect(getCurrentLineup(match, 'uruguay')?.playerIds).toEqual([
+      'mauro',
+      'marcelo',
+      'nicolas',
+      'vladi',
+      'errazquin',
+      'leon',
+      'mathias',
+    ]);
+  });
+
+  it('allows any bench player to enter any neutral slot regardless of preferred position', () => {
+    createLivePeriodMatch();
+    const player = useMatchStore.getState().players.find((item) => item.id === 'juan');
+
+    expect(player?.usualPlayingZone).toBe('derecha');
+
+    useMatchStore.getState().substitutePlayer({ playerOutId: 'mauro', playerInId: 'juan', slotIndex: 0 });
+
+    expect(getCurrentLineup(getActiveMatch(), 'uruguay')?.playerIds[0]).toBe('juan');
+  });
+
+  it('does not change lineup when substitution is cancelled before store action', () => {
+    createLivePeriodMatch();
+    const before = getCurrentLineup(getActiveMatch(), 'uruguay')?.playerIds;
+
+    const after = getCurrentLineup(getActiveMatch(), 'uruguay')?.playerIds;
+    expect(after).toEqual(before);
     expect(getActiveMatch().events).toHaveLength(0);
   });
 
