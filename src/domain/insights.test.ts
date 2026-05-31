@@ -81,4 +81,20 @@ describe('createTacticalInsights zone labels', () => {
     expect(text).not.toContain('turnover');
     expect(text).not.toContain('punto_en_contra');
   });
+
+  it('creates opponent own-point insight without location-based insight', () => {
+    const insights = createTacticalInsights(
+      {
+        events: [
+          point({ id: 'own-1', scoringTeam: 'uruguay', playerId: undefined, landingLocation: undefined, pointSource: 'opponent_own_point' }),
+          point({ id: 'own-2', scoringTeam: 'uruguay', playerId: undefined, landingLocation: undefined, pointSource: 'opponent_own_point' }),
+        ],
+        lineupSnapshots: [],
+      },
+      { opponentOwnPointWarning: 2, repeatedOpponentZoneWarning: 2 },
+    );
+
+    expect(insights.some((insight) => insight.title === 'Puntos regalados por el rival')).toBe(true);
+    expect(insights.some((insight) => insight.id.startsWith('opponent-zone'))).toBe(false);
+  });
 });

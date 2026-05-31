@@ -41,6 +41,7 @@ export type TacticalInsightRules = {
   negativeLineupPlusMinusCritical: number;
   lowInvolvementTeamPoints: number;
   lowInvolvementTouches: number;
+  opponentOwnPointWarning: number;
 };
 
 const defaultRules: TacticalInsightRules = {
@@ -55,9 +56,12 @@ const defaultRules: TacticalInsightRules = {
   negativeLineupPlusMinusCritical: -4,
   lowInvolvementTeamPoints: 5,
   lowInvolvementTouches: 0,
+  opponentOwnPointWarning: 2,
 };
 
 const isPointEvent = (event: MatchEvent): event is PointEvent => event.kind === 'point';
+const isOpponentOwnPointEvent = (event: MatchEvent): event is PointEvent =>
+  isPointEvent(event) && event.scoringTeam === 'uruguay' && event.pointSource === 'opponent_own_point';
 
 const isErrorEvent = (event: MatchEvent): event is ErrorEvent => event.kind === 'error';
 
@@ -255,6 +259,27 @@ const createOpponentZoneInsights = (
     }));
 };
 
+const createOpponentOwnPointInsights = (
+  recentEvents: MatchEvent[],
+  rules: TacticalInsightRules,
+): InsightCard[] => {
+  const total = recentEvents.filter(isOpponentOwnPointEvent).length;
+
+  if (total < rules.opponentOwnPointWarning) {
+    return [];
+  }
+
+  return [
+    {
+      id: 'opponent-own-points',
+      severity: 'info',
+      title: 'Puntos regalados por el rival',
+      description: `El rival entrego ${total} puntos en contra en este tiempo.`,
+      suggestedAction: 'Aprovechar el momento y mantener presion.',
+    },
+  ];
+};
+
 const createCurrentLineupInsight = (
   events: MatchEvent[],
   lineupSnapshots: LineupSnapshot[],
@@ -311,7 +336,7 @@ const createLowInvolvementInsights = (
 
   const lineupPointEvents = events
     .filter(isPointEvent)
-    .filter((event) => event.lineupSnapshotId === currentLineup.id && event.scoringTeam === team);
+    .filter((event) => event.lineupSnapshotId === currentLineup.id && event.scoringTeam === team && event.pointSource !== 'opponent_own_point');
 
   if (lineupPointEvents.length < rules.lowInvolvementTeamPoints) {
     return [];
@@ -351,6 +376,7 @@ export function createTacticalInsights(
     createRecentErrorInsights(recentEvents, input.players, team, rules),
     createDefenseInsights(recentEvents, input.players, team),
     createTypedErrorInsights(recentEvents, input.players, team),
+    createOpponentOwnPointInsights(recentEvents, rules),
     createOpponentZoneInsights(recentEvents, opponentName, rules),
     createCurrentLineupInsight(input.events, input.lineupSnapshots, team, rules),
     createLowInvolvementInsights(input.events, input.lineupSnapshots, input.players, team, rules),
@@ -365,4 +391,3 @@ export function createTacticalInsights(
     .flat()
     .sort((a, b) => severityRank[a.severity] - severityRank[b.severity] || a.title.localeCompare(b.title));
 }
-

@@ -11,7 +11,7 @@ export type LandingZoneStat = {
 export const isPointEvent = (event: MatchEvent): event is PointEvent => event.kind === 'point';
 
 export const hasLandingLocation = (event: MatchEvent): event is PointEvent & { landingLocation: CourtLocation } =>
-  isPointEvent(event) && Boolean(event.landingLocation);
+  isPointEvent(event) && event.pointSource !== 'opponent_own_point' && Boolean(event.landingLocation);
 
 export function clamp01(value: number): number {
   return Math.min(Math.max(value, 0), 1);

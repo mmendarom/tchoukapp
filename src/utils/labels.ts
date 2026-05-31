@@ -64,6 +64,10 @@ export const safeErrorLabel = (errorType: ErrorType | string | undefined) => {
 export const eventKindLabel = (event: MatchEvent) => {
   switch (event.kind) {
     case 'point':
+      if (event.pointSource === 'opponent_own_point') {
+        return 'Punto en contra rival';
+      }
+
       return event.scoringTeam === 'uruguay' ? 'Punto Uruguay' : 'Punto rival';
     case 'error':
       return event.team === 'uruguay' ? safeErrorLabel(event.errorType) : 'Error rival';

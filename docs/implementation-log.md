@@ -1,5 +1,46 @@
 # Implementation Log
 
+## 2026-05-31 - Match report PDF export
+
+Se implemento exportacion de reporte post-partido desde `Resumen final`.
+
+- Se agrego `Exportar reporte PDF`, que genera un PDF local desde HTML con `expo-print`.
+- Se agrego `Compartir resumen`, que usa un resumen textual compartible con `Share` de React Native.
+- Si la generacion PDF o el share de archivo falla, la pantalla intenta compartir el resumen textual como fallback.
+- Se instalo `expo-print` `~15.0.8` y `expo-sharing` `~14.0.8` con `npx expo install`.
+- La logica pura del reporte vive en `src/domain/reportData.ts`.
+- La construccion de HTML/texto vive en `src/export/reportHtml.ts`.
+- La integracion nativa PDF/share vive en `src/export/exportMatchReport.ts`.
+- El reporte incluye score final, resultado por tiempos, estadisticas por periodo, totales, puntos en contra, puntos en contra del rival, zonas agrupadas, cambios, formaciones, insights y notas.
+- El mapa visual o imagen compartible queda diferido; el PDF incluye resumen textual por zonas y una nota de limitacion.
+- Se agregaron `docs/specs/005-match-report-export.md`, `docs/plans/005-match-report-export-plan.md` y `docs/decisions/002-match-report-export-format.md`.
+
+Validacion:
+
+- `npm test`: pasa, 9 archivos de test y 76 tests.
+- `npx tsc --noEmit`: pasa.
+
+## 2026-05-31 - Punto en contra rival
+
+Se implemento `Punto en contra rival` como accion rapida de scoring.
+
+- El nuevo evento se guarda como `kind: point`, `scoringTeam: uruguay` y `pointSource: opponent_own_point`.
+- Suma exactamente +1 a Uruguay.
+- No requiere jugador, jugador rival ni `landingLocation`.
+- No abre el mapa de cancha y no infiere ubicacion desde posiciones.
+- No cuenta como goleador ni aparece en mapas o puntos por zona.
+- Se muestra en vivo como `Punto en contra rival (+1 Uruguay)`.
+- En la pantalla en vivo comparte el espacio de `Punto rival` como accion dividida, sin agregar un quinto boton al grid.
+- Deshacer remueve el evento y recalcula el marcador desde eventos.
+- Resumen por tiempo, resumen final y dashboard muestran el conteo separado de puntos en contra del rival.
+- Los insights agregan una lectura liviana cuando el rival regala varios puntos.
+- Se agregaron `docs/specs/004-opponent-own-point.md` y `docs/plans/004-opponent-own-point-plan.md`.
+
+Validacion:
+
+- `npm test`: pasa, 7 archivos de test y 72 tests.
+- `npx tsc --noEmit`: pasa.
+
 ## 2026-05-31 - Live match controls layout adjustment
 
 Se reorganizaron los controles de la pantalla de partido en vivo para liberar espacio en el primer viewport.

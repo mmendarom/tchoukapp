@@ -9,7 +9,10 @@ import {
   getErrorsByPlayerByPeriod,
   getErrorsByTypeByPlayer,
   getEventsByPeriod,
+  getOpponentOwnPoints,
+  getOpponentOwnPointsByPeriod,
   getPlayerErrorSummary,
+  getPointsByZoneForEvents,
   getTopScorersByPeriod,
 } from './periodStats';
 import { Match, MatchEvent } from './types';
@@ -124,6 +127,32 @@ describe('periodStats', () => {
     expect(calculatePeriodScore(errorEvents, 1)).toEqual({ uruguay: 0, opponent: 1 });
   });
 
+  it('punto en contra rival adds one Uruguay point without player or landingLocation', () => {
+    const events: MatchEvent[] = [
+      event({
+        id: 'opponent-own-1',
+        scoringTeam: 'uruguay',
+        playerId: undefined,
+        landingLocation: undefined,
+        pointSource: 'opponent_own_point',
+      }),
+      event({
+        id: 'attack-1',
+        scoringTeam: 'uruguay',
+        playerId: 'p1',
+        landingLocation: { x: 0.7, y: 0.3 },
+        pointSource: 'attack',
+      }),
+    ];
+
+    expect(calculateTotalScore(events)).toEqual({ uruguay: 2, opponent: 0 });
+    expect(calculatePeriodScore(events, 1)).toEqual({ uruguay: 2, opponent: 0 });
+    expect(getOpponentOwnPoints(events)).toBe(1);
+    expect(getOpponentOwnPointsByPeriod(events, 1)).toBe(1);
+    expect(getTopScorersByPeriod(events, 1)).toEqual([{ playerId: 'p1', total: 1 }]);
+    expect(getPointsByZoneForEvents(events, 'uruguay')).toEqual([{ zone: 'center', total: 1 }]);
+  });
+
   it('legacy errors are safe and do not affect score or typed totals', () => {
     const legacyEvents: MatchEvent[] = [
       event({ id: 'legacy-1', kind: 'error', team: 'uruguay', playerId: 'p1', errorType: 'turnover' } as Partial<MatchEvent>),
@@ -174,5 +203,19 @@ describe('periodStats', () => {
     };
 
     expect(generatePeriodInsights(oldEventMatch, 1, (playerId) => playerId).some((insight) => insight.title === 'Zona vulnerable')).toBe(false);
+  });
+
+  it('generatePeriodInsights creates a rival own-point insight without location insight', () => {
+    const ownPointMatch: Match = {
+      ...match,
+      events: [
+        event({ id: 'own-1', scoringTeam: 'uruguay', playerId: undefined, landingLocation: undefined, pointSource: 'opponent_own_point' }),
+        event({ id: 'own-2', scoringTeam: 'uruguay', playerId: undefined, landingLocation: undefined, pointSource: 'opponent_own_point' }),
+      ],
+    };
+    const insights = generatePeriodInsights(ownPointMatch, 1, (playerId) => playerId);
+
+    expect(insights.some((insight) => insight.title === 'Puntos regalados por el rival')).toBe(true);
+    expect(insights.some((insight) => insight.title === 'Zona efectiva')).toBe(false);
   });
 });

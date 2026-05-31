@@ -43,6 +43,8 @@ const isPointEvent = (event: MatchEvent): event is PointEvent => event.kind === 
 const isErrorEvent = (event: MatchEvent): event is ErrorEvent => event.kind === 'error';
 const isDefenseEvent = (event: MatchEvent): event is DefenseEvent => event.kind === 'defense';
 const isSubstitutionEvent = (event: MatchEvent): event is SubstitutionEvent => event.kind === 'substitution';
+const isOpponentOwnPointEvent = (event: MatchEvent): event is PointEvent =>
+  isPointEvent(event) && event.scoringTeam === 'uruguay' && event.pointSource === 'opponent_own_point';
 
 const isTrackedErrorType = (errorType: ErrorType | string | undefined): errorType is 'falta' | 'punto_en_contra' =>
   errorType === 'falta' || errorType === 'punto_en_contra';
@@ -112,7 +114,7 @@ export function getPointsByPlayer(events: MatchEvent[]): PlayerPeriodStat[] {
   const totals = new Map<string, number>();
 
   events.filter(isPointEvent).forEach((event) => {
-    if (event.scoringTeam === 'uruguay') {
+    if (event.scoringTeam === 'uruguay' && event.pointSource !== 'opponent_own_point') {
       increment(totals, event.playerId);
     }
   });
@@ -192,7 +194,7 @@ export function getPointsByZoneForEvents(events: MatchEvent[], team: TeamSide = 
   const totals = new Map<CourtZone, number>();
 
   events.filter(isPointEvent).forEach((event) => {
-    if (event.scoringTeam === team) {
+    if (event.scoringTeam === team && event.pointSource !== 'opponent_own_point' && event.landingLocation) {
       increment(totals, event.zone);
     }
   });
@@ -214,6 +216,14 @@ export function getSubstitutions(events: MatchEvent[]) {
 
 export function getSubstitutionsByPeriod(events: MatchEvent[], periodNumber: MatchPeriod) {
   return getSubstitutions(getEventsByPeriod(events, periodNumber));
+}
+
+export function getOpponentOwnPoints(events: MatchEvent[]) {
+  return events.filter(isOpponentOwnPointEvent).length;
+}
+
+export function getOpponentOwnPointsByPeriod(events: MatchEvent[], periodNumber: MatchPeriod) {
+  return getOpponentOwnPoints(getEventsByPeriod(events, periodNumber));
 }
 
 export function formatPeriodName(periodNumber: MatchPeriod) {
@@ -246,6 +256,7 @@ export function generatePeriodInsights(match: Match, periodNumber: MatchPeriod, 
   const topFalta = [...errorBreakdown].sort((a, b) => b.faltas - a.faltas)[0];
   const topPuntoEnContra = [...errorBreakdown].sort((a, b) => b.puntosEnContra - a.puntosEnContra)[0];
   const puntosEnContraTotal = errorBreakdown.reduce((sum, stat) => sum + stat.puntosEnContra, 0);
+  const opponentOwnPoints = getOpponentOwnPoints(periodEvents);
   const opponentZone = getMostFrequentLandingZones(periodEvents, 'opponent')[0];
   const uruguayZone = getMostFrequentLandingZones(periodEvents, 'uruguay')[0];
   const insights: PeriodInsight[] = [];
@@ -301,6 +312,15 @@ export function generatePeriodInsights(match: Match, periodNumber: MatchPeriod, 
       title: 'Puntos regalados',
       description: `Uruguay entrego ${puntosEnContraTotal} puntos en contra en este tiempo.`,
       suggestedAction: 'Bajar riesgo en los tiros y priorizar seguridad.',
+    });
+  }
+
+  if (opponentOwnPoints >= 2) {
+    insights.push({
+      severity: 'info',
+      title: 'Puntos regalados por el rival',
+      description: `El rival entrego ${opponentOwnPoints} puntos en contra en este tiempo.`,
+      suggestedAction: 'Aprovechar el momento y mantener presion.',
     });
   }
 

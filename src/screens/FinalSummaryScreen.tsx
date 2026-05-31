@@ -1,15 +1,21 @@
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { StyleSheet, Text, TextInput, View } from 'react-native';
+import { useMemo, useState } from 'react';
+import { Share, StyleSheet, Text, TextInput, View } from 'react-native';
 
+import { ActionButton } from '../components/ActionButton';
 import { CourtMapSummary } from '../components/CourtMapSummary';
 import { Screen } from '../components/Screen';
 import { groupOpponentPointsByZone, groupPointsByZone } from '../domain/court';
 import { createTacticalInsights } from '../domain/insights';
+import { buildMatchReportData } from '../domain/reportData';
+import { exportMatchReportPdf } from '../export/exportMatchReport';
+import { buildMatchReportText } from '../export/reportHtml';
 import {
   calculateTotalScore,
   getDefensesByPlayer,
   getErrorsByPlayer,
   getErrorsByTypeByPlayer,
+  getOpponentOwnPoints,
   getPointsByPlayer,
   getScoreByPeriod,
   getSubstitutions,
@@ -21,10 +27,48 @@ import { fontSize, spacing } from '../utils/responsive';
 type Props = NativeStackScreenProps<RootStackParamList, 'FinalSummary'>;
 
 export function FinalSummaryScreen({ route }: Props) {
+  const [exporting, setExporting] = useState(false);
+  const [exportMessage, setExportMessage] = useState<string | undefined>();
   const matches = useMatchStore((state) => state.matches);
   const players = useMatchStore((state) => state.players);
   const updateMatchNotes = useMatchStore((state) => state.updateMatchNotes);
   const match = matches.find((item) => item.id === route.params.matchId);
+  const reportData = useMemo(() => (match ? buildMatchReportData(match, players) : undefined), [match, players]);
+
+  const shareTextReport = async () => {
+    if (!reportData) {
+      return;
+    }
+
+    try {
+      await Share.share({
+        title: 'Reporte del partido',
+        message: buildMatchReportText(reportData),
+      });
+      setExportMessage('Resumen compartido');
+    } catch {
+      setExportMessage('No se pudo compartir el resumen');
+    }
+  };
+
+  const exportPdfReport = async () => {
+    if (!reportData) {
+      return;
+    }
+
+    setExporting(true);
+    setExportMessage('Generando reporte...');
+
+    try {
+      const result = await exportMatchReportPdf(reportData);
+      setExportMessage(result.shared ? 'Reporte generado' : 'Reporte generado, compartir no disponible');
+    } catch {
+      setExportMessage('No se pudo generar el reporte');
+      await shareTextReport();
+    } finally {
+      setExporting(false);
+    }
+  };
 
   if (!match) {
     return (
@@ -44,6 +88,7 @@ export function FinalSummaryScreen({ route }: Props) {
   const errors = getErrorsByPlayer(match.events);
   const errorBreakdown = getErrorsByTypeByPlayer(match.events);
   const defenses = getDefensesByPlayer(match.events);
+  const opponentOwnPoints = getOpponentOwnPoints(match.events);
   const zones = groupPointsByZone(match.events);
   const opponentZones = groupOpponentPointsByZone(match.events);
   const substitutions = getSubstitutions(match.events);
@@ -107,6 +152,10 @@ export function FinalSummaryScreen({ route }: Props) {
         ))}
       </View>
       <View style={styles.card}>
+        <Text style={styles.sectionTitle}>Puntos en contra del rival totales</Text>
+        <Text style={styles.metric}>{opponentOwnPoints}</Text>
+      </View>
+      <View style={styles.card}>
         <Text style={styles.sectionTitle}>Errores</Text>
         {errors.length === 0 ? <Text style={styles.metric}>Sin errores registrados.</Text> : errors.map((stat) => <Text key={stat.playerId} style={styles.metric}>{playerName(stat.playerId)}: {stat.total}</Text>)}
       </View>
@@ -138,7 +187,11 @@ export function FinalSummaryScreen({ route }: Props) {
       </View>
       <View style={styles.card}>
         <Text style={styles.sectionTitle}>Exportar</Text>
-        <Text style={styles.metric}>Exportacion pendiente para una proxima iteracion.</Text>
+        <View style={styles.exportActions}>
+          <ActionButton label={exporting ? 'Generando reporte...' : 'Exportar reporte PDF'} onPress={exportPdfReport} disabled={exporting} />
+          <ActionButton label="Compartir resumen" onPress={shareTextReport} variant="secondary" disabled={exporting} />
+        </View>
+        {exportMessage ? <Text style={styles.metric}>{exportMessage}</Text> : null}
       </View>
     </Screen>
   );
@@ -196,5 +249,10 @@ const styles = StyleSheet.create({
     padding: spacing.sm,
     color: '#0b1f33',
     textAlignVertical: 'top',
+  },
+  exportActions: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
   },
 });

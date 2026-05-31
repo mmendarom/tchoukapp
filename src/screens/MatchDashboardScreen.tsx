@@ -10,6 +10,7 @@ import {
   getDefensesByPlayer,
   getErrorsByPlayer,
   getErrorsByTypeByPlayer,
+  getOpponentOwnPoints,
   getOpponentPointsByZone,
   getPlusMinusByLineup,
   getPointsByZone,
@@ -47,6 +48,7 @@ export function MatchDashboardScreen({ navigation, route }: Props) {
   const errorsByPlayer = getErrorsByPlayer(match.events);
   const errorBreakdown = getErrorsByTypeByPlayer(match.events);
   const defensesByPlayer = getDefensesByPlayer(match.events);
+  const opponentOwnPoints = getOpponentOwnPoints(match.events);
   const pointsByZone = getPointsByZone(match.events);
   const opponentPointsByZone = getOpponentPointsByZone(match.events);
   const plusMinusByLineup = getPlusMinusByLineup(match);
@@ -69,6 +71,7 @@ export function MatchDashboardScreen({ navigation, route }: Props) {
         <StatCard label="Set" value={match.clock.period} />
         <StatCard label="Puntos Uruguay" value={score.uruguay} />
         <StatCard label="Puntos rival" value={score.opponent} />
+        <StatCard label="En contra rival" value={opponentOwnPoints} />
       </View>
 
       <View style={styles.analyticsGrid}>
@@ -103,6 +106,10 @@ export function MatchDashboardScreen({ navigation, route }: Props) {
               {playerLabel(stat.playerId)}: {stat.puntosEnContra}
             </Text>
           ))}
+        </View>
+        <View style={[styles.panel, isPhone && styles.panelPhone]}>
+          <Text style={styles.sectionTitle}>Puntos en contra del rival</Text>
+          <Text style={styles.metric}>{opponentOwnPoints}</Text>
         </View>
         <View style={[styles.panel, isPhone && styles.panelPhone]}>
           <Text style={styles.sectionTitle}>Errores por jugador</Text>

@@ -6,16 +6,19 @@ type ActionButtonProps = {
   label: string;
   onPress: () => void;
   variant?: 'primary' | 'secondary' | 'danger';
+  disabled?: boolean;
 };
 
-export function ActionButton({ label, onPress, variant = 'primary' }: ActionButtonProps) {
+export function ActionButton({ label, onPress, variant = 'primary', disabled = false }: ActionButtonProps) {
   return (
     <Pressable
       accessibilityRole="button"
+      disabled={disabled}
       onPress={onPress}
       style={({ pressed }) => [
         styles.button,
         styles[variant],
+        disabled && styles.disabled,
         pressed && styles.pressed,
       ]}
     >
@@ -41,6 +44,9 @@ const styles = StyleSheet.create({
   },
   danger: {
     backgroundColor: '#b42318',
+  },
+  disabled: {
+    opacity: 0.58,
   },
   pressed: {
     opacity: 0.82,

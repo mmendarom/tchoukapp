@@ -19,6 +19,7 @@ import {
   getSubstitutionsByPeriod,
   getTopScorersByPeriod,
   getEventsByPeriod,
+  getOpponentOwnPointsByPeriod,
 } from '../domain/periodStats';
 import { useMatchStore } from '../store/useMatchStore';
 import { RootStackParamList } from '../utils/navigation';
@@ -54,6 +55,7 @@ export function PeriodSummaryScreen({ navigation, route }: Props) {
   const errorBreakdown = getErrorsByTypeByPlayerByPeriod(match.events, periodNumber);
   const defenses = getDefensesByPlayerByPeriod(match.events, periodNumber);
   const substitutions = getSubstitutionsByPeriod(match.events, periodNumber);
+  const opponentOwnPoints = getOpponentOwnPointsByPeriod(match.events, periodNumber);
   const periodEvents = getEventsByPeriod(match.events, periodNumber);
   const effectiveZones = groupPointsByZone(periodEvents);
   const vulnerableZones = groupOpponentPointsByZone(periodEvents);
@@ -115,6 +117,11 @@ export function PeriodSummaryScreen({ navigation, route }: Props) {
         {errorBreakdown.filter((stat) => stat.puntosEnContra > 0).length === 0 ? <Text style={styles.metric}>Sin puntos en contra.</Text> : errorBreakdown.filter((stat) => stat.puntosEnContra > 0).map((stat) => (
           <Text key={stat.playerId} style={styles.metric}>{playerName(stat.playerId)}: {stat.puntosEnContra}</Text>
         ))}
+      </View>
+
+      <View style={styles.card}>
+        <Text style={styles.sectionTitle}>Puntos en contra del rival</Text>
+        <Text style={styles.metric}>{opponentOwnPoints}</Text>
       </View>
 
       <View style={styles.card}>

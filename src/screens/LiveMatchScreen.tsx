@@ -31,6 +31,10 @@ const getPlayerShortName = (players: Player[], playerId?: string) => {
 const describeEvent = (event: MatchEvent, players: Player[]) => {
   switch (event.kind) {
     case 'point':
+      if (event.pointSource === 'opponent_own_point') {
+        return 'Punto en contra rival (+1 Uruguay)';
+      }
+
       return `${eventKindLabel(event)} - ${getPlayerName(players, event.playerId)} - ${zoneLabel[event.zone]}`;
     case 'error':
       return event.errorType === 'punto_en_contra'
@@ -71,6 +75,7 @@ export function LiveMatchScreen({ navigation, route }: Props) {
   const resumeTimer = useMatchStore((state) => state.resumeTimer);
   const tickTimer = useMatchStore((state) => state.tickTimer);
   const recordEvent = useMatchStore((state) => state.recordEvent);
+  const recordOpponentOwnPoint = useMatchStore((state) => state.recordOpponentOwnPoint);
   const recordDefense = useMatchStore((state) => state.recordDefense);
   const recordError = useMatchStore((state) => state.recordError);
   const substitutePlayer = useMatchStore((state) => state.substitutePlayer);
@@ -269,6 +274,20 @@ export function LiveMatchScreen({ navigation, route }: Props) {
 
     recordDefense(player.id);
     setFeedbackMessage(`+1 defensa · ${getPlayerShortName(players, player.id)}`);
+  };
+
+  const recordOpponentOwnPointAction = () => {
+    if (!canRecord) {
+      setFeedbackMessage('Iniciá el tiempo para registrar puntos.');
+      return;
+    }
+
+    setPointMode(undefined);
+    setSelectedLandingLocation(undefined);
+    setErrorModalVisible(false);
+    setSelectedErrorPlayerId(undefined);
+    recordOpponentOwnPoint();
+    setFeedbackMessage('Punto en contra rival (+1 Uruguay)');
   };
 
   const confirmError = (errorType: 'falta' | 'punto_en_contra') => {
@@ -497,17 +516,36 @@ export function LiveMatchScreen({ navigation, route }: Props) {
               <Text style={styles.bigButtonHint}>{getPlayerName(players, selectedPlayerId)}</Text>
             </Pressable>
 
-            <Pressable
-              disabled={!canRecord}
-              onPress={() => {
-                setPointMode('opponent_point');
-                setSelectedLandingLocation(undefined);
-              }}
-              style={({ pressed }) => [styles.bigButton, styles.opponentButton, !canRecord && styles.disabledButton, pressed && styles.pressed]}
-            >
-              <Text style={styles.bigButtonLabel}>Punto rival</Text>
-              <Text style={styles.bigButtonHint}>Suma rápida</Text>
-            </Pressable>
+            <View style={styles.splitActionButton}>
+              <Pressable
+                disabled={!canRecord}
+                onPress={() => {
+                  setPointMode('opponent_point');
+                  setSelectedLandingLocation(undefined);
+                }}
+                style={({ pressed }) => [
+                  styles.splitActionHalf,
+                  styles.opponentButton,
+                  !canRecord && styles.disabledButton,
+                  pressed && styles.pressed,
+                ]}
+              >
+                <Text style={styles.splitButtonLabel}>Punto rival</Text>
+              </Pressable>
+
+              <Pressable
+                disabled={!canRecord}
+                onPress={recordOpponentOwnPointAction}
+                style={({ pressed }) => [
+                  styles.splitActionHalf,
+                  styles.opponentOwnPointButton,
+                  !canRecord && styles.disabledButton,
+                  pressed && styles.pressed,
+                ]}
+              >
+                <Text style={styles.splitButtonLabel}>En contra rival</Text>
+              </Pressable>
+            </View>
 
             <Pressable
               disabled={!canRecord}
@@ -734,11 +772,31 @@ const styles = StyleSheet.create({
     padding: spacing.md,
     justifyContent: 'center',
   },
+  splitActionButton: {
+    flexGrow: 1,
+    flexBasis: '47%',
+    minHeight: 86,
+    borderRadius: 8,
+    flexDirection: 'row',
+    overflow: 'hidden',
+    gap: 2,
+  },
+  splitActionHalf: {
+    flex: 1,
+    minHeight: 86,
+    alignItems: 'center',
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.sm,
+    justifyContent: 'center',
+  },
   uruguayButton: {
     backgroundColor: '#0b6bcb',
   },
   opponentButton: {
-    backgroundColor: '#2f4358',
+    backgroundColor: '#7f1d1d',
+  },
+  opponentOwnPointButton: {
+    backgroundColor: '#188038',
   },
   defenseButton: {
     backgroundColor: '#0f766e',
@@ -913,6 +971,12 @@ const styles = StyleSheet.create({
     fontSize: fontSize.small,
     fontWeight: '700',
     marginTop: spacing.xs,
+  },
+  splitButtonLabel: {
+    color: '#ffffff',
+    fontSize: fontSize.body,
+    fontWeight: '900',
+    textAlign: 'center',
   },
   utilityRow: {
     flexDirection: 'row',

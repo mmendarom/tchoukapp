@@ -112,6 +112,15 @@ describe('court derived zones', () => {
     expect(groupPointsByZone([point({ landingLocation: undefined })])).toEqual([]);
   });
 
+  it('opponent own points are excluded from maps even if legacy data has a location', () => {
+    const events = [
+      point({ scoringTeam: 'uruguay', pointSource: 'opponent_own_point', playerId: undefined, landingLocation: { x: 0.8, y: 0.2 } }),
+    ];
+
+    expect(getPointEventsWithLocation(events, 'uruguay')).toEqual([]);
+    expect(groupPointsByZone(events)).toEqual([]);
+  });
+
   it('period summaries can use only current period locations', () => {
     const events = [
       point({ periodNumber: 1, landingLocation: { x: 0.8, y: 0.2 } }),

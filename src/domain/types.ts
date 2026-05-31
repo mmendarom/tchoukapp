@@ -85,7 +85,7 @@ export type PointEvent = BaseMatchEvent & {
   defensiveErrorPlayerId?: string;
   zone: CourtZone;
   frame: FrameSide | PointFrame;
-  pointSource: 'attack' | 'opponent-error' | 'technical';
+  pointSource: 'attack' | 'opponent-error' | 'opponent_own_point' | 'technical';
 };
 
 export type ErrorType =

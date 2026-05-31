@@ -37,6 +37,8 @@ export type LineupPlusMinus = {
 };
 
 const isPointEvent = (event: MatchEvent): event is PointEvent => event.kind === 'point';
+const isOpponentOwnPointEvent = (event: MatchEvent): event is PointEvent =>
+  isPointEvent(event) && event.scoringTeam === 'uruguay' && event.pointSource === 'opponent_own_point';
 
 const isErrorEvent = (event: MatchEvent): event is ErrorEvent => event.kind === 'error';
 
@@ -84,7 +86,7 @@ export function getTopScorers(events: MatchEvent[], limit = 5): PlayerStat[] {
   const totals = new Map<string, number>();
 
   events.filter(isPointEvent).forEach((event) => {
-    if (event.scoringTeam !== 'uruguay' || !event.playerId) {
+    if (event.scoringTeam !== 'uruguay' || event.pointSource === 'opponent_own_point' || !event.playerId) {
       return;
     }
 
@@ -158,7 +160,7 @@ export function getPointsByZone(events: MatchEvent[], team: TeamSide = 'uruguay'
   const totals = new Map<CourtZone, number>();
 
   events.filter(isPointEvent).forEach((event) => {
-    if (event.scoringTeam !== team) {
+    if (event.scoringTeam !== team || event.pointSource === 'opponent_own_point' || !event.landingLocation) {
       return;
     }
 
@@ -170,6 +172,10 @@ export function getPointsByZone(events: MatchEvent[], team: TeamSide = 'uruguay'
 
 export function getOpponentPointsByZone(events: MatchEvent[]): ZoneStat[] {
   return getPointsByZone(events, 'opponent');
+}
+
+export function getOpponentOwnPoints(events: MatchEvent[]) {
+  return events.filter(isOpponentOwnPointEvent).length;
 }
 
 export function getPlusMinusByLineup(match: Match, team: TeamSide = 'uruguay'): LineupPlusMinus[] {

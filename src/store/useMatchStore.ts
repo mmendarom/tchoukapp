@@ -43,6 +43,7 @@ type MatchState = {
     frame?: FrameSide;
     landingLocation?: CourtLocation;
   }) => void;
+  recordOpponentOwnPoint: () => void;
   recordDefense: (playerId: string) => void;
   recordError: (playerId: string, errorType: TrackableErrorType) => void;
   substitutePlayer: (input: { playerInId: string; playerOutId?: string; slotIndex?: number }) => void;
@@ -417,6 +418,42 @@ export const useMatchStore = create<MatchState>()(
                     errorType: getErrorType(type),
                     pointAwardedTo: getErrorType(type) === 'punto_en_contra' ? 'opponent' : undefined,
                   };
+
+            return {
+              ...normalized,
+              events: [event, ...normalized.events],
+            };
+          }),
+        }));
+      },
+      recordOpponentOwnPoint: () => {
+        const { activeMatchId } = get();
+
+        if (!activeMatchId) {
+          return;
+        }
+
+        set((state) => ({
+          matches: state.matches.map((match) => {
+            const normalized = normalizeMatch(match);
+
+            if (normalized.id !== activeMatchId || !canRecordInMatch(normalized)) {
+              return match;
+            }
+
+            const event: MatchEvent = {
+              id: createId(),
+              matchId: normalized.id,
+              periodNumber: normalized.currentPeriod,
+              timestamp: new Date().toISOString(),
+              clock: { ...normalized.clock, period: normalized.currentPeriod },
+              lineupSnapshotId: getCurrentLineup(normalized, 'uruguay')?.id,
+              kind: 'point',
+              scoringTeam: 'uruguay',
+              zone: defaultZone,
+              frame: defaultFrame,
+              pointSource: 'opponent_own_point',
+            };
 
             return {
               ...normalized,

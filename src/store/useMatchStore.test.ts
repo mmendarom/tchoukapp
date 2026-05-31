@@ -6,6 +6,7 @@ import {
   getDefensesByPlayerByPeriod,
   getErrorsByPlayerByPeriod,
   getErrorsByTypeByPlayer,
+  getOpponentOwnPoints,
   getScoreByPeriod,
 } from '../domain/periodStats';
 import { getCurrentLineup } from '../domain/stats';
@@ -120,6 +121,36 @@ describe('useMatchStore period stability', () => {
     useMatchStore.getState().undoLastEvent();
 
     expect(calculateTotalScore(getActiveMatch().events)).toEqual({ uruguay: 0, opponent: 0 });
+  });
+
+  it('records punto en contra rival without landingLocation and adds one Uruguay point', () => {
+    createLivePeriodMatch();
+    useMatchStore.getState().recordOpponentOwnPoint();
+
+    const event = getActiveMatch().events[0];
+    expect(event).toMatchObject({ kind: 'point', scoringTeam: 'uruguay', pointSource: 'opponent_own_point' });
+    expect('playerId' in event).toBe(false);
+    expect('landingLocation' in event).toBe(false);
+    expect(calculateTotalScore(getActiveMatch().events)).toEqual({ uruguay: 1, opponent: 0 });
+    expect(getOpponentOwnPoints(getActiveMatch().events)).toBe(1);
+  });
+
+  it('does not record punto en contra rival outside a live period', () => {
+    const state = useMatchStore.getState();
+    const matchId = state.createDemoMatch();
+    state.startMatch(matchId);
+
+    useMatchStore.getState().recordOpponentOwnPoint();
+    expect(getActiveMatch().events).toHaveLength(0);
+  });
+
+  it('undo after punto en contra rival subtracts the Uruguay point', () => {
+    createLivePeriodMatch();
+    useMatchStore.getState().recordOpponentOwnPoint();
+    useMatchStore.getState().undoLastEvent();
+
+    expect(calculateTotalScore(getActiveMatch().events)).toEqual({ uruguay: 0, opponent: 0 });
+    expect(getOpponentOwnPoints(getActiveMatch().events)).toBe(0);
   });
 
   it('does not record defense or errors for bench players', () => {
@@ -250,6 +281,7 @@ describe('useMatchStore period stability', () => {
   it('calculates final score by periods from events', () => {
     createLivePeriodMatch();
     useMatchStore.getState().recordEvent({ type: 'goal', side: 'uruguay', playerId: 'uru-01', landingLocation });
+    useMatchStore.getState().recordOpponentOwnPoint();
     useMatchStore.getState().recordEvent({ type: 'goal', side: 'opponent', landingLocation: { x: 0.5, y: 0.5 } });
     useMatchStore.getState().endCurrentPeriod();
     useMatchStore.getState().advancePeriod();
@@ -257,7 +289,7 @@ describe('useMatchStore period stability', () => {
     useMatchStore.getState().recordEvent({ type: 'goal', side: 'uruguay', playerId: 'uru-02', landingLocation: { x: 0.2, y: 0.5 } });
 
     const periodScores = getScoreByPeriod(getActiveMatch().events);
-    expect(periodScores[0].score).toEqual({ uruguay: 1, opponent: 1 });
+    expect(periodScores[0].score).toEqual({ uruguay: 2, opponent: 1 });
     expect(periodScores[1].score).toEqual({ uruguay: 1, opponent: 0 });
   });
 
