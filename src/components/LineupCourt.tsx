@@ -1,4 +1,4 @@
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 
 import { getPlayerInitials, LineupSlot } from '../domain/lineupSlots';
 import { fontSize, spacing } from '../utils/responsive';
@@ -12,18 +12,30 @@ type LineupCourtProps = {
 };
 
 const slotPositions = [
-  { top: '10%', left: '10%' },
-  { top: '10%', right: '10%' },
-  { top: '35%', left: '7%' },
-  { top: '35%', right: '7%' },
-  { top: '58%', left: '18%' },
-  { top: '58%', right: '18%' },
-  { top: '36%', left: '36%' },
+  { top: '20%', left: '20%' },
+  { top: '50%', left: '20%' },
+  { top: '80%', left: '20%' },
+  { top: '50%', left: '50%' },
+  { top: '20%', left: '80%' },
+  { top: '50%', left: '80%' },
+  { top: '80%', left: '80%' },
 ] as const;
 
-export function LineupCourt({ slots, selectedPlayerId, selectedSlotIndex, highlightSlots, onSlotPress }: LineupCourtProps) {
+export function LineupCourt({
+  slots,
+  selectedPlayerId,
+  selectedSlotIndex,
+  highlightSlots,
+  onSlotPress,
+}: LineupCourtProps) {
+  const { width } = useWindowDimensions();
+  const compact = width < 768;
+  const slotWidth = compact ? 72 : 88;
+  const slotHeight = compact ? 58 : 66;
+  const avatarSize = compact ? 23 : 27;
+
   return (
-    <View style={styles.court}>
+    <View style={[styles.court, compact && styles.courtPhone]}>
       <View style={styles.centerLine} />
       <View style={[styles.frame, styles.leftFrame]} />
       <View style={[styles.frame, styles.rightFrame]} />
@@ -39,13 +51,21 @@ export function LineupCourt({ slots, selectedPlayerId, selectedSlotIndex, highli
             style={({ pressed }) => [
               styles.slot,
               slotPositions[slot.index],
+              { width: slotWidth, height: slotHeight, marginLeft: -slotWidth / 2, marginTop: -slotHeight / 2 },
               highlightSlots && styles.highlightSlot,
               selected && styles.selectedSlot,
               !slot.player && styles.emptySlot,
               pressed && styles.pressed,
             ]}
           >
-            <View style={[styles.avatar, selected && styles.selectedAvatar, !slot.player && styles.emptyAvatar]}>
+            <View
+              style={[
+                styles.avatar,
+                { width: avatarSize, height: avatarSize, borderRadius: avatarSize / 2 },
+                selected && styles.selectedAvatar,
+                !slot.player && styles.emptyAvatar,
+              ]}
+            >
               <Text style={[styles.avatarText, selected && styles.selectedAvatarText]}>{slot.player ? getPlayerInitials(slot.player) : '+'}</Text>
             </View>
             {slot.player?.number ? (
@@ -63,13 +83,16 @@ export function LineupCourt({ slots, selectedPlayerId, selectedSlotIndex, highli
 
 const styles = StyleSheet.create({
   court: {
-    minHeight: 276,
+    minHeight: 300,
     borderRadius: 8,
     borderWidth: 2,
     borderColor: '#0b6bcb',
     backgroundColor: '#dff5eb',
     overflow: 'hidden',
     position: 'relative',
+  },
+  courtPhone: {
+    minHeight: 286,
   },
   centerLine: {
     position: 'absolute',
@@ -100,17 +123,14 @@ const styles = StyleSheet.create({
   },
   slot: {
     position: 'absolute',
-    width: '28%',
-    minWidth: 86,
-    maxWidth: 122,
-    minHeight: 70,
     borderRadius: 8,
     borderWidth: 1,
     borderColor: '#9bc5d8',
     backgroundColor: '#ffffff',
     alignItems: 'center',
     justifyContent: 'center',
-    padding: spacing.xs,
+    paddingHorizontal: 4,
+    paddingVertical: 3,
   },
   highlightSlot: {
     borderColor: '#188038',
@@ -125,13 +145,10 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255, 255, 255, 0.72)',
   },
   avatar: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
     backgroundColor: '#e7f0fb',
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 2,
+    marginBottom: 1,
   },
   selectedAvatar: {
     backgroundColor: '#ffffff',
@@ -144,7 +161,7 @@ const styles = StyleSheet.create({
   },
   avatarText: {
     color: '#0b1f33',
-    fontSize: fontSize.small,
+    fontSize: fontSize.tiny,
     fontWeight: '900',
   },
   number: {
@@ -155,7 +172,7 @@ const styles = StyleSheet.create({
   name: {
     width: '100%',
     color: '#0b1f33',
-    fontSize: fontSize.small,
+    fontSize: fontSize.tiny,
     fontWeight: '900',
     textAlign: 'center',
   },

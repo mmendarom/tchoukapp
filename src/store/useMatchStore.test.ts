@@ -176,6 +176,24 @@ describe('useMatchStore period stability', () => {
     ]);
   });
 
+  it('supports confirmed slot substitution from visual change mode', () => {
+    createLivePeriodMatch();
+
+    useMatchStore.getState().substitutePlayer({ playerInId: 'tadeo', slotIndex: 4 });
+
+    const match = getActiveMatch();
+    const currentLineup = getCurrentLineup(match, 'uruguay');
+
+    expect(currentLineup?.playerIds[4]).toBe('tadeo');
+    expect(currentLineup?.playerIds).not.toContain('errazquin');
+    expect(match.events[0]).toMatchObject({
+      kind: 'substitution',
+      playerOutId: 'errazquin',
+      playerInId: 'tadeo',
+      lineupSnapshotId: currentLineup?.id,
+    });
+  });
+
   it('allows any bench player to enter any neutral slot regardless of preferred position', () => {
     createLivePeriodMatch();
     const player = useMatchStore.getState().players.find((item) => item.id === 'juan');

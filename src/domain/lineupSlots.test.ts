@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { createLineupSlots, getBenchPlayers, replaceLineupSlotPlayer } from './lineupSlots';
+import { createLineupSlots, getBenchPlayers, getNeutralSlotVisualGroup, replaceLineupSlotPlayer } from './lineupSlots';
 import { uruguayPlayers } from './mockData';
 
 describe('lineup slot helpers', () => {
@@ -38,5 +38,12 @@ describe('lineup slot helpers', () => {
 
     expect(benchPlayers.map((player) => player.id)).toContain('tadeo');
     expect(benchPlayers.map((player) => player.id)).not.toContain('mauro');
+  });
+
+  it('maps neutral visual slots as 3 left, 1 center and 3 right', () => {
+    expect([0, 1, 2].map(getNeutralSlotVisualGroup)).toEqual(['left', 'left', 'left']);
+    expect(getNeutralSlotVisualGroup(3)).toBe('center');
+    expect([4, 5, 6].map(getNeutralSlotVisualGroup)).toEqual(['right', 'right', 'right']);
+    expect(getNeutralSlotVisualGroup(7)).toBe('unknown');
   });
 });

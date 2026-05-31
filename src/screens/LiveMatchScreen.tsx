@@ -7,7 +7,7 @@ import { BenchList } from '../components/BenchList';
 import { CourtMapInput } from '../components/CourtMapInput';
 import { LineupCourt } from '../components/LineupCourt';
 import { Screen } from '../components/Screen';
-import { createLineupSlots, getBenchPlayers, LineupSlot } from '../domain/lineupSlots';
+import { createLineupSlots, getBenchPlayers } from '../domain/lineupSlots';
 import { calculateTotalScore, formatPeriodName, formatTimer } from '../domain/periodStats';
 import { getCurrentLineup } from '../domain/stats';
 import { CourtLocation, MatchEvent, Player } from '../domain/types';
@@ -51,7 +51,8 @@ export function LiveMatchScreen({ navigation, route }: Props) {
   const { width } = useWindowDimensions();
   const isPhone = width < 768;
   const [selectedPlayerId, setSelectedPlayerId] = useState<string | undefined>();
-  const [substitutionModalVisible, setSubstitutionModalVisible] = useState(false);
+  const [changeModeActive, setChangeModeActive] = useState(false);
+  const [selectedSubOutSlotIndex, setSelectedSubOutSlotIndex] = useState<number | undefined>();
   const [selectedBenchPlayerId, setSelectedBenchPlayerId] = useState<string | undefined>();
   const [pointMode, setPointMode] = useState<'uruguay_point' | 'opponent_point' | undefined>();
   const [errorModalVisible, setErrorModalVisible] = useState(false);
@@ -101,22 +102,34 @@ export function LiveMatchScreen({ navigation, route }: Props) {
   }, [currentPeriodState?.timerRunning, tickTimer]);
 
   const currentLineup = match ? getCurrentLineup(match, 'uruguay') : undefined;
-  const lineupSlots = createLineupSlots(currentLineup, players);
-  const onCourtPlayers = players.filter((player) => currentLineup?.playerIds.includes(player.id));
-  const benchPlayers = getBenchPlayers(players, currentLineup);
+  const lineupSlots = useMemo(() => createLineupSlots(currentLineup, players), [currentLineup, players]);
+  const onCourtPlayers = useMemo(
+    () => players.filter((player) => currentLineup?.playerIds.includes(player.id)),
+    [currentLineup?.playerIds, players],
+  );
+  const benchPlayers = useMemo(() => getBenchPlayers(players, currentLineup), [currentLineup, players]);
   const selectedOnCourtPlayer = onCourtPlayers.find((player) => player.id === selectedPlayerId);
 
   useEffect(() => {
-    if (!selectedPlayerId && onCourtPlayers[0]) {
-      setSelectedPlayerId(onCourtPlayers[0].id);
+    if (selectedPlayerId && !currentLineup?.playerIds.includes(selectedPlayerId)) {
+      setSelectedPlayerId(undefined);
     }
-  }, [onCourtPlayers, selectedPlayerId]);
+  }, [currentLineup?.playerIds, selectedPlayerId]);
 
   useEffect(() => {
-    if (selectedPlayerId && !currentLineup?.playerIds.includes(selectedPlayerId)) {
-      setSelectedPlayerId(onCourtPlayers[0]?.id);
+    if (selectedBenchPlayerId && !benchPlayers.some((player) => player.id === selectedBenchPlayerId)) {
+      setSelectedBenchPlayerId(undefined);
     }
-  }, [currentLineup?.playerIds, onCourtPlayers, selectedPlayerId]);
+  }, [benchPlayers, selectedBenchPlayerId]);
+
+  useEffect(() => {
+    if (
+      typeof selectedSubOutSlotIndex === 'number' &&
+      !lineupSlots.some((slot) => slot.index === selectedSubOutSlotIndex && slot.playerId)
+    ) {
+      setSelectedSubOutSlotIndex(undefined);
+    }
+  }, [lineupSlots, selectedSubOutSlotIndex]);
 
   useEffect(() => {
     if (!feedbackMessage) {
@@ -274,50 +287,74 @@ export function LiveMatchScreen({ navigation, route }: Props) {
   };
 
   const resetSubstitutionFlow = () => {
-    setSubstitutionModalVisible(false);
+    setChangeModeActive(false);
+    setSelectedSubOutSlotIndex(undefined);
     setSelectedBenchPlayerId(undefined);
   };
 
-  const openSubstitutionFlow = () => {
+  const prepareSubstitutionAction = () => {
     if (!canRecord) {
       setFeedbackMessage('Iniciá el tiempo para registrar cambios.');
-      return;
+      return false;
     }
 
     setPointMode(undefined);
     setSelectedLandingLocation(undefined);
     setErrorModalVisible(false);
     setSelectedErrorPlayerId(undefined);
-    setSelectedBenchPlayerId(undefined);
-    setSubstitutionModalVisible(true);
+    return true;
   };
 
-  const cancelSubstitutionFlow = () => {
+  const handleBenchPlayerPress = (player: Player) => {
+    if (!changeModeActive) {
+      setFeedbackMessage('TocÃ¡ Cambiar jugadores para iniciar un cambio.');
+      return;
+    }
+
+    setSelectedBenchPlayerId((current) => (current === player.id ? undefined : player.id));
+  };
+
+  const startChangeMode = () => {
+    if (!prepareSubstitutionAction()) {
+      return;
+    }
+
+    setChangeModeActive(true);
+    setSelectedSubOutSlotIndex(undefined);
+    setSelectedBenchPlayerId(undefined);
+  };
+
+  const cancelChangeMode = () => {
     resetSubstitutionFlow();
     setFeedbackMessage('Cambio cancelado');
   };
 
-  const confirmSlotSubstitution = (slot: LineupSlot) => {
-    if (!selectedBenchPlayerId) {
-      setFeedbackMessage('Seleccioná primero un jugador del banco.');
+  const confirmSelectedSubstitution = () => {
+    if (!prepareSubstitutionAction()) {
+      return;
+    }
+
+    const selectedSlot =
+      typeof selectedSubOutSlotIndex === 'number'
+        ? lineupSlots.find((slot) => slot.index === selectedSubOutSlotIndex)
+        : undefined;
+
+    if (!selectedSlot?.playerId || !selectedBenchPlayerId) {
+      setFeedbackMessage('SeleccionÃ¡ un jugador en cancha y uno del banco.');
       return;
     }
 
     const playerInName = getPlayerName(players, selectedBenchPlayerId);
-    const playerOutName = slot.playerId ? getPlayerName(players, slot.playerId) : undefined;
+    const playerOutName = getPlayerName(players, selectedSlot.playerId);
 
-    substitutePlayer({ playerInId: selectedBenchPlayerId, playerOutId: slot.playerId, slotIndex: slot.index });
+    substitutePlayer({ playerInId: selectedBenchPlayerId, playerOutId: selectedSlot.playerId, slotIndex: selectedSlot.index });
 
-    if (!selectedPlayerId || selectedPlayerId === slot.playerId) {
-      setSelectedPlayerId(selectedBenchPlayerId);
+    if (selectedPlayerId === selectedSlot.playerId) {
+      setSelectedPlayerId(undefined);
     }
 
     resetSubstitutionFlow();
-    setFeedbackMessage(
-      playerOutName
-        ? `Cambio realizado: entra ${playerInName}, sale ${playerOutName}`
-        : `Entra ${playerInName}`,
-    );
+    setFeedbackMessage(`Cambio realizado: entra ${playerInName}, sale ${playerOutName}`);
   };
 
   return (
@@ -430,45 +467,6 @@ export function LiveMatchScreen({ navigation, route }: Props) {
         </SafeAreaView>
       </Modal>
 
-      <Modal visible={substitutionModalVisible} animationType="slide" transparent onRequestClose={cancelSubstitutionFlow}>
-        <SafeAreaView style={styles.modalBackdrop}>
-          <View style={styles.substitutionModal}>
-            <View style={styles.modalHeader}>
-              <View>
-                <Text style={styles.modalTitle}>Cambio</Text>
-                <Text style={styles.modalHint}>
-                  {selectedBenchPlayerId ? 'Tocá una posición en cancha' : 'Seleccioná un jugador del banco'}
-                </Text>
-              </View>
-              <ActionButton label="Cancelar cambio" onPress={cancelSubstitutionFlow} variant="secondary" />
-            </View>
-
-            <View style={[styles.substitutionGrid, !isPhone && styles.substitutionGridWide]}>
-              <View style={styles.substitutionPane}>
-                <Text style={styles.panelTitle}>Cancha</Text>
-                <Text style={styles.sectionLabel}>Jugadores en cancha</Text>
-                <LineupCourt
-                  slots={lineupSlots}
-                  selectedPlayerId={selectedPlayerId}
-                  highlightSlots={Boolean(selectedBenchPlayerId)}
-                  onSlotPress={confirmSlotSubstitution}
-                />
-              </View>
-
-              <View style={styles.substitutionPane}>
-                <Text style={styles.panelTitle}>Banco</Text>
-                <Text style={styles.sectionLabel}>Suplentes</Text>
-                <BenchList
-                  players={benchPlayers}
-                  selectedPlayerId={selectedBenchPlayerId}
-                  onPlayerPress={(player) => setSelectedBenchPlayerId((current) => (current === player.id ? undefined : player.id))}
-                />
-              </View>
-            </View>
-          </View>
-        </SafeAreaView>
-      </Modal>
-
       {feedbackMessage && (
         <Animated.View
           pointerEvents="none"
@@ -529,54 +527,73 @@ export function LiveMatchScreen({ navigation, route }: Props) {
               <Text style={styles.bigButtonHint}>{getPlayerName(players, selectedPlayerId)}</Text>
             </Pressable>
 
-            <Pressable
-              disabled={!canRecord}
-              onPress={openSubstitutionFlow}
-              style={({ pressed }) => [
-                styles.bigButton,
-                styles.subButton,
-                !canRecord && styles.disabledButton,
-                pressed && styles.pressed,
-              ]}
-            >
-              <Text style={styles.bigButtonLabel}>Cambio</Text>
-              <Text style={styles.bigButtonHint}>Cancha y banco</Text>
-            </Pressable>
           </View>
 
           {match.status === 'live' && (
-            <View style={styles.utilityRow}>
-              <ActionButton label="Deshacer" onPress={undoLastEvent} variant="secondary" />
-              {currentPeriodState?.timerRunning ? (
-                <ActionButton label="Pausar" onPress={pauseTimer} variant="secondary" />
-              ) : (
-                <ActionButton label="Reanudar" onPress={resumeTimer} variant="secondary" />
-              )}
-              <ActionButton label="Finalizar tiempo" onPress={finishPeriod} variant="secondary" />
-              <ActionButton label="Cancelar partido" onPress={confirmCancel} variant="danger" />
+            <View style={styles.undoRow}>
+              <Pressable
+                accessibilityRole="button"
+                onPress={undoLastEvent}
+                style={({ pressed }) => [styles.undoButton, pressed && styles.pressed]}
+              >
+                <Text style={styles.undoIcon}>↶</Text>
+                <Text style={styles.undoText}>Deshacer</Text>
+              </Pressable>
             </View>
           )}
         </View>
 
         <View style={styles.rightColumn}>
           <View style={styles.panel}>
-            <Text style={styles.panelTitle}>Cancha</Text>
-            <Text style={styles.sectionLabel}>Jugadores en cancha</Text>
             <LineupCourt
               slots={lineupSlots}
-              selectedPlayerId={selectedPlayerId}
+              selectedPlayerId={changeModeActive ? undefined : selectedPlayerId}
+              selectedSlotIndex={changeModeActive ? selectedSubOutSlotIndex : undefined}
+              highlightSlots={changeModeActive}
               onSlotPress={(slot) => {
+                if (changeModeActive) {
+                  if (slot.playerId) {
+                    setSelectedSubOutSlotIndex(slot.index);
+                  }
+                  return;
+                }
+
                 if (slot.playerId) {
                   setSelectedPlayerId(slot.playerId);
                 }
               }}
             />
+            {changeModeActive ? (
+              <View style={styles.changeModeActions}>
+                <ActionButton label="Cancelar cambio" onPress={cancelChangeMode} variant="secondary" />
+                <Pressable
+                  accessibilityRole="button"
+                  disabled={typeof selectedSubOutSlotIndex !== 'number' || !selectedBenchPlayerId}
+                  onPress={confirmSelectedSubstitution}
+                  style={({ pressed }) => [
+                    styles.confirmChangeButton,
+                    (typeof selectedSubOutSlotIndex !== 'number' || !selectedBenchPlayerId) && styles.confirmChangeDisabled,
+                    pressed && styles.pressed,
+                  ]}
+                >
+                  <Text style={styles.confirmChangeText}>Confirmar cambio</Text>
+                </Pressable>
+              </View>
+            ) : (
+              <ActionButton label="Cambiar jugadores" onPress={startChangeMode} variant="secondary" />
+            )}
           </View>
 
           <View style={styles.panel}>
             <Text style={styles.panelTitle}>Banco</Text>
-            <Text style={styles.sectionLabel}>Suplentes</Text>
-            <BenchList players={benchPlayers} />
+            <Text style={styles.sectionLabel}>
+              {changeModeActive ? 'Seleccioná jugador del banco' : 'Activá Modo cambio para seleccionar suplente'}
+            </Text>
+            <BenchList
+              players={benchPlayers}
+              selectedPlayerId={selectedBenchPlayerId}
+              onPlayerPress={handleBenchPlayerPress}
+            />
           </View>
 
           <View style={styles.panel}>
@@ -594,6 +611,21 @@ export function LiveMatchScreen({ navigation, route }: Props) {
           </View>
         </View>
       </View>
+
+      {match.status === 'live' && (
+        <View style={styles.matchControlsPanel}>
+          <Text style={styles.sectionLabel}>Controles del partido</Text>
+          <View style={styles.utilityRow}>
+            {currentPeriodState?.timerRunning ? (
+              <ActionButton label="Pausar" onPress={pauseTimer} variant="secondary" />
+            ) : (
+              <ActionButton label="Reanudar" onPress={resumeTimer} variant="secondary" />
+            )}
+            <ActionButton label="Finalizar tiempo" onPress={finishPeriod} variant="secondary" />
+            <ActionButton label="Cancelar partido" onPress={confirmCancel} variant="danger" />
+          </View>
+        </View>
+      )}
     </Screen>
   );
 }
@@ -828,6 +860,29 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
     gap: spacing.sm,
   },
+  changeModeActions: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
+  },
+  confirmChangeButton: {
+    minHeight: 44,
+    flexGrow: 1,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#188038',
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+  },
+  confirmChangeDisabled: {
+    backgroundColor: '#8a98a8',
+  },
+  confirmChangeText: {
+    color: '#ffffff',
+    fontSize: fontSize.button,
+    fontWeight: '700',
+  },
   feedbackBanner: {
     position: 'absolute',
     top: spacing.md,
@@ -864,7 +919,44 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     gap: spacing.sm,
   },
+  undoRow: {
+    alignItems: 'center',
+  },
+  undoButton: {
+    minHeight: 52,
+    width: '100%',
+    maxWidth: 420,
+    borderRadius: 8,
+    backgroundColor: '#f59e0b',
+    borderWidth: 1,
+    borderColor: '#b45309',
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexDirection: 'row',
+    gap: spacing.sm,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+  },
+  undoIcon: {
+    color: '#0b1f33',
+    fontSize: 24,
+    fontWeight: '900',
+    lineHeight: 28,
+  },
+  undoText: {
+    color: '#0b1f33',
+    fontSize: fontSize.button,
+    fontWeight: '900',
+  },
   panel: {
+    borderRadius: 8,
+    backgroundColor: '#ffffff',
+    borderWidth: 1,
+    borderColor: '#dbe4ef',
+    padding: spacing.sm,
+    gap: spacing.sm,
+  },
+  matchControlsPanel: {
     borderRadius: 8,
     backgroundColor: '#ffffff',
     borderWidth: 1,

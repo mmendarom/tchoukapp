@@ -1,5 +1,94 @@
 # Implementation Log
 
+## 2026-05-31 - Live match controls layout adjustment
+
+Se reorganizaron los controles de la pantalla de partido en vivo para liberar espacio en el primer viewport.
+
+- `Deshacer` queda junto a las acciones rapidas porque se usa durante el registro en vivo.
+- `Pausar` / `Reanudar`, `Finalizar tiempo` y `Cancelar partido` pasan a un panel inferior de controles del partido.
+- No se cambio comportamiento de marcador, timer, undo, defensa/error, mapa de cancha ni cambios.
+
+## 2026-05-31 - Visual lineup substitutions bench tap fix
+
+Se corrigieron dos problemas detectados en pruebas manuales con Expo Go.
+
+- La seleccion de jugadores del banco no respondia de forma confiable; se removio el `ScrollView` anidado de `BenchList` y se dejo que la pantalla principal maneje el scroll.
+- Las tarjetas del banco siguen siendo `Pressable` simples y ahora los taps actualizan `selectedBenchPlayerId`.
+- `Confirmar cambio` queda habilitado al seleccionar un jugador en cancha y un jugador del banco.
+- La interpretacion visual 3 - 1 - 3 se corrigio a izquierda-centro-derecha: 3 jugadores a la izquierda, 1 al centro y 3 a la derecha.
+- Se agrego un helper testeable para fijar el grupo visual de los 7 slots neutrales.
+- Drag/drop sigue diferido; no se reintrodujo `PanResponder` ni dependencia nueva.
+
+QA manual recomendado:
+
+- Abrir partido en vivo e iniciar tiempo.
+- Confirmar que la cancha muestra 7 jugadores en 3 izquierda - 1 centro - 3 derecha.
+- Tocar `Cambiar jugadores`.
+- Seleccionar un jugador en cancha y verificar highlight.
+- Seleccionar un jugador en banco y verificar highlight.
+- Confirmar que `Confirmar cambio` queda habilitado.
+- Tocar `Confirmar cambio` y verificar que el entrante ocupa el slot seleccionado.
+- Verificar que el saliente aparece en banco y ultimas acciones muestra el cambio.
+- Usar `Deshacer` y verificar que vuelve la alineacion anterior.
+- Probar portrait, landscape y barra de navegacion Android.
+
+## 2026-05-31 - Visual lineup substitutions stability fix
+
+Se ajusto el flujo de cambios despues de pruebas manuales en Expo Go con telefono real.
+
+- Drag/drop queda desactivado/diferido porque no fue confiable en campo: interferia con taps y no permitia completar cambios de forma consistente.
+- `Banco` vuelve a usar tarjetas con `Pressable` simple para priorizar taps confiables y scroll estable.
+- Se implemento modo cambio explicito: `Cambiar jugadores`, seleccionar jugador en cancha, seleccionar jugador del banco y `Confirmar cambio`.
+- `Confirmar cambio` queda bloqueado hasta que existan ambas selecciones.
+- La cancha mantiene 7 slots neutrales y ahora se distribuye visualmente como 3 - 1 - 3.
+- El cambio sigue reutilizando `substitutePlayer`, registrando evento de sustitucion y creando nuevo `LineupSnapshot`.
+- Si el jugador seleccionado para acciones rapidas sale de cancha, la seleccion se limpia para evitar Defensa/Error sobre suplentes.
+- No se cambio el modelo de datos, marcador, mapa de cancha, defensa/error, timer, undo ni persistencia.
+
+QA manual recomendado:
+
+- Abrir partido en vivo e iniciar tiempo.
+- Confirmar que la cancha muestra 7 jugadores en 3 - 1 - 3 sin solaparse.
+- Tocar `Cambiar jugadores`.
+- Seleccionar un jugador en cancha.
+- Seleccionar un jugador del banco.
+- Confirmar que `Confirmar cambio` queda habilitado.
+- Tocar `Confirmar cambio`.
+- Verificar que el jugador entrante aparece en el mismo slot y el saliente aparece en banco.
+- Verificar que ultimas acciones muestra el cambio.
+- Tocar `Deshacer` y verificar que vuelve la alineacion anterior.
+- Entrar a modo cambio y cancelar; verificar que no cambia la alineacion.
+- Intentar confirmar sin ambas selecciones y verificar feedback.
+- Sustituir al jugador seleccionado para acciones rapidas y verificar que Defensa/Error no quedan apuntando al jugador que salio.
+- Probar portrait, landscape y barra de navegacion Android.
+
+## 2026-05-31 - Visual lineup substitutions UX refinement
+
+Se refino la experiencia de cambios en la pantalla de partido en vivo.
+
+- Se compacto `LineupCourt` para reducir solapamiento de tarjetas y mantener 7 slots neutrales legibles.
+- `Cambio` se removio del grid superior de acciones rapidas; Cancha/Banco pasa a ser el espacio principal de sustituciones.
+- Se elimino el flujo popup/modal de cambios.
+- Se agrego drag/drop desde `Banco` hacia slots de `Cancha` usando `PanResponder` y `Animated` de React Native, sin dependencias nuevas.
+- Se mantiene fallback tap-to-swap: tocar suplente y luego tocar slot en cancha.
+- Al completar un cambio, se reutiliza `substitutePlayer`, se registra evento de sustitucion, se crea nuevo `LineupSnapshot` y se muestra feedback.
+- Si el jugador seleccionado para acciones rapidas sale de cancha, la seleccion pasa al jugador entrante para evitar estado obsoleto.
+- La posicion habitual del jugador sigue siendo metadata solamente y no restringe cambios.
+
+QA manual recomendado:
+
+- Abrir partido en vivo.
+- Verificar que las tarjetas de cancha no se solapen y que los 7 jugadores sean legibles.
+- Verificar que el banco sea legible.
+- Arrastrar un suplente a un slot en cancha.
+- Verificar que el suplente entra, el jugador saliente va al banco y aparece feedback.
+- Verificar que ultimas acciones muestra el cambio.
+- Usar Deshacer y verificar que vuelve la alineacion anterior.
+- Tocar suplente y luego tocar slot en cancha para validar el fallback.
+- Verificar que Defensa/Error no usan un jugador que ya salio de cancha.
+- Probar portrait y landscape.
+- Verificar que la barra de navegacion de Android no bloquee la zona inferior.
+
 ## 2026-05-28 - Visual lineup substitutions Stage 1
 
 Se implemento Stage 1 de cambios visuales.

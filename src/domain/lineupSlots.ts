@@ -64,6 +64,22 @@ export function getBenchPlayers(players: Player[], lineup: Pick<LineupSnapshot, 
   return players.filter((player) => !onCourtIds.has(player.id));
 }
 
+export function getNeutralSlotVisualGroup(slotIndex: number): 'left' | 'center' | 'right' | 'unknown' {
+  if (slotIndex >= 0 && slotIndex <= 2) {
+    return 'left';
+  }
+
+  if (slotIndex === 3) {
+    return 'center';
+  }
+
+  if (slotIndex >= 4 && slotIndex <= 6) {
+    return 'right';
+  }
+
+  return 'unknown';
+}
+
 export function getPlayerInitials(player: Player) {
   const firstInitial = player.firstName.trim().charAt(0);
   const lastInitial = player.lastName.trim().charAt(0);

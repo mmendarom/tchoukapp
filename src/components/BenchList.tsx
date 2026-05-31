@@ -1,4 +1,4 @@
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { getPlayerInitials } from '../domain/lineupSlots';
 import { Player } from '../domain/types';
@@ -16,7 +16,7 @@ export function BenchList({ players, selectedPlayerId, onPlayerPress }: BenchLis
   }
 
   return (
-    <ScrollView nestedScrollEnabled contentContainerStyle={styles.list} style={styles.scroll}>
+    <View style={styles.list}>
       {players.map((player) => {
         const selected = selectedPlayerId === player.id;
         const displayName = `${player.firstName} ${player.lastName}`.trim();
@@ -24,6 +24,7 @@ export function BenchList({ players, selectedPlayerId, onPlayerPress }: BenchLis
         return (
           <Pressable
             key={player.id}
+            accessibilityRole="button"
             onPress={() => onPlayerPress?.(player)}
             style={({ pressed }) => [styles.row, selected && styles.selectedRow, pressed && styles.pressed]}
           >
@@ -39,14 +40,11 @@ export function BenchList({ players, selectedPlayerId, onPlayerPress }: BenchLis
           </Pressable>
         );
       })}
-    </ScrollView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  scroll: {
-    maxHeight: 280,
-  },
   list: {
     gap: spacing.xs,
   },

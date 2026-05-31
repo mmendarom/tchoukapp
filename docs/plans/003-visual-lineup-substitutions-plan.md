@@ -8,7 +8,7 @@ Improve substitutions with a visual lineup while preserving the current event mo
 
 ## Recommendation
 
-Implement Stage 1 first. Do not implement drag/drop now. Drag/drop should be Stage 2 after tap-to-swap is stable on real phones because it adds gesture, scroll, safe-area, and layout risk.
+Stage 1 shipped first. Drag/drop was attempted, but real-phone Expo Go testing showed unreliable taps and dragging. For the field-test MVP, use reliable change mode: select one court player, select one bench player, then confirm.
 
 ## Stage 1 - Visual court lineup and tap-to-swap
 
@@ -80,16 +80,29 @@ Implement Stage 1 first. Do not implement drag/drop now. Drag/drop should be Sta
 - Update `docs/implementation-log.md`.
 - Add a decision record only if explicit slot metadata is introduced.
 
-## Stage 2 - Drag/drop, animations, and optional photos
+## Stage 2 - Reliable change mode
 
-Only start after Stage 1 field testing.
+Status: implemented as a stability fix.
 
-- Evaluate React Native gesture approach against installed Expo SDK.
+- Disable drag/drop for now because it was unreliable during real phone testing.
+- Keep Cancha/Banco as the lower substitution workspace.
+- Add `Cambiar jugadores` / `Cancelar cambio` / `Confirmar cambio` controls near Cancha/Banco.
+- Require explicit selection of one player in cancha and one player from banco.
+- Keep confirmation button disabled until both selections exist.
+- Reuse current `substitutePlayer` behavior and existing substitution event/snapshot compatibility.
+- Use a neutral left-to-right 3 - 1 - 3 visual layout for the 7 slots:
+  - 3 players on the left side.
+  - 1 player in the center.
+  - 3 players on the right side.
+- Avoid nested bench scrolling that can swallow taps in Expo Go/Android; let the live screen scroll.
+- Clear quick-action selected player if that player is substituted out.
+- Keep drag/drop as future Stage 3 only after a safer real-device gesture approach is validated.
+
+## Future Stage 3 - Drag/drop, animations, and optional photos
+
+- Re-evaluate gestures only after the reliable button flow is field-tested.
 - Avoid new dependencies unless justified in an approved spec/decision.
-- Keep tap-to-swap as fallback.
-- Add drag from bench to court slot.
-- Auto-swap with the player currently in the slot.
-- Add better animations if they do not hurt performance or tap accuracy.
+- Keep button-based mode as fallback.
 - Consider optional player photos later; do not require them now.
 
 ## Validation
