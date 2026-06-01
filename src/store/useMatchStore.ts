@@ -45,6 +45,7 @@ type MatchState = {
   }) => void;
   recordOpponentOwnPoint: () => void;
   recordDefense: (playerId: string) => void;
+  recordOpponentDefense: (defenseLocation?: CourtLocation) => void;
   recordError: (playerId: string, errorType: TrackableErrorType) => void;
   substitutePlayer: (input: { playerInId: string; playerOutId?: string; slotIndex?: number }) => void;
   swapLineupPlayers: (input: { fromSlotIndex: number; toSlotIndex: number }) => void;
@@ -492,6 +493,40 @@ export const useMatchStore = create<MatchState>()(
               kind: 'defense',
               team: 'uruguay',
               playerId,
+            };
+
+            return {
+              ...normalized,
+              events: [event, ...normalized.events],
+            };
+          }),
+        }));
+      },
+      recordOpponentDefense: (defenseLocation) => {
+        const { activeMatchId } = get();
+
+        if (!activeMatchId || !defenseLocation) {
+          return;
+        }
+
+        set((state) => ({
+          matches: state.matches.map((match) => {
+            const normalized = normalizeMatch(match);
+
+            if (normalized.id !== activeMatchId || !canRecordInMatch(normalized)) {
+              return match;
+            }
+
+            const event: MatchEvent = {
+              id: createId(),
+              matchId: normalized.id,
+              periodNumber: normalized.currentPeriod,
+              timestamp: new Date().toISOString(),
+              clock: { ...normalized.clock, period: normalized.currentPeriod },
+              lineupSnapshotId: getCurrentLineup(normalized, 'uruguay')?.id,
+              kind: 'opponent_defense',
+              team: 'opponent',
+              defenseLocation,
             };
 
             return {

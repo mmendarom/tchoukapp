@@ -6,6 +6,7 @@ import { CourtMapSummary } from '../components/CourtMapSummary';
 import { Screen } from '../components/Screen';
 import {
   groupOpponentPointsByZone,
+  groupOpponentDefensesByZone,
   groupPointsByZone,
 } from '../domain/court';
 import {
@@ -21,6 +22,7 @@ import {
   getTopScorersByPeriod,
   getEventsByPeriod,
   getOpponentOwnPointsByPeriod,
+  getOpponentDefensesByPeriod,
 } from '../domain/periodStats';
 import { useMatchStore } from '../store/useMatchStore';
 import { RootStackParamList } from '../utils/navigation';
@@ -58,9 +60,11 @@ export function PeriodSummaryScreen({ navigation, route }: Props) {
   const substitutions = getSubstitutionsByPeriod(match.events, periodNumber);
   const lineupSwaps = getLineupSwapsByPeriod(match.events, periodNumber);
   const opponentOwnPoints = getOpponentOwnPointsByPeriod(match.events, periodNumber);
+  const opponentDefenses = getOpponentDefensesByPeriod(match.events, periodNumber);
   const periodEvents = getEventsByPeriod(match.events, periodNumber);
   const effectiveZones = groupPointsByZone(periodEvents);
   const vulnerableZones = groupOpponentPointsByZone(periodEvents);
+  const defendedZones = groupOpponentDefensesByZone(periodEvents);
   const previousErrors = periodNumber > 1 ? getErrorsByPlayerByPeriod(match.events, (periodNumber - 1) as 1 | 2).reduce((sum, stat) => sum + stat.total, 0) : undefined;
   const currentErrors = errors.reduce((sum, stat) => sum + stat.total, 0);
   const previousOpponentCentral = periodNumber > 1
@@ -92,6 +96,7 @@ export function PeriodSummaryScreen({ navigation, route }: Props) {
 
       <CourtMapSummary title="Dónde hicimos los puntos" events={periodEvents} team="uruguay" />
       <CourtMapSummary title="Dónde nos hicieron puntos" events={periodEvents} team="opponent" />
+      <CourtMapSummary title="Dónde nos defendieron" events={periodEvents} source="opponent_defenses" />
 
       <View style={styles.card}>
         <Text style={styles.sectionTitle}>Goleadores del tiempo</Text>
@@ -101,10 +106,15 @@ export function PeriodSummaryScreen({ navigation, route }: Props) {
       </View>
 
       <View style={styles.card}>
-        <Text style={styles.sectionTitle}>Defensas del tiempo</Text>
+        <Text style={styles.sectionTitle}>Defensas Uruguay</Text>
         {defenses.length === 0 ? <Text style={styles.metric}>Sin defensas registradas.</Text> : defenses.map((stat) => (
           <Text key={stat.playerId} style={styles.metric}>{playerName(stat.playerId)}: {stat.total}</Text>
         ))}
+      </View>
+
+      <View style={styles.card}>
+        <Text style={styles.sectionTitle}>Defensas del rival</Text>
+        <Text style={styles.metric}>{opponentDefenses.length}</Text>
       </View>
 
       <View style={styles.card}>
@@ -143,6 +153,13 @@ export function PeriodSummaryScreen({ navigation, route }: Props) {
       <View style={styles.card}>
         <Text style={styles.sectionTitle}>Zonas vulnerables</Text>
         {vulnerableZones.length === 0 ? <Text style={styles.metric}>Sin ubicación registrada.</Text> : vulnerableZones.map((stat) => (
+          <Text key={stat.label} style={styles.metric}>{stat.label}: {stat.total}</Text>
+        ))}
+      </View>
+
+      <View style={styles.card}>
+        <Text style={styles.sectionTitle}>Zonas donde nos defendieron</Text>
+        {defendedZones.length === 0 ? <Text style={styles.metric}>Sin ubicaciones registradas.</Text> : defendedZones.map((stat) => (
           <Text key={stat.label} style={styles.metric}>{stat.label}: {stat.total}</Text>
         ))}
       </View>

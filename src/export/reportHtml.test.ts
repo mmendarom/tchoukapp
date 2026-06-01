@@ -27,6 +27,8 @@ const report: MatchReportData = {
       opponentOwnPoints: 1,
       topScorers: [{ label: '#1 Mauro', total: 1 }],
       defenses: [{ label: '#2 Marcelo', total: 2 }],
+      opponentDefenses: 3,
+      opponentDefenseZones: [{ label: 'Zona central', total: 3 }],
       faltas: [{ label: '#3 Nicolas', total: 1 }],
       ownPointsByPlayer: [{ label: '#3 Nicolas', total: 1 }],
       totalErrors: [{ label: '#3 Nicolas', total: 2 }],
@@ -43,6 +45,8 @@ const report: MatchReportData = {
       opponentOwnPoints: 0,
       topScorers: [],
       defenses: [],
+      opponentDefenses: 0,
+      opponentDefenseZones: [],
       faltas: [],
       ownPointsByPlayer: [],
       totalErrors: [],
@@ -59,6 +63,8 @@ const report: MatchReportData = {
       opponentOwnPoints: 0,
       topScorers: [],
       defenses: [],
+      opponentDefenses: 0,
+      opponentDefenseZones: [],
       faltas: [],
       ownPointsByPlayer: [],
       totalErrors: [],
@@ -69,6 +75,7 @@ const report: MatchReportData = {
   totals: {
     topScorers: [{ label: '#1 Mauro', total: 1 }],
     defenses: [{ label: '#2 Marcelo', total: 2 }],
+    opponentDefenses: 3,
     faltas: [{ label: '#3 Nicolas', total: 1 }],
     ownPointsByPlayer: [{ label: '#3 Nicolas', total: 1 }],
     totalErrors: [{ label: '#3 Nicolas', total: 2 }],
@@ -82,6 +89,7 @@ const report: MatchReportData = {
   zones: {
     attack: [{ label: 'Zona derecha', total: 1 }],
     against: [{ label: 'Zona izquierda', total: 1 }],
+    defended: [{ label: 'Zona central', total: 3 }],
   },
   lineups: {
     initial: ['#1 Mauro', '#2 Marcelo'],
@@ -98,6 +106,8 @@ describe('reportHtml', () => {
     expect(html).toContain('Resultado por tiempos');
     expect(html).toContain('Goleadores');
     expect(html).toContain('Puntos en contra del rival');
+    expect(html).toContain('Defensas del rival');
+    expect(html).toContain('Zonas donde nos defendieron');
     expect(html).toContain('Formacion inicial');
     expect(html).toContain('Mapa visual exportable pendiente');
     expect(html).not.toContain('opponent_own_point');
@@ -110,6 +120,7 @@ describe('reportHtml', () => {
     expect(text).toContain('Uruguay vs Argentina');
     expect(text).toContain('Uruguay 2 - 1 Argentina');
     expect(text).toContain('Puntos en contra del rival: 1');
+    expect(text).toContain('Defensas del rival: 3');
     expect(text).toContain('Formacion final');
     expect(text).not.toContain('opponent_own_point');
   });

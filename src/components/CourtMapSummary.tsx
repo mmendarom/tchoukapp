@@ -1,45 +1,69 @@
 import { StyleSheet, Text, View } from 'react-native';
 
-import { getPointEventsWithLocation } from '../domain/court';
-import { MatchEvent, TeamSide } from '../domain/types';
+import { getOpponentDefenseEventsWithLocation, getPointEventsWithLocation } from '../domain/court';
+import { CourtLocation, MatchEvent, TeamSide } from '../domain/types';
 import { fontSize, spacing } from '../utils/responsive';
 import { CourtField } from './CourtField';
 
 type CourtMapSummaryProps = {
   title: string;
   events: MatchEvent[];
-  team: TeamSide;
+  team?: TeamSide;
+  source?: 'points' | 'opponent_defenses';
 };
 
-export function CourtMapSummary({ title, events, team }: CourtMapSummaryProps) {
-  const points = getPointEventsWithLocation(events, team);
-  const missingCount = events.filter((event) => event.kind === 'point' && event.scoringTeam === team && !event.landingLocation).length;
+const getDensity = (location: CourtLocation, locations: CourtLocation[]) =>
+  locations.filter((item) => Math.abs(item.x - location.x) <= 0.07 && Math.abs(item.y - location.y) <= 0.07).length;
+
+export function CourtMapSummary({ title, events, team = 'uruguay', source = 'points' }: CourtMapSummaryProps) {
+  const pointEvents = source === 'points' ? getPointEventsWithLocation(events, team) : [];
+  const defenseEvents = source === 'opponent_defenses' ? getOpponentDefenseEventsWithLocation(events) : [];
+  const locations = source === 'opponent_defenses'
+    ? defenseEvents.map((event) => event.defenseLocation)
+    : pointEvents.map((event) => event.landingLocation);
+  const missingCount = source === 'points'
+    ? events.filter((event) => event.kind === 'point' && event.scoringTeam === team && event.pointSource !== 'opponent_own_point' && !event.landingLocation).length
+    : events.filter((event) => event.kind === 'opponent_defense' && !event.defenseLocation).length;
+  const itemLabel = source === 'opponent_defenses' ? 'defensas del rival' : 'puntos';
 
   return (
     <View style={styles.card}>
       <Text style={styles.title}>{title}</Text>
       <CourtField style={styles.court}>
-        {points.map((event, index) => (
+        {locations.map((location, index) => {
+          const density = getDensity(location, locations);
+          const size = Math.min(12 + density * 3, 24);
+
+          return (
           <View
-            key={`${event.id}-${index}`}
+            key={`${location.x}-${location.y}-${index}`}
             style={[
               styles.dot,
-              team === 'uruguay' ? styles.uruguayDot : styles.opponentDot,
+              source === 'opponent_defenses'
+                ? styles.opponentDefenseDot
+                : team === 'uruguay'
+                  ? styles.uruguayDot
+                  : styles.opponentDot,
               {
-                left: `${event.landingLocation.x * 100}%`,
-                top: `${event.landingLocation.y * 100}%`,
-                opacity: Math.min(0.55 + index * 0.03, 0.95),
+                height: size,
+                left: `${location.x * 100}%`,
+                marginLeft: -size / 2,
+                marginTop: -size / 2,
+                opacity: Math.min(0.5 + density * 0.12, 0.95),
+                top: `${location.y * 100}%`,
+                width: size,
               },
             ]}
           />
-        ))}
+        );
+        })}
       </CourtField>
-      {points.length === 0 ? (
-        <Text style={styles.meta}>Sin ubicación registrada.</Text>
+      {locations.length === 0 ? (
+        <Text style={styles.meta}>Sin ubicaciones registradas.</Text>
       ) : (
-        <Text style={styles.meta}>{points.length} puntos con ubicación.</Text>
+        <Text style={styles.meta}>{locations.length} {itemLabel} con ubicación.</Text>
       )}
-      {missingCount > 0 && <Text style={styles.meta}>{missingCount} puntos antiguos sin ubicación registrada.</Text>}
+      {missingCount > 0 && <Text style={styles.meta}>{missingCount} eventos antiguos sin ubicación registrada.</Text>}
     </View>
   );
 }
@@ -76,6 +100,9 @@ const styles = StyleSheet.create({
   },
   opponentDot: {
     backgroundColor: '#b42318',
+  },
+  opponentDefenseDot: {
+    backgroundColor: '#7c3aed',
   },
   meta: {
     color: '#5d6b7a',

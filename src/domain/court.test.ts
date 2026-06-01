@@ -5,7 +5,9 @@ import {
   denormalizeLocation,
   getCourtHalf,
   getCourtZone,
+  getOpponentDefenseEventsWithLocation,
   getPointEventsWithLocation,
+  groupOpponentDefensesByZone,
   groupOpponentPointsByZone,
   groupPointsByZone,
   isValidCourtLayout,
@@ -119,6 +121,17 @@ describe('court derived zones', () => {
 
     expect(getPointEventsWithLocation(events, 'uruguay')).toEqual([]);
     expect(groupPointsByZone(events)).toEqual([]);
+  });
+
+  it('groups rival defense locations by zone and ignores point events', () => {
+    const events: MatchEvent[] = [
+      point({ id: 'd-1', kind: 'opponent_defense', team: 'opponent', playerId: undefined, defenseLocation: { x: 0.52, y: 0.2 } } as Partial<MatchEvent>),
+      point({ id: 'd-2', kind: 'opponent_defense', team: 'opponent', playerId: undefined, defenseLocation: { x: 0.48, y: 0.4 } } as Partial<MatchEvent>),
+      point({ id: 'u-1', scoringTeam: 'uruguay', landingLocation: { x: 0.52, y: 0.4 } }),
+    ];
+
+    expect(getOpponentDefenseEventsWithLocation(events)).toHaveLength(2);
+    expect(groupOpponentDefensesByZone(events)[0]).toEqual({ label: 'Zona central', total: 2 });
   });
 
   it('period summaries can use only current period locations', () => {

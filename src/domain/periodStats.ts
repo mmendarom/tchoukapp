@@ -7,12 +7,13 @@ import {
   Match,
   MatchEvent,
   MatchPeriod,
+  OpponentDefenseEvent,
   PointEvent,
   Score,
   SubstitutionEvent,
   TeamSide,
 } from './types';
-import { getMostFrequentLandingZones } from './court';
+import { getMostFrequentLandingZones, getMostFrequentOpponentDefenseZones } from './court';
 
 export type PlayerPeriodStat = {
   playerId: string;
@@ -43,6 +44,7 @@ export const PERIOD_DURATION_SECONDS = 15 * 60;
 const isPointEvent = (event: MatchEvent): event is PointEvent => event.kind === 'point';
 const isErrorEvent = (event: MatchEvent): event is ErrorEvent => event.kind === 'error';
 const isDefenseEvent = (event: MatchEvent): event is DefenseEvent => event.kind === 'defense';
+const isOpponentDefenseEvent = (event: MatchEvent): event is OpponentDefenseEvent => event.kind === 'opponent_defense';
 const isSubstitutionEvent = (event: MatchEvent): event is SubstitutionEvent => event.kind === 'substitution';
 const isLineupSwapEvent = (event: MatchEvent): event is LineupSwapEvent => event.kind === 'lineup_swap';
 const isOpponentOwnPointEvent = (event: MatchEvent): event is PointEvent =>
@@ -152,6 +154,22 @@ export function getDefensesByPlayer(events: MatchEvent[]): PlayerPeriodStat[] {
   });
 
   return toSortedStats(totals).map(({ key, total }) => ({ playerId: key, total }));
+}
+
+export function getOpponentDefenses(events: MatchEvent[]) {
+  return events.filter(isOpponentDefenseEvent);
+}
+
+export function getOpponentDefensesByPeriod(events: MatchEvent[], periodNumber: MatchPeriod) {
+  return getOpponentDefenses(getEventsByPeriod(events, periodNumber));
+}
+
+export function getOpponentDefenseLocations(events: MatchEvent[]) {
+  return getOpponentDefenses(events).map((event) => event.defenseLocation).filter(Boolean);
+}
+
+export function getOpponentDefenseLocationsByPeriod(events: MatchEvent[], periodNumber: MatchPeriod) {
+  return getOpponentDefenseLocations(getEventsByPeriod(events, periodNumber));
 }
 
 export function getErrorsByTypeByPlayerByPeriod(events: MatchEvent[], periodNumber: MatchPeriod): PlayerErrorPeriodSummary[] {
@@ -269,6 +287,7 @@ export function generatePeriodInsights(match: Match, periodNumber: MatchPeriod, 
   const opponentOwnPoints = getOpponentOwnPoints(periodEvents);
   const opponentZone = getMostFrequentLandingZones(periodEvents, 'opponent')[0];
   const uruguayZone = getMostFrequentLandingZones(periodEvents, 'uruguay')[0];
+  const opponentDefenseZone = getMostFrequentOpponentDefenseZones(periodEvents)[0];
   const insights: PeriodInsight[] = [];
 
   if (topScorer && topScorer.total >= 3) {
@@ -349,6 +368,15 @@ export function generatePeriodInsights(match: Match, periodNumber: MatchPeriod, 
       title: 'Zona efectiva',
       description: `Uruguay convirtio ${uruguayZone.total} puntos hacia ${uruguayZone.label.toLowerCase()}.`,
       suggestedAction: 'Seguir explotando esa zona si el rival no ajusta.',
+    });
+  }
+
+  if (opponentDefenseZone && opponentDefenseZone.total >= 3) {
+    insights.push({
+      severity: 'warning',
+      title: 'Nos defienden seguido en una zona',
+      description: `El rival defendio ${opponentDefenseZone.total} ataques en ${opponentDefenseZone.label.toLowerCase()}.`,
+      suggestedAction: 'Variar angulos de ataque o rotar el punto de lanzamiento.',
     });
   }
 

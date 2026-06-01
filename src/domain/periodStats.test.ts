@@ -11,6 +11,9 @@ import {
   getEventsByPeriod,
   getOpponentOwnPoints,
   getOpponentOwnPointsByPeriod,
+  getOpponentDefenses,
+  getOpponentDefensesByPeriod,
+  getOpponentDefenseLocationsByPeriod,
   getPlayerErrorSummary,
   getPointsByZoneForEvents,
   getTopScorersByPeriod,
@@ -101,6 +104,18 @@ describe('periodStats', () => {
       { playerId: 'p2', total: 1 },
     ]);
     expect(getDefensesByPlayerByPeriod(defenseEvents, 1)).toEqual([{ playerId: 'p1', total: 2 }]);
+  });
+
+  it('counts rival defenses by period and keeps score unchanged', () => {
+    const defenseEvents: MatchEvent[] = [
+      event({ id: 'rd-1', kind: 'opponent_defense', team: 'opponent', playerId: undefined, defenseLocation: { x: 0.5, y: 0.3 } } as Partial<MatchEvent>),
+      event({ id: 'rd-2', kind: 'opponent_defense', team: 'opponent', periodNumber: 2, clock: { period: 2, secondsElapsed: 3 }, playerId: undefined, defenseLocation: { x: 0.8, y: 0.3 } } as Partial<MatchEvent>),
+    ];
+
+    expect(getOpponentDefenses(defenseEvents)).toHaveLength(2);
+    expect(getOpponentDefensesByPeriod(defenseEvents, 1)).toHaveLength(1);
+    expect(getOpponentDefenseLocationsByPeriod(defenseEvents, 1)).toEqual([{ x: 0.5, y: 0.3 }]);
+    expect(calculateTotalScore(defenseEvents)).toEqual({ uruguay: 0, opponent: 0 });
   });
 
   it('counts typed errors by player and keeps total errors', () => {
@@ -217,5 +232,23 @@ describe('periodStats', () => {
 
     expect(insights.some((insight) => insight.title === 'Puntos regalados por el rival')).toBe(true);
     expect(insights.some((insight) => insight.title === 'Zona efectiva')).toBe(false);
+  });
+
+  it('generatePeriodInsights creates a rival defense zone insight without raw values', () => {
+    const defenseMatch: Match = {
+      ...match,
+      events: [
+        event({ id: 'rd-1', kind: 'opponent_defense', team: 'opponent', playerId: undefined, defenseLocation: { x: 0.5, y: 0.3 } } as Partial<MatchEvent>),
+        event({ id: 'rd-2', kind: 'opponent_defense', team: 'opponent', playerId: undefined, defenseLocation: { x: 0.52, y: 0.4 } } as Partial<MatchEvent>),
+        event({ id: 'rd-3', kind: 'opponent_defense', team: 'opponent', playerId: undefined, defenseLocation: { x: 0.48, y: 0.5 } } as Partial<MatchEvent>),
+      ],
+    };
+    const text = generatePeriodInsights(defenseMatch, 1, (playerId) => playerId)
+      .map((insight) => `${insight.title} ${insight.description}`)
+      .join(' ');
+
+    expect(text).toContain('Nos defienden seguido en una zona');
+    expect(text).toContain('zona central');
+    expect(text).not.toMatch(/\b(center|left|right|opponent_defense)\b/);
   });
 });

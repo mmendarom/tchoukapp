@@ -1,4 +1,4 @@
-import { CourtLocation, MatchEvent, PointEvent, TeamSide } from './types';
+import { CourtLocation, MatchEvent, OpponentDefenseEvent, PointEvent, TeamSide } from './types';
 
 export type DerivedCourtZone = 'izquierda' | 'central' | 'derecha';
 export type DerivedCourtHalf = 'marco_izquierdo' | 'marco_derecho' | 'centro';
@@ -9,9 +9,15 @@ export type LandingZoneStat = {
 };
 
 export const isPointEvent = (event: MatchEvent): event is PointEvent => event.kind === 'point';
+export const isOpponentDefenseEvent = (event: MatchEvent): event is OpponentDefenseEvent => event.kind === 'opponent_defense';
 
 export const hasLandingLocation = (event: MatchEvent): event is PointEvent & { landingLocation: CourtLocation } =>
   isPointEvent(event) && event.pointSource !== 'opponent_own_point' && Boolean(event.landingLocation);
+
+export const hasOpponentDefenseLocation = (
+  event: MatchEvent,
+): event is OpponentDefenseEvent & { defenseLocation: CourtLocation } =>
+  isOpponentDefenseEvent(event) && Boolean(event.defenseLocation);
 
 export function clamp01(value: number): number {
   return Math.min(Math.max(value, 0), 1);
@@ -99,6 +105,10 @@ export function getPointEventsWithLocation(events: MatchEvent[], team?: TeamSide
   return events.filter(hasLandingLocation).filter((event) => !team || event.scoringTeam === team);
 }
 
+export function getOpponentDefenseEventsWithLocation(events: MatchEvent[]) {
+  return events.filter(hasOpponentDefenseLocation);
+}
+
 export function groupPointsByZone(events: MatchEvent[]): LandingZoneStat[] {
   const totals = new Map<string, number>();
 
@@ -121,11 +131,32 @@ export function groupOpponentPointsByZone(events: MatchEvent[]): LandingZoneStat
   return sortStats(totals);
 }
 
+export function groupOpponentDefensesByZone(events: MatchEvent[]): LandingZoneStat[] {
+  const totals = new Map<string, number>();
+
+  getOpponentDefenseEventsWithLocation(events).forEach((event) => {
+    increment(totals, zoneLabel[getCourtZone(event.defenseLocation)]);
+    increment(totals, halfLabel[getCourtHalf(event.defenseLocation)]);
+  });
+
+  return sortStats(totals);
+}
+
 export function getMostFrequentLandingZones(events: MatchEvent[], team?: TeamSide, limit = 3): LandingZoneStat[] {
   const totals = new Map<string, number>();
 
   getPointEventsWithLocation(events, team).forEach((event) => {
     increment(totals, zoneLabel[getCourtZone(event.landingLocation)]);
+  });
+
+  return sortStats(totals).slice(0, limit);
+}
+
+export function getMostFrequentOpponentDefenseZones(events: MatchEvent[], limit = 3): LandingZoneStat[] {
+  const totals = new Map<string, number>();
+
+  getOpponentDefenseEventsWithLocation(events).forEach((event) => {
+    increment(totals, zoneLabel[getCourtZone(event.defenseLocation)]);
   });
 
   return sortStats(totals).slice(0, limit);

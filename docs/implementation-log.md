@@ -1,5 +1,84 @@
 # Implementation Log
 
+## 2026-05-31 - Live action grid equal-width rows
+
+Se refino la grilla de acciones del partido en vivo para equilibrar area tactil y peso visual.
+
+- La primera fila ahora tiene tres acciones con el mismo ancho: `Punto Uruguay`, `Punto rival`, `En contra rival`.
+- La segunda fila ahora tiene tres acciones con el mismo ancho: `Defensa`, `Defensa rival`, `Error`.
+- `Deshacer` queda como accion full width debajo.
+- Los handlers y reglas de cada accion no cambiaron.
+- Se mantienen colores diferenciados: azul, rojo oscuro, verde, teal, violeta, rojo y naranja para deshacer.
+
+QA manual recomendado:
+
+- Abrir partido en vivo en telefono en portrait.
+- Verificar que la primera fila tiene tres botones de igual ancho: `Punto Uruguay`, `Punto rival`, `En contra rival`.
+- Verificar que la segunda fila tiene tres botones de igual ancho: `Defensa`, `Defensa rival`, `Error`.
+- Verificar que todos los labels son legibles.
+- Verificar que los botones son faciles de tocar.
+- Verificar que el texto auxiliar del jugador no rompe el layout.
+- Tocar cada accion y confirmar que el comportamiento no cambio.
+- Rotar a landscape y verificar que la grilla sigue usable.
+- Verificar que `Deshacer` queda full width y funciona.
+
+## 2026-05-31 - Defensa split action refinement
+
+Se refino la UX de la defensa dividida para acelerar el registro en vivo.
+
+- Se elimino el popup/modal `Registrar defensa`.
+- La grilla de acciones ahora muestra una accion dividida `Defensa` / `Defensa rival`.
+- `Defensa` registra inmediatamente la defensa del jugador uruguayo seleccionado en cancha.
+- `Defensa rival` abre directamente el mapa `¿Dónde nos defendieron?`.
+- Los botones usan colores distintos: teal para `Defensa` y violeta para `Defensa rival`.
+- No se cambio el modelo de eventos, heatmaps, score, puntos, errores, cambios, timer, undo ni export PDF.
+
+QA manual recomendado:
+
+- Abrir partido en vivo e iniciar tiempo.
+- Tocar `Defensa` sin jugador seleccionado y confirmar `Seleccioná primero un jugador en cancha.`.
+- Seleccionar jugador en cancha.
+- Tocar `Defensa` y confirmar que se registra inmediatamente sin modal.
+- Confirmar feedback `+1 defensa · {jugador}`.
+- Tocar `Defensa rival` y confirmar que abre el mapa.
+- Marcar ubicacion y confirmar feedback `Defensa rival registrada`.
+- Confirmar que el score no cambia.
+- Usar `Deshacer` para ambos tipos de defensa.
+- Finalizar tiempo y confirmar que `Dónde nos defendieron` sigue actualizando.
+- Revisar portrait/landscape y que los colores se distinguen rapido.
+
+## 2026-05-31 - Defensa rival y mapas visuales
+
+Se implemento la spec `docs/specs/006-rival-defense-and-heatmaps.md`.
+
+- `Defensa` ahora abre el modal `Registrar defensa` con dos opciones: `Defensa Uruguay` y `Defensa rival`.
+- `Defensa Uruguay` mantiene la regla existente: requiere jugador uruguayo seleccionado y en cancha, no usa mapa y no cambia score.
+- `Defensa rival` registra un nuevo evento `opponent_defense` con `defenseLocation`, no requiere jugador, no cambia score y es undoable.
+- `CourtMapInput` suma modo `opponent_defense` con textos especificos: `¿Dónde nos defendieron?`.
+- Los resumenes por tiempo y final agregan mapa `Dónde nos defendieron`, total de `Defensas del rival` y zonas agrupadas.
+- `CourtMapSummary` ahora soporta puntos y defensas rivales con puntos de densidad sin dependencia nueva.
+- Los insights agregan una alerta cuando el rival defiende repetidamente ataques en una misma zona.
+- El dashboard y el reporte PDF/texto incluyen defensas del rival y zonas donde nos defendieron.
+- `Punto en contra` y `Punto en contra rival` siguen fuera de mapas porque no tienen ubicacion tactica.
+
+Validacion:
+
+- `npm test`: pasa, 9 archivos de test y 87 tests.
+- `npx tsc --noEmit`: pasa.
+
+QA manual recomendado:
+
+- Abrir partido en vivo e iniciar tiempo.
+- Tocar `Defensa`.
+- Elegir `Defensa Uruguay` sin jugador y confirmar feedback de seleccion requerida.
+- Seleccionar jugador en cancha, registrar `Defensa Uruguay` y verificar ultimas acciones.
+- Tocar `Defensa`, elegir `Defensa rival`, marcar ubicacion y confirmar feedback `Defensa rival registrada`.
+- Confirmar que el score no cambia.
+- Usar `Deshacer` y confirmar que la defensa rival desaparece.
+- Finalizar tiempo y revisar mapa `Dónde nos defendieron`.
+- Finalizar partido y revisar resumen final, dashboard y export de reporte.
+- Probar portrait y landscape en Expo Go.
+
 ## 2026-05-31 - Scoreboard compact height fix
 
 Se corrigio el exceso de altura del marcador observado en Expo Go.

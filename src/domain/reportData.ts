@@ -1,4 +1,4 @@
-import { groupOpponentPointsByZone, groupPointsByZone, LandingZoneStat } from './court';
+import { groupOpponentDefensesByZone, groupOpponentPointsByZone, groupPointsByZone, LandingZoneStat } from './court';
 import { createTacticalInsights, InsightCard } from './insights';
 import {
   calculatePeriodScore,
@@ -16,6 +16,8 @@ import {
   getLineupSwapsByPeriod,
   getOpponentOwnPoints,
   getOpponentOwnPointsByPeriod,
+  getOpponentDefenses,
+  getOpponentDefensesByPeriod,
   getPointsByPlayer,
   getScoreByPeriod,
   getSubstitutions,
@@ -50,6 +52,8 @@ export type PeriodReportData = {
   opponentOwnPoints: number;
   topScorers: ReportStat[];
   defenses: ReportStat[];
+  opponentDefenses: number;
+  opponentDefenseZones: LandingZoneStat[];
   faltas: ReportStat[];
   ownPointsByPlayer: ReportStat[];
   totalErrors: ReportStat[];
@@ -73,6 +77,7 @@ export type MatchReportData = {
   totals: {
     topScorers: ReportStat[];
     defenses: ReportStat[];
+    opponentDefenses: number;
     faltas: ReportStat[];
     ownPointsByPlayer: ReportStat[];
     totalErrors: ReportStat[];
@@ -83,6 +88,7 @@ export type MatchReportData = {
   zones: {
     attack: LandingZoneStat[];
     against: LandingZoneStat[];
+    defended: LandingZoneStat[];
   };
   lineups: {
     initial: string[];
@@ -219,6 +225,8 @@ export function buildMatchReportData(match: Match, players: Player[]): MatchRepo
       opponentOwnPoints: getOpponentOwnPointsByPeriod(match.events, periodNumber),
       topScorers: mapPlayerStats(getTopScorersByPeriod(match.events, periodNumber), getPlayerLabel),
       defenses: mapPlayerStats(getDefensesByPlayerByPeriod(match.events, periodNumber), getPlayerLabel),
+      opponentDefenses: getOpponentDefensesByPeriod(match.events, periodNumber).length,
+      opponentDefenseZones: groupOpponentDefensesByZone(periodEvents),
       faltas: mapFaltas(errorBreakdown, getPlayerLabel),
       ownPointsByPlayer: mapOwnPointsByPlayer(errorBreakdown, getPlayerLabel),
       totalErrors: mapPlayerStats(getErrorsByPlayerByPeriod(match.events, periodNumber), getPlayerLabel),
@@ -246,6 +254,7 @@ export function buildMatchReportData(match: Match, players: Player[]): MatchRepo
     totals: {
       topScorers: mapPlayerStats(getPointsByPlayer(match.events), getPlayerLabel),
       defenses: mapPlayerStats(getDefensesByPlayer(match.events), getPlayerLabel),
+      opponentDefenses: getOpponentDefenses(match.events).length,
       faltas: mapFaltas(totalErrorBreakdown, getPlayerLabel),
       ownPointsByPlayer: mapOwnPointsByPlayer(totalErrorBreakdown, getPlayerLabel),
       totalErrors: mapPlayerStats(getErrorsByPlayer(match.events), getPlayerLabel),
@@ -261,6 +270,7 @@ export function buildMatchReportData(match: Match, players: Player[]): MatchRepo
     zones: {
       attack: groupPointsByZone(match.events),
       against: groupOpponentPointsByZone(match.events),
+      defended: groupOpponentDefensesByZone(match.events),
     },
     lineups: {
       initial: mapLineup(initialLineup?.playerIds, getPlayerLabel),

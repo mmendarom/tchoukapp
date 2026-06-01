@@ -17,6 +17,7 @@ import { RootStackParamList } from '../utils/navigation';
 import { fontSize, spacing } from '../utils/responsive';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'LiveMatch'>;
+type CourtMapMode = 'uruguay_point' | 'opponent_point' | 'opponent_defense';
 
 const getPlayerName = (players: Player[], playerId?: string) => {
   const player = players.find((item) => item.id === playerId);
@@ -42,6 +43,8 @@ const describeEvent = (event: MatchEvent, players: Player[]) => {
         : `${safeErrorLabel(event.errorType)} de ${getPlayerName(players, event.playerId)}`;
     case 'defense':
       return `Defensa de ${getPlayerName(players, event.playerId)}`;
+    case 'opponent_defense':
+      return 'Defensa rival registrada';
     case 'substitution':
       return event.playerOutId
         ? `Cambio - sale ${getPlayerName(players, event.playerOutId)}, entra ${getPlayerName(players, event.playerInId)}`
@@ -61,7 +64,7 @@ export function LiveMatchScreen({ navigation, route }: Props) {
   const [selectedSubOutSlotIndex, setSelectedSubOutSlotIndex] = useState<number | undefined>();
   const [selectedSwapSlotIndex, setSelectedSwapSlotIndex] = useState<number | undefined>();
   const [selectedBenchPlayerId, setSelectedBenchPlayerId] = useState<string | undefined>();
-  const [pointMode, setPointMode] = useState<'uruguay_point' | 'opponent_point' | undefined>();
+  const [pointMode, setPointMode] = useState<CourtMapMode | undefined>();
   const [errorModalVisible, setErrorModalVisible] = useState(false);
   const [selectedErrorPlayerId, setSelectedErrorPlayerId] = useState<string | undefined>();
   const [feedbackMessage, setFeedbackMessage] = useState<string | undefined>();
@@ -80,6 +83,7 @@ export function LiveMatchScreen({ navigation, route }: Props) {
   const recordEvent = useMatchStore((state) => state.recordEvent);
   const recordOpponentOwnPoint = useMatchStore((state) => state.recordOpponentOwnPoint);
   const recordDefense = useMatchStore((state) => state.recordDefense);
+  const recordOpponentDefense = useMatchStore((state) => state.recordOpponentDefense);
   const recordError = useMatchStore((state) => state.recordError);
   const substitutePlayer = useMatchStore((state) => state.substitutePlayer);
   const swapLineupPlayers = useMatchStore((state) => state.swapLineupPlayers);
@@ -258,7 +262,18 @@ export function LiveMatchScreen({ navigation, route }: Props) {
 
   const confirmPointLocation = () => {
     if (!selectedLandingLocation) {
-      Alert.alert('Ubicación requerida', 'Marcá primero dónde cayó la pelota.');
+      Alert.alert(
+        'Ubicación requerida',
+        pointMode === 'opponent_defense' ? 'Marcá primero dónde nos defendieron.' : 'Marcá primero dónde cayó la pelota.',
+      );
+      return;
+    }
+
+    if (pointMode === 'opponent_defense') {
+      recordOpponentDefense(selectedLandingLocation);
+      setPointMode(undefined);
+      setSelectedLandingLocation(undefined);
+      setFeedbackMessage('Defensa rival registrada');
       return;
     }
 
@@ -313,6 +328,18 @@ export function LiveMatchScreen({ navigation, route }: Props) {
 
     recordDefense(player.id);
     setFeedbackMessage(`+1 defensa · ${getPlayerShortName(players, player.id)}`);
+  };
+
+  const openOpponentDefenseMap = () => {
+    if (!canRecord) {
+      setFeedbackMessage('Iniciá el tiempo para registrar defensas.');
+      return;
+    }
+
+    setErrorModalVisible(false);
+    setSelectedErrorPlayerId(undefined);
+    setPointMode('opponent_defense');
+    setSelectedLandingLocation(undefined);
   };
 
   const recordOpponentOwnPointAction = () => {
@@ -603,17 +630,17 @@ export function LiveMatchScreen({ navigation, route }: Props) {
 
       <View style={[styles.mainGrid, isPhone && styles.mainGridPhone]}>
         <View style={styles.leftColumn}>
-          <View style={styles.bigActionGrid}>
-            <Pressable
-              disabled={!canRecord}
-              onPress={openUruguayPointFlow}
-              style={({ pressed }) => [styles.bigButton, styles.uruguayButton, !canRecord && styles.disabledButton, pressed && styles.pressed]}
-            >
-              <Text style={styles.bigButtonLabel}>Punto Uruguay</Text>
-              <Text style={styles.bigButtonHint}>{getPlayerName(players, selectedPlayerId)}</Text>
-            </Pressable>
+          <View style={styles.actionGrid}>
+            <View style={styles.actionRow}>
+              <Pressable
+                disabled={!canRecord}
+                onPress={openUruguayPointFlow}
+                style={({ pressed }) => [styles.actionCard, styles.uruguayButton, !canRecord && styles.disabledButton, pressed && styles.pressed]}
+              >
+                <Text numberOfLines={2} adjustsFontSizeToFit style={styles.actionButtonLabel}>Punto Uruguay</Text>
+                <Text numberOfLines={1} adjustsFontSizeToFit style={styles.actionButtonHint}>{getPlayerName(players, selectedPlayerId)}</Text>
+              </Pressable>
 
-            <View style={styles.splitActionButton}>
               <Pressable
                 disabled={!canRecord}
                 onPress={() => {
@@ -621,46 +648,69 @@ export function LiveMatchScreen({ navigation, route }: Props) {
                   setSelectedLandingLocation(undefined);
                 }}
                 style={({ pressed }) => [
-                  styles.splitActionHalf,
+                  styles.actionCard,
                   styles.opponentButton,
                   !canRecord && styles.disabledButton,
                   pressed && styles.pressed,
                 ]}
               >
-                <Text style={styles.splitButtonLabel}>Punto rival</Text>
+                <Text numberOfLines={2} adjustsFontSizeToFit style={styles.actionButtonLabel}>Punto rival</Text>
+                <Text numberOfLines={1} adjustsFontSizeToFit style={styles.actionButtonHint}>Mapa</Text>
               </Pressable>
 
               <Pressable
                 disabled={!canRecord}
                 onPress={recordOpponentOwnPointAction}
                 style={({ pressed }) => [
-                  styles.splitActionHalf,
+                  styles.actionCard,
                   styles.opponentOwnPointButton,
                   !canRecord && styles.disabledButton,
                   pressed && styles.pressed,
                 ]}
               >
-                <Text style={styles.splitButtonLabel}>En contra rival</Text>
+                <Text numberOfLines={2} adjustsFontSizeToFit style={styles.actionButtonLabel}>En contra rival</Text>
+                <Text numberOfLines={1} adjustsFontSizeToFit style={styles.actionButtonHint}>+1 Uruguay</Text>
               </Pressable>
             </View>
 
-            <Pressable
-              disabled={!canRecord}
-              onPress={recordSelectedDefense}
-              style={({ pressed }) => [styles.bigButton, styles.defenseButton, !canRecord && styles.disabledButton, pressed && styles.pressed]}
-            >
-              <Text style={styles.bigButtonLabel}>Defensa</Text>
-              <Text style={styles.bigButtonHint}>{getPlayerName(players, selectedPlayerId)}</Text>
-            </Pressable>
+            <View style={styles.actionRow}>
+              <Pressable
+                disabled={!canRecord}
+                onPress={recordSelectedDefense}
+                style={({ pressed }) => [
+                  styles.actionCard,
+                  styles.defenseButton,
+                  !canRecord && styles.disabledButton,
+                  pressed && styles.pressed,
+                ]}
+              >
+                <Text numberOfLines={2} adjustsFontSizeToFit style={styles.actionButtonLabel}>Defensa</Text>
+                <Text numberOfLines={1} adjustsFontSizeToFit style={styles.actionButtonHint}>Jugador</Text>
+              </Pressable>
 
-            <Pressable
-              disabled={!canRecord}
-              onPress={openErrorModal}
-              style={({ pressed }) => [styles.bigButton, styles.errorButton, !canRecord && styles.disabledButton, pressed && styles.pressed]}
-            >
-              <Text style={styles.bigButtonLabel}>Error</Text>
-              <Text style={styles.bigButtonHint}>{getPlayerName(players, selectedPlayerId)}</Text>
-            </Pressable>
+              <Pressable
+                disabled={!canRecord}
+                onPress={openOpponentDefenseMap}
+                style={({ pressed }) => [
+                  styles.actionCard,
+                  styles.opponentDefenseButton,
+                  !canRecord && styles.disabledButton,
+                  pressed && styles.pressed,
+                ]}
+              >
+                <Text numberOfLines={2} adjustsFontSizeToFit style={styles.actionButtonLabel}>Defensa rival</Text>
+                <Text numberOfLines={1} adjustsFontSizeToFit style={styles.actionButtonHint}>Mapa</Text>
+              </Pressable>
+
+              <Pressable
+                disabled={!canRecord}
+                onPress={openErrorModal}
+                style={({ pressed }) => [styles.actionCard, styles.errorButton, !canRecord && styles.disabledButton, pressed && styles.pressed]}
+              >
+                <Text numberOfLines={2} adjustsFontSizeToFit style={styles.actionButtonLabel}>Error</Text>
+                <Text numberOfLines={1} adjustsFontSizeToFit style={styles.actionButtonHint}>{getPlayerName(players, selectedPlayerId)}</Text>
+              </Pressable>
+            </View>
 
           </View>
 
@@ -909,34 +959,20 @@ const styles = StyleSheet.create({
     gap: spacing.xs,
     width: '100%',
   },
-  bigActionGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
+  actionGrid: {
     gap: spacing.xs,
   },
-  bigButton: {
-    flexGrow: 1,
-    flexBasis: '47%',
-    minHeight: 68,
-    borderRadius: 8,
-    padding: spacing.sm,
-    justifyContent: 'center',
-  },
-  splitActionButton: {
-    flexGrow: 1,
-    flexBasis: '47%',
-    minHeight: 68,
-    borderRadius: 8,
+  actionRow: {
     flexDirection: 'row',
-    overflow: 'hidden',
-    gap: 2,
+    gap: spacing.xs,
   },
-  splitActionHalf: {
+  actionCard: {
     flex: 1,
     minHeight: 68,
-    alignItems: 'center',
-    paddingHorizontal: spacing.sm,
+    borderRadius: 8,
+    paddingHorizontal: spacing.xs,
     paddingVertical: spacing.sm,
+    alignItems: 'center',
     justifyContent: 'center',
   },
   uruguayButton: {
@@ -950,6 +986,9 @@ const styles = StyleSheet.create({
   },
   defenseButton: {
     backgroundColor: '#0f766e',
+  },
+  opponentDefenseButton: {
+    backgroundColor: '#6d28d9',
   },
   errorButton: {
     backgroundColor: '#b42318',
@@ -1111,21 +1150,17 @@ const styles = StyleSheet.create({
     fontWeight: '900',
     textAlign: 'center',
   },
-  bigButtonLabel: {
+  actionButtonLabel: {
     color: '#ffffff',
-    fontSize: fontSize.button,
+    fontSize: fontSize.small,
     fontWeight: '900',
+    textAlign: 'center',
   },
-  bigButtonHint: {
+  actionButtonHint: {
     color: '#edf6ff',
     fontSize: fontSize.tiny,
-    fontWeight: '700',
+    fontWeight: '800',
     marginTop: 2,
-  },
-  splitButtonLabel: {
-    color: '#ffffff',
-    fontSize: fontSize.body,
-    fontWeight: '900',
     textAlign: 'center',
   },
   utilityRow: {

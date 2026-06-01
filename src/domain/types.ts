@@ -116,6 +116,12 @@ export type DefenseEvent = BaseMatchEvent & {
   playerId: string;
 };
 
+export type OpponentDefenseEvent = BaseMatchEvent & {
+  kind: 'opponent_defense';
+  team: 'opponent';
+  defenseLocation: CourtLocation;
+};
+
 export type SubstitutionEvent = BaseMatchEvent & {
   kind: 'substitution';
   team: TeamSide;
@@ -134,7 +140,7 @@ export type LineupSwapEvent = BaseMatchEvent & {
   lineupSnapshotId: string;
 };
 
-export type MatchEvent = PointEvent | ErrorEvent | DefenseEvent | SubstitutionEvent | LineupSwapEvent;
+export type MatchEvent = PointEvent | ErrorEvent | DefenseEvent | OpponentDefenseEvent | SubstitutionEvent | LineupSwapEvent;
 
 export type LineupSnapshot = {
   id: string;

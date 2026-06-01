@@ -1,4 +1,4 @@
-﻿import { getMostFrequentLandingZones } from './court';
+﻿import { getMostFrequentLandingZones, getMostFrequentOpponentDefenseZones } from './court';
 import { calculateScore, getCurrentLineup } from './stats';
 import {
   DefenseEvent,
@@ -42,6 +42,7 @@ export type TacticalInsightRules = {
   lowInvolvementTeamPoints: number;
   lowInvolvementTouches: number;
   opponentOwnPointWarning: number;
+  opponentDefenseZoneWarning: number;
 };
 
 const defaultRules: TacticalInsightRules = {
@@ -57,6 +58,7 @@ const defaultRules: TacticalInsightRules = {
   lowInvolvementTeamPoints: 5,
   lowInvolvementTouches: 0,
   opponentOwnPointWarning: 2,
+  opponentDefenseZoneWarning: 3,
 };
 
 const isPointEvent = (event: MatchEvent): event is PointEvent => event.kind === 'point';
@@ -280,6 +282,21 @@ const createOpponentOwnPointInsights = (
   ];
 };
 
+const createOpponentDefenseZoneInsights = (
+  recentEvents: MatchEvent[],
+  rules: TacticalInsightRules,
+): InsightCard[] => {
+  return getMostFrequentOpponentDefenseZones(recentEvents)
+    .filter((zone) => zone.total >= rules.opponentDefenseZoneWarning)
+    .map((zone) => ({
+      id: `opponent-defense-zone-${zone.label}`,
+      severity: 'warning',
+      title: 'Nos defienden seguido en una zona',
+      description: `El rival defendio ${zone.total} ataques en ${zone.label.toLowerCase()}.`,
+      suggestedAction: 'Variar angulos de ataque o rotar el punto de lanzamiento.',
+    }));
+};
+
 const createCurrentLineupInsight = (
   events: MatchEvent[],
   lineupSnapshots: LineupSnapshot[],
@@ -377,6 +394,7 @@ export function createTacticalInsights(
     createDefenseInsights(recentEvents, input.players, team),
     createTypedErrorInsights(recentEvents, input.players, team),
     createOpponentOwnPointInsights(recentEvents, rules),
+    createOpponentDefenseZoneInsights(recentEvents, rules),
     createOpponentZoneInsights(recentEvents, opponentName, rules),
     createCurrentLineupInsight(input.events, input.lineupSnapshots, team, rules),
     createLowInvolvementInsights(input.events, input.lineupSnapshots, input.players, team, rules),

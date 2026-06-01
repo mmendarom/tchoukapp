@@ -6,6 +6,7 @@ import {
   LineupSnapshot,
   Match,
   MatchEvent,
+  OpponentDefenseEvent,
   PointEvent,
   Score,
   TeamSide,
@@ -43,6 +44,7 @@ const isOpponentOwnPointEvent = (event: MatchEvent): event is PointEvent =>
 const isErrorEvent = (event: MatchEvent): event is ErrorEvent => event.kind === 'error';
 
 const isDefenseEvent = (event: MatchEvent): event is DefenseEvent => event.kind === 'defense';
+const isOpponentDefenseEvent = (event: MatchEvent): event is OpponentDefenseEvent => event.kind === 'opponent_defense';
 
 export const isTrackedErrorType = (errorType: ErrorType | string | undefined): errorType is 'falta' | 'punto_en_contra' =>
   errorType === 'falta' || errorType === 'punto_en_contra';
@@ -120,6 +122,10 @@ export function getDefensesByPlayer(events: MatchEvent[]): PlayerStat[] {
   });
 
   return sortByTotalDesc(Array.from(totals, ([playerId, total]) => ({ playerId, total })));
+}
+
+export function getOpponentDefenses(events: MatchEvent[]) {
+  return events.filter(isOpponentDefenseEvent);
 }
 
 export function getErrorsByTypeByPlayer(events: MatchEvent[]): PlayerErrorSummary[] {

@@ -109,6 +109,7 @@ Primera version:
 - Incluir resumen textual por zonas:
   - `Zonas de ataque`
   - `Zonas donde nos anotaron`
+  - `Zonas donde nos defendieron`
 - Agregar nota: `Mapa visual exportable pendiente para una proxima iteracion.`
 
 No se dibuja mapa visual en PDF en esta version para evitar complejidad y dependencias de captura.
@@ -167,6 +168,7 @@ Tests puros:
 - `Punto en contra rival` suma a Uruguay.
 - Incluye goleadores.
 - Incluye defensas.
+- Incluye defensas del rival por total y zonas cuando existen.
 - Incluye faltas.
 - Incluye puntos en contra.
 - Incluye puntos en contra del rival.

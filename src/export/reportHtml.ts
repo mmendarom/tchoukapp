@@ -53,6 +53,9 @@ const periodHtml = (period: PeriodReportData, opponentName: string) => `
     ${statListHtml(period.topScorers, 'Sin puntos de Uruguay.')}
     <h3>Defensas</h3>
     ${statListHtml(period.defenses, 'Sin defensas registradas.')}
+    <p><strong>Defensas del rival:</strong> ${period.opponentDefenses}</p>
+    <h3>Zonas donde nos defendieron</h3>
+    ${statListHtml(period.opponentDefenseZones, 'Sin ubicaciones registradas.')}
     <h3>Faltas</h3>
     ${statListHtml(period.faltas, 'Sin faltas registradas.')}
     <h3>Puntos en contra</h3>
@@ -114,8 +117,9 @@ export function buildMatchReportHtml(report: MatchReportData) {
     <h2>Estadisticas totales</h2>
     <h3>Goleadores</h3>
     ${statListHtml(report.totals.topScorers, 'Sin puntos de Uruguay.')}
-    <h3>Defensas</h3>
+    <h3>Defensas Uruguay</h3>
     ${statListHtml(report.totals.defenses, 'Sin defensas registradas.')}
+    <p><strong>Defensas del rival:</strong> ${report.totals.opponentDefenses}</p>
     <h3>Faltas</h3>
     ${statListHtml(report.totals.faltas, 'Sin faltas registradas.')}
     <h3>Puntos en contra</h3>
@@ -132,6 +136,8 @@ export function buildMatchReportHtml(report: MatchReportData) {
     ${report.zones.attack.length === 0 ? '<p class="muted">Sin ubicacion registrada.</p>' : `<ul>${report.zones.attack.map((stat) => `<li>${escapeHtml(stat.label)}: <strong>${stat.total}</strong></li>`).join('')}</ul>`}
     <h2>Zonas donde nos anotaron</h2>
     ${report.zones.against.length === 0 ? '<p class="muted">Sin ubicacion registrada.</p>' : `<ul>${report.zones.against.map((stat) => `<li>${escapeHtml(stat.label)}: <strong>${stat.total}</strong></li>`).join('')}</ul>`}
+    <h2>Zonas donde nos defendieron</h2>
+    ${report.zones.defended.length === 0 ? '<p class="muted">Sin ubicaciones registradas.</p>' : `<ul>${report.zones.defended.map((stat) => `<li>${escapeHtml(stat.label)}: <strong>${stat.total}</strong></li>`).join('')}</ul>`}
     <p class="note">Mapa visual exportable pendiente para una proxima iteracion.</p>
   </section>
 
@@ -170,7 +176,11 @@ export function buildMatchReportText(report: MatchReportData) {
     '',
     ...statLines('Goleadores', report.totals.topScorers, 'Sin puntos de Uruguay.'),
     '',
-    ...statLines('Defensas', report.totals.defenses, 'Sin defensas registradas.'),
+    ...statLines('Defensas Uruguay', report.totals.defenses, 'Sin defensas registradas.'),
+    '',
+    `Defensas del rival: ${report.totals.opponentDefenses}`,
+    '',
+    ...statLines('Zonas donde nos defendieron', report.zones.defended, 'Sin ubicaciones registradas.'),
     '',
     ...statLines('Faltas', report.totals.faltas, 'Sin faltas registradas.'),
     '',

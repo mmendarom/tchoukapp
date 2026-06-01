@@ -10,6 +10,7 @@ import {
   getDefensesByPlayer,
   getErrorsByPlayer,
   getErrorsByTypeByPlayer,
+  getOpponentDefenses,
   getOpponentOwnPoints,
   getOpponentPointsByZone,
   getPlusMinusByLineup,
@@ -48,6 +49,7 @@ export function MatchDashboardScreen({ navigation, route }: Props) {
   const errorsByPlayer = getErrorsByPlayer(match.events);
   const errorBreakdown = getErrorsByTypeByPlayer(match.events);
   const defensesByPlayer = getDefensesByPlayer(match.events);
+  const opponentDefenses = getOpponentDefenses(match.events);
   const opponentOwnPoints = getOpponentOwnPoints(match.events);
   const pointsByZone = getPointsByZone(match.events);
   const opponentPointsByZone = getOpponentPointsByZone(match.events);
@@ -72,6 +74,7 @@ export function MatchDashboardScreen({ navigation, route }: Props) {
         <StatCard label="Puntos Uruguay" value={score.uruguay} />
         <StatCard label="Puntos rival" value={score.opponent} />
         <StatCard label="En contra rival" value={opponentOwnPoints} />
+        <StatCard label="Def. rival" value={opponentDefenses.length} />
       </View>
 
       <View style={styles.analyticsGrid}>
@@ -84,12 +87,16 @@ export function MatchDashboardScreen({ navigation, route }: Props) {
           ))}
         </View>
         <View style={[styles.panel, isPhone && styles.panelPhone]}>
-          <Text style={styles.sectionTitle}>Defensas</Text>
+          <Text style={styles.sectionTitle}>Defensas Uruguay</Text>
           {defensesByPlayer.map((stat) => (
             <Text key={stat.playerId} style={styles.metric}>
               {playerLabel(stat.playerId)}: {stat.total}
             </Text>
           ))}
+        </View>
+        <View style={[styles.panel, isPhone && styles.panelPhone]}>
+          <Text style={styles.sectionTitle}>Defensas del rival</Text>
+          <Text style={styles.metric}>{opponentDefenses.length}</Text>
         </View>
         <View style={[styles.panel, isPhone && styles.panelPhone]}>
           <Text style={styles.sectionTitle}>Faltas</Text>

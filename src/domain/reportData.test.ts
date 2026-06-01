@@ -70,6 +70,8 @@ describe('buildMatchReportData', () => {
         point({ id: 'own-1', kind: 'error', team: 'uruguay', playerId: 'p2', errorType: 'punto_en_contra' } as Partial<MatchEvent>),
         point({ id: 'f-1', kind: 'error', team: 'uruguay', playerId: 'p2', errorType: 'falta' } as Partial<MatchEvent>),
         point({ id: 'd-1', kind: 'defense', team: 'uruguay', playerId: 'p1' } as Partial<MatchEvent>),
+        point({ id: 'rd-1', kind: 'opponent_defense', team: 'opponent', playerId: undefined, defenseLocation: { x: 0.52, y: 0.3 } } as Partial<MatchEvent>),
+        point({ id: 'rd-2', kind: 'opponent_defense', team: 'opponent', playerId: undefined, defenseLocation: { x: 0.48, y: 0.4 } } as Partial<MatchEvent>),
         point({ id: 's-1', kind: 'substitution', team: 'uruguay', playerOutId: 'p2', playerInId: 'p3', lineupSnapshotId: 'lineup-final' } as Partial<MatchEvent>),
         point({ id: 'swap-1', kind: 'lineup_swap', team: 'uruguay', playerAId: 'p1', playerBId: 'p3', fromSlotIndex: 0, toSlotIndex: 1, lineupSnapshotId: 'lineup-final' } as Partial<MatchEvent>),
       ]),
@@ -83,9 +85,11 @@ describe('buildMatchReportData', () => {
       opponentPoints: 2,
       ownPoints: 1,
       opponentOwnPoints: 1,
+      opponentDefenses: 2,
     });
     expect(report.totals.topScorers).toEqual([{ label: '#1 Mauro', total: 1 }]);
     expect(report.totals.defenses).toEqual([{ label: '#1 Mauro', total: 1 }]);
+    expect(report.totals.opponentDefenses).toBe(2);
     expect(report.totals.faltas).toEqual([{ label: '#2 Marcelo', total: 1 }]);
     expect(report.totals.ownPointsByPlayer).toEqual([{ label: '#2 Marcelo', total: 1 }]);
     expect(report.totals.totalErrors).toEqual([{ label: '#2 Marcelo', total: 2 }]);
@@ -100,6 +104,7 @@ describe('buildMatchReportData', () => {
     expect(report.lineups.final).toEqual(['#1 Mauro', '#3 Nicolas']);
     expect(report.zones.attack[0]).toMatchObject({ label: 'Zona derecha', total: 1 });
     expect(report.zones.against[0]).toMatchObject({ label: 'Zona izquierda', total: 1 });
+    expect(report.zones.defended[0]).toMatchObject({ label: 'Zona central', total: 2 });
   });
 
   it('uses safe fallbacks for missing data and old events', () => {
@@ -123,5 +128,6 @@ describe('buildMatchReportData', () => {
     expect(report.lineups.final).toEqual(['Sin datos registrados']);
     expect(report.notes).toBe('Sin notas registradas.');
     expect(report.zones.attack).toEqual([]);
+    expect(report.zones.defended).toEqual([]);
   });
 });

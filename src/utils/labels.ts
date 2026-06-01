@@ -72,7 +72,9 @@ export const eventKindLabel = (event: MatchEvent) => {
     case 'error':
       return event.team === 'uruguay' ? safeErrorLabel(event.errorType) : 'Error rival';
     case 'defense':
-      return 'Defensa';
+      return 'Defensa Uruguay';
+    case 'opponent_defense':
+      return 'Defensa rival';
     case 'substitution':
       return 'Cambio';
     case 'lineup_swap':

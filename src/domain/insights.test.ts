@@ -97,4 +97,24 @@ describe('createTacticalInsights zone labels', () => {
     expect(insights.some((insight) => insight.title === 'Puntos regalados por el rival')).toBe(true);
     expect(insights.some((insight) => insight.id.startsWith('opponent-zone'))).toBe(false);
   });
+
+  it('creates rival defense zone insight without raw enum values', () => {
+    const insights = createTacticalInsights(
+      {
+        events: [
+          point({ id: 'rd-1', kind: 'opponent_defense', team: 'opponent', defenseLocation: { x: 0.5, y: 0.2 } } as Partial<MatchEvent>),
+          point({ id: 'rd-2', kind: 'opponent_defense', team: 'opponent', defenseLocation: { x: 0.52, y: 0.3 } } as Partial<MatchEvent>),
+          point({ id: 'rd-3', kind: 'opponent_defense', team: 'opponent', defenseLocation: { x: 0.48, y: 0.4 } } as Partial<MatchEvent>),
+        ],
+        lineupSnapshots: [],
+      },
+      { opponentDefenseZoneWarning: 3 },
+    );
+    const text = insights.map((insight) => `${insight.title} ${insight.description}`).join(' ');
+
+    expect(text).toContain('Nos defienden seguido en una zona');
+    expect(text).toContain('zona central');
+    expect(text).not.toContain('opponent_defense');
+    expect(text).not.toMatch(/\b(center|left|right)\b/);
+  });
 });

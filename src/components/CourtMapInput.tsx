@@ -22,7 +22,7 @@ type CourtMapInputProps = {
   onSelectLocation: (location: CourtLocation) => void;
   onConfirm: () => void;
   onCancel: () => void;
-  mode: 'uruguay_point' | 'opponent_point';
+  mode: 'uruguay_point' | 'opponent_point' | 'opponent_defense';
 };
 
 type CourtRect = {
@@ -47,7 +47,17 @@ export function CourtMapInput({ selectedLocation, onSelectLocation, onConfirm, o
   const [lastTap, setLastTap] = useState<{ x: number; y: number } | null>(null);
 
   const isLandscape = windowWidth > windowHeight;
-  const title = mode === 'uruguay_point' ? '¿Dónde cayó nuestro punto?' : '¿Dónde nos hicieron el punto?';
+  const title =
+    mode === 'uruguay_point'
+      ? '¿Dónde cayó nuestro punto?'
+      : mode === 'opponent_point'
+        ? '¿Dónde nos hicieron el punto?'
+        : '¿Dónde nos defendieron?';
+  const kicker = mode === 'opponent_defense' ? 'Marcá dónde nos defendieron' : 'Marcá dónde cayó la pelota';
+  const tip =
+    mode === 'opponent_defense'
+      ? 'Marcá dónde el rival defendió nuestro ataque.'
+      : 'Tip: girá el celular para marcar con más precisión.';
   const mapHeight = useMemo(() => {
     const verticalInsets = insets.top + insets.bottom;
 
@@ -164,9 +174,9 @@ export function CourtMapInput({ selectedLocation, onSelectLocation, onConfirm, o
       >
         <View style={[styles.content, isLandscape && styles.contentLandscape]}>
           <View style={[styles.header, isLandscape && styles.headerLandscape]}>
-            <Text style={styles.kicker}>Marcá dónde cayó la pelota</Text>
+            <Text style={styles.kicker}>{kicker}</Text>
             <Text style={styles.title}>{title}</Text>
-            <Text style={styles.tip}>Tip: girá el celular para marcar con más precisión.</Text>
+            <Text style={styles.tip}>{tip}</Text>
           </View>
 
           <CourtField

@@ -5,7 +5,7 @@ import { Share, StyleSheet, Text, TextInput, View } from 'react-native';
 import { ActionButton } from '../components/ActionButton';
 import { CourtMapSummary } from '../components/CourtMapSummary';
 import { Screen } from '../components/Screen';
-import { groupOpponentPointsByZone, groupPointsByZone } from '../domain/court';
+import { groupOpponentDefensesByZone, groupOpponentPointsByZone, groupPointsByZone } from '../domain/court';
 import { createTacticalInsights } from '../domain/insights';
 import { buildMatchReportData } from '../domain/reportData';
 import { exportMatchReportPdf } from '../export/exportMatchReport';
@@ -17,6 +17,7 @@ import {
   getErrorsByTypeByPlayer,
   getLineupSwaps,
   getOpponentOwnPoints,
+  getOpponentDefenses,
   getPointsByPlayer,
   getScoreByPeriod,
   getSubstitutions,
@@ -89,9 +90,11 @@ export function FinalSummaryScreen({ route }: Props) {
   const errors = getErrorsByPlayer(match.events);
   const errorBreakdown = getErrorsByTypeByPlayer(match.events);
   const defenses = getDefensesByPlayer(match.events);
+  const opponentDefenses = getOpponentDefenses(match.events);
   const opponentOwnPoints = getOpponentOwnPoints(match.events);
   const zones = groupPointsByZone(match.events);
   const opponentZones = groupOpponentPointsByZone(match.events);
+  const defendedZones = groupOpponentDefensesByZone(match.events);
   const substitutions = getSubstitutions(match.events);
   const lineupSwaps = getLineupSwaps(match.events);
   const insights = createTacticalInsights({
@@ -129,17 +132,22 @@ export function FinalSummaryScreen({ route }: Props) {
           ))
         )}
       </View>
-      <CourtMapSummary title="Mapa general: nuestros puntos" events={match.events} team="uruguay" />
-      <CourtMapSummary title="Mapa general: puntos recibidos" events={match.events} team="opponent" />
+      <CourtMapSummary title="Dónde hicimos los puntos" events={match.events} team="uruguay" />
+      <CourtMapSummary title="Dónde nos hicieron puntos" events={match.events} team="opponent" />
+      <CourtMapSummary title="Dónde nos defendieron" events={match.events} source="opponent_defenses" />
       <View style={styles.card}>
         <Text style={styles.sectionTitle}>Goleadores</Text>
         {scorers.map((stat) => <Text key={stat.playerId} style={styles.metric}>{playerName(stat.playerId)}: {stat.total}</Text>)}
       </View>
       <View style={styles.card}>
-        <Text style={styles.sectionTitle}>Defensas totales</Text>
+        <Text style={styles.sectionTitle}>Defensas Uruguay</Text>
         {defenses.length === 0 ? <Text style={styles.metric}>Sin defensas registradas.</Text> : defenses.map((stat) => (
           <Text key={stat.playerId} style={styles.metric}>{playerName(stat.playerId)}: {stat.total}</Text>
         ))}
+      </View>
+      <View style={styles.card}>
+        <Text style={styles.sectionTitle}>Defensas del rival</Text>
+        <Text style={styles.metric}>{opponentDefenses.length}</Text>
       </View>
       <View style={styles.card}>
         <Text style={styles.sectionTitle}>Faltas totales</Text>
@@ -170,6 +178,12 @@ export function FinalSummaryScreen({ route }: Props) {
       <View style={styles.card}>
         <Text style={styles.sectionTitle}>Zonas vulnerables</Text>
         {opponentZones.length === 0 ? <Text style={styles.metric}>Sin ubicacion registrada.</Text> : opponentZones.map((stat) => (
+          <Text key={stat.label} style={styles.metric}>{stat.label}: {stat.total}</Text>
+        ))}
+      </View>
+      <View style={styles.card}>
+        <Text style={styles.sectionTitle}>Zonas donde nos defendieron</Text>
+        {defendedZones.length === 0 ? <Text style={styles.metric}>Sin ubicaciones registradas.</Text> : defendedZones.map((stat) => (
           <Text key={stat.label} style={styles.metric}>{stat.label}: {stat.total}</Text>
         ))}
       </View>
