@@ -45,7 +45,7 @@ describe('useMatchStore period stability', () => {
 
   it('records events in the current live period', () => {
     createLivePeriodMatch();
-    useMatchStore.getState().recordEvent({ type: 'goal', side: 'uruguay', playerId: 'uru-01', landingLocation });
+    useMatchStore.getState().recordEvent({ type: 'goal', side: 'uruguay', playerId: 'mauro', landingLocation });
 
     const match = getActiveMatch();
     expect(match.events[0].periodNumber).toBe(1);
@@ -56,20 +56,20 @@ describe('useMatchStore period stability', () => {
     const state = useMatchStore.getState();
     const matchId = state.createDemoMatch();
     state.startMatch(matchId);
-    useMatchStore.getState().recordEvent({ type: 'goal', side: 'uruguay', playerId: 'uru-01', landingLocation });
+    useMatchStore.getState().recordEvent({ type: 'goal', side: 'uruguay', playerId: 'mauro', landingLocation });
 
     expect(getActiveMatch().events).toHaveLength(0);
 
     useMatchStore.getState().startCurrentPeriod();
     useMatchStore.getState().endCurrentPeriod();
-    useMatchStore.getState().recordEvent({ type: 'goal', side: 'uruguay', playerId: 'uru-01', landingLocation });
+    useMatchStore.getState().recordEvent({ type: 'goal', side: 'uruguay', playerId: 'mauro', landingLocation });
 
     expect(getActiveMatch().events).toHaveLength(0);
   });
 
   it('undo after point updates score from events', () => {
     createLivePeriodMatch();
-    useMatchStore.getState().recordEvent({ type: 'goal', side: 'uruguay', playerId: 'uru-01', landingLocation });
+    useMatchStore.getState().recordEvent({ type: 'goal', side: 'uruguay', playerId: 'mauro', landingLocation });
     useMatchStore.getState().undoLastEvent();
 
     expect(calculateTotalScore(getActiveMatch().events)).toEqual({ uruguay: 0, opponent: 0 });
@@ -207,6 +207,46 @@ describe('useMatchStore period stability', () => {
     ]);
   });
 
+  it('swaps two on-court players and records a lineup swap event', () => {
+    createLivePeriodMatch();
+    const initialMatch = getActiveMatch();
+
+    useMatchStore.getState().swapLineupPlayers({ fromSlotIndex: 0, toSlotIndex: 2 });
+
+    const match = getActiveMatch();
+    const currentLineup = getCurrentLineup(match, 'uruguay');
+
+    expect(match.lineupSnapshots).toHaveLength(initialMatch.lineupSnapshots.length + 1);
+    expect(currentLineup?.playerIds).toEqual(['nicolas', 'marcelo', 'mauro', 'vladi', 'errazquin', 'leon', 'mathias']);
+    expect(match.events[0]).toMatchObject({
+      kind: 'lineup_swap',
+      playerAId: 'mauro',
+      playerBId: 'nicolas',
+      fromSlotIndex: 0,
+      toSlotIndex: 2,
+      lineupSnapshotId: currentLineup?.id,
+    });
+  });
+
+  it('undo after court swap restores previous lineup', () => {
+    createLivePeriodMatch();
+
+    useMatchStore.getState().swapLineupPlayers({ fromSlotIndex: 0, toSlotIndex: 2 });
+    useMatchStore.getState().undoLastEvent();
+
+    const match = getActiveMatch();
+    expect(match.events).toHaveLength(0);
+    expect(getCurrentLineup(match, 'uruguay')?.playerIds).toEqual([
+      'mauro',
+      'marcelo',
+      'nicolas',
+      'vladi',
+      'errazquin',
+      'leon',
+      'mathias',
+    ]);
+  });
+
   it('supports confirmed slot substitution from visual change mode', () => {
     createLivePeriodMatch();
 
@@ -268,7 +308,7 @@ describe('useMatchStore period stability', () => {
 
   it('cancelling a live match marks it cancelled, clears events and active state', () => {
     const matchId = createLivePeriodMatch();
-    useMatchStore.getState().recordEvent({ type: 'goal', side: 'uruguay', playerId: 'uru-01', landingLocation });
+    useMatchStore.getState().recordEvent({ type: 'goal', side: 'uruguay', playerId: 'mauro', landingLocation });
     useMatchStore.getState().cancelMatch(matchId);
 
     const nextState = useMatchStore.getState();
@@ -280,13 +320,13 @@ describe('useMatchStore period stability', () => {
 
   it('calculates final score by periods from events', () => {
     createLivePeriodMatch();
-    useMatchStore.getState().recordEvent({ type: 'goal', side: 'uruguay', playerId: 'uru-01', landingLocation });
+    useMatchStore.getState().recordEvent({ type: 'goal', side: 'uruguay', playerId: 'mauro', landingLocation });
     useMatchStore.getState().recordOpponentOwnPoint();
     useMatchStore.getState().recordEvent({ type: 'goal', side: 'opponent', landingLocation: { x: 0.5, y: 0.5 } });
     useMatchStore.getState().endCurrentPeriod();
     useMatchStore.getState().advancePeriod();
     useMatchStore.getState().startCurrentPeriod();
-    useMatchStore.getState().recordEvent({ type: 'goal', side: 'uruguay', playerId: 'uru-02', landingLocation: { x: 0.2, y: 0.5 } });
+    useMatchStore.getState().recordEvent({ type: 'goal', side: 'uruguay', playerId: 'marcelo', landingLocation: { x: 0.2, y: 0.5 } });
 
     const periodScores = getScoreByPeriod(getActiveMatch().events);
     expect(periodScores[0].score).toEqual({ uruguay: 2, opponent: 1 });
@@ -295,8 +335,24 @@ describe('useMatchStore period stability', () => {
 
   it('prevents saving points without landingLocation', () => {
     createLivePeriodMatch();
-    useMatchStore.getState().recordEvent({ type: 'goal', side: 'uruguay', playerId: 'uru-01' });
+    useMatchStore.getState().recordEvent({ type: 'goal', side: 'uruguay', playerId: 'mauro' });
     useMatchStore.getState().recordEvent({ type: 'goal', side: 'opponent' });
+
+    expect(getActiveMatch().events).toHaveLength(0);
+  });
+
+  it('prevents Uruguay points without selected scorer', () => {
+    createLivePeriodMatch();
+
+    useMatchStore.getState().recordEvent({ type: 'goal', side: 'uruguay', landingLocation });
+
+    expect(getActiveMatch().events).toHaveLength(0);
+  });
+
+  it('prevents Uruguay points for players off court', () => {
+    createLivePeriodMatch();
+
+    useMatchStore.getState().recordEvent({ type: 'goal', side: 'uruguay', playerId: 'tadeo', landingLocation });
 
     expect(getActiveMatch().events).toHaveLength(0);
   });

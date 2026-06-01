@@ -7,6 +7,7 @@ type LineupCourtProps = {
   slots: LineupSlot[];
   selectedPlayerId?: string;
   selectedSlotIndex?: number;
+  selectedSecondarySlotIndex?: number;
   highlightSlots?: boolean;
   onSlotPress?: (slot: LineupSlot) => void;
 };
@@ -25,6 +26,7 @@ export function LineupCourt({
   slots,
   selectedPlayerId,
   selectedSlotIndex,
+  selectedSecondarySlotIndex,
   highlightSlots,
   onSlotPress,
 }: LineupCourtProps) {
@@ -41,6 +43,7 @@ export function LineupCourt({
       <View style={[styles.frame, styles.rightFrame]} />
       {slots.map((slot) => {
         const selected = selectedSlotIndex === slot.index || (!!slot.playerId && selectedPlayerId === slot.playerId);
+        const secondarySelected = selectedSecondarySlotIndex === slot.index;
         const playerName = slot.player ? `${slot.player.firstName} ${slot.player.lastName}`.trim() : 'Lugar libre';
 
         return (
@@ -54,6 +57,7 @@ export function LineupCourt({
               { width: slotWidth, height: slotHeight, marginLeft: -slotWidth / 2, marginTop: -slotHeight / 2 },
               highlightSlots && styles.highlightSlot,
               selected && styles.selectedSlot,
+              secondarySelected && styles.secondarySelectedSlot,
               !slot.player && styles.emptySlot,
               pressed && styles.pressed,
             ]}
@@ -63,15 +67,16 @@ export function LineupCourt({
                 styles.avatar,
                 { width: avatarSize, height: avatarSize, borderRadius: avatarSize / 2 },
                 selected && styles.selectedAvatar,
+                secondarySelected && styles.secondarySelectedAvatar,
                 !slot.player && styles.emptyAvatar,
               ]}
             >
-              <Text style={[styles.avatarText, selected && styles.selectedAvatarText]}>{slot.player ? getPlayerInitials(slot.player) : '+'}</Text>
+              <Text style={[styles.avatarText, (selected || secondarySelected) && styles.selectedAvatarText]}>{slot.player ? getPlayerInitials(slot.player) : '+'}</Text>
             </View>
             {slot.player?.number ? (
-              <Text style={[styles.number, selected && styles.selectedText]}>#{slot.player.number}</Text>
+              <Text style={[styles.number, (selected || secondarySelected) && styles.selectedText]}>#{slot.player.number}</Text>
             ) : null}
-            <Text numberOfLines={1} adjustsFontSizeToFit style={[styles.name, selected && styles.selectedText]}>
+            <Text numberOfLines={1} adjustsFontSizeToFit style={[styles.name, (selected || secondarySelected) && styles.selectedText]}>
               {playerName}
             </Text>
           </Pressable>
@@ -140,6 +145,10 @@ const styles = StyleSheet.create({
     backgroundColor: '#0b6bcb',
     borderColor: '#0b6bcb',
   },
+  secondarySelectedSlot: {
+    backgroundColor: '#188038',
+    borderColor: '#188038',
+  },
   emptySlot: {
     borderStyle: 'dashed',
     backgroundColor: 'rgba(255, 255, 255, 0.72)',
@@ -151,6 +160,9 @@ const styles = StyleSheet.create({
     marginBottom: 1,
   },
   selectedAvatar: {
+    backgroundColor: '#ffffff',
+  },
+  secondarySelectedAvatar: {
     backgroundColor: '#ffffff',
   },
   selectedAvatarText: {

@@ -15,6 +15,7 @@ import {
   getDefensesByPlayer,
   getErrorsByPlayer,
   getErrorsByTypeByPlayer,
+  getLineupSwaps,
   getOpponentOwnPoints,
   getPointsByPlayer,
   getScoreByPeriod,
@@ -92,6 +93,7 @@ export function FinalSummaryScreen({ route }: Props) {
   const zones = groupPointsByZone(match.events);
   const opponentZones = groupOpponentPointsByZone(match.events);
   const substitutions = getSubstitutions(match.events);
+  const lineupSwaps = getLineupSwaps(match.events);
   const insights = createTacticalInsights({
     events: match.events,
     lineupSnapshots: match.lineupSnapshots,
@@ -173,7 +175,7 @@ export function FinalSummaryScreen({ route }: Props) {
       </View>
       <View style={styles.card}>
         <Text style={styles.sectionTitle}>Cambios</Text>
-        <Text style={styles.metric}>{substitutions.length} cambios registrados.</Text>
+        <Text style={styles.metric}>{substitutions.length} cambios y {lineupSwaps.length} intercambios en cancha registrados.</Text>
       </View>
       <View style={styles.card}>
         <Text style={styles.sectionTitle}>Notas finales</Text>

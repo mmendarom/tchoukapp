@@ -59,6 +59,30 @@ export function replaceLineupSlotPlayer(playerIds: string[], slotIndex: number, 
   return nextPlayerIds;
 }
 
+export function swapLineupSlotPlayers(playerIds: string[], fromSlotIndex: number, toSlotIndex: number) {
+  if (
+    fromSlotIndex < 0 ||
+    toSlotIndex < 0 ||
+    fromSlotIndex >= LINEUP_SLOT_COUNT ||
+    toSlotIndex >= LINEUP_SLOT_COUNT ||
+    fromSlotIndex === toSlotIndex
+  ) {
+    return playerIds;
+  }
+
+  const nextPlayerIds = playerIds.slice(0, LINEUP_SLOT_COUNT);
+
+  while (nextPlayerIds.length < LINEUP_SLOT_COUNT) {
+    nextPlayerIds.push('');
+  }
+
+  const fromPlayerId = nextPlayerIds[fromSlotIndex];
+  nextPlayerIds[fromSlotIndex] = nextPlayerIds[toSlotIndex];
+  nextPlayerIds[toSlotIndex] = fromPlayerId;
+
+  return nextPlayerIds;
+}
+
 export function getBenchPlayers(players: Player[], lineup: Pick<LineupSnapshot, 'playerIds'> | undefined) {
   const onCourtIds = new Set((lineup?.playerIds ?? []).filter(Boolean));
   return players.filter((player) => !onCourtIds.has(player.id));

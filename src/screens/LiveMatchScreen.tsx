@@ -46,6 +46,8 @@ const describeEvent = (event: MatchEvent, players: Player[]) => {
       return event.playerOutId
         ? `Cambio - sale ${getPlayerName(players, event.playerOutId)}, entra ${getPlayerName(players, event.playerInId)}`
         : `Cambio - entra ${getPlayerName(players, event.playerInId)}`;
+    case 'lineup_swap':
+      return `Intercambio en cancha: ${getPlayerName(players, event.playerAId)} ↔ ${getPlayerName(players, event.playerBId)}`;
     default:
       return 'Accion registrada';
   }
@@ -57,6 +59,7 @@ export function LiveMatchScreen({ navigation, route }: Props) {
   const [selectedPlayerId, setSelectedPlayerId] = useState<string | undefined>();
   const [changeModeActive, setChangeModeActive] = useState(false);
   const [selectedSubOutSlotIndex, setSelectedSubOutSlotIndex] = useState<number | undefined>();
+  const [selectedSwapSlotIndex, setSelectedSwapSlotIndex] = useState<number | undefined>();
   const [selectedBenchPlayerId, setSelectedBenchPlayerId] = useState<string | undefined>();
   const [pointMode, setPointMode] = useState<'uruguay_point' | 'opponent_point' | undefined>();
   const [errorModalVisible, setErrorModalVisible] = useState(false);
@@ -79,6 +82,7 @@ export function LiveMatchScreen({ navigation, route }: Props) {
   const recordDefense = useMatchStore((state) => state.recordDefense);
   const recordError = useMatchStore((state) => state.recordError);
   const substitutePlayer = useMatchStore((state) => state.substitutePlayer);
+  const swapLineupPlayers = useMatchStore((state) => state.swapLineupPlayers);
   const undoLastEvent = useMatchStore((state) => state.undoLastEvent);
   const advancePeriod = useMatchStore((state) => state.advancePeriod);
   const completeActiveMatch = useMatchStore((state) => state.completeActiveMatch);
@@ -134,7 +138,14 @@ export function LiveMatchScreen({ navigation, route }: Props) {
     ) {
       setSelectedSubOutSlotIndex(undefined);
     }
-  }, [lineupSlots, selectedSubOutSlotIndex]);
+
+    if (
+      typeof selectedSwapSlotIndex === 'number' &&
+      !lineupSlots.some((slot) => slot.index === selectedSwapSlotIndex && slot.playerId)
+    ) {
+      setSelectedSwapSlotIndex(undefined);
+    }
+  }, [lineupSlots, selectedSubOutSlotIndex, selectedSwapSlotIndex]);
 
   useEffect(() => {
     if (!feedbackMessage) {
@@ -215,6 +226,34 @@ export function LiveMatchScreen({ navigation, route }: Props) {
   const finishPeriod = () => {
     endCurrentPeriod();
     navigation.navigate('PeriodSummary', { matchId: match.id, periodNumber: match.currentPeriod });
+  };
+
+  const toggleTimer = () => {
+    if (currentPeriodState?.timerRunning) {
+      pauseTimer();
+      return;
+    }
+
+    resumeTimer();
+  };
+
+  const openUruguayPointFlow = () => {
+    if (!canRecord) {
+      return;
+    }
+
+    if (!selectedPlayerId) {
+      setFeedbackMessage('Seleccioná primero quién hizo el punto.');
+      return;
+    }
+
+    if (!selectedOnCourtPlayer) {
+      setFeedbackMessage('Seleccioná un jugador en cancha.');
+      return;
+    }
+
+    setPointMode('uruguay_point');
+    setSelectedLandingLocation(undefined);
   };
 
   const confirmPointLocation = () => {
@@ -308,6 +347,7 @@ export function LiveMatchScreen({ navigation, route }: Props) {
   const resetSubstitutionFlow = () => {
     setChangeModeActive(false);
     setSelectedSubOutSlotIndex(undefined);
+    setSelectedSwapSlotIndex(undefined);
     setSelectedBenchPlayerId(undefined);
   };
 
@@ -330,6 +370,7 @@ export function LiveMatchScreen({ navigation, route }: Props) {
       return;
     }
 
+    setSelectedSwapSlotIndex(undefined);
     setSelectedBenchPlayerId((current) => (current === player.id ? undefined : player.id));
   };
 
@@ -340,6 +381,7 @@ export function LiveMatchScreen({ navigation, route }: Props) {
 
     setChangeModeActive(true);
     setSelectedSubOutSlotIndex(undefined);
+    setSelectedSwapSlotIndex(undefined);
     setSelectedBenchPlayerId(undefined);
   };
 
@@ -357,9 +399,28 @@ export function LiveMatchScreen({ navigation, route }: Props) {
       typeof selectedSubOutSlotIndex === 'number'
         ? lineupSlots.find((slot) => slot.index === selectedSubOutSlotIndex)
         : undefined;
+    const selectedSwapSlot =
+      typeof selectedSwapSlotIndex === 'number'
+        ? lineupSlots.find((slot) => slot.index === selectedSwapSlotIndex)
+        : undefined;
 
-    if (!selectedSlot?.playerId || !selectedBenchPlayerId) {
-      setFeedbackMessage('SeleccionÃ¡ un jugador en cancha y uno del banco.');
+    if (!selectedSlot?.playerId || (!selectedBenchPlayerId && !selectedSwapSlot?.playerId)) {
+      setFeedbackMessage('Seleccioná dos jugadores en cancha o un jugador en cancha y uno del banco.');
+      return;
+    }
+
+    if (selectedSwapSlot?.playerId) {
+      const playerAName = getPlayerName(players, selectedSlot.playerId);
+      const playerBName = getPlayerName(players, selectedSwapSlot.playerId);
+
+      swapLineupPlayers({ fromSlotIndex: selectedSlot.index, toSlotIndex: selectedSwapSlot.index });
+      resetSubstitutionFlow();
+      setFeedbackMessage(`Intercambio realizado: ${playerAName} ↔ ${playerBName}`);
+      return;
+    }
+
+    if (!selectedBenchPlayerId) {
+      setFeedbackMessage('Seleccioná dos jugadores en cancha o un jugador en cancha y uno del banco.');
       return;
     }
 
@@ -379,20 +440,59 @@ export function LiveMatchScreen({ navigation, route }: Props) {
   return (
     <Screen>
       <View style={styles.scoreboard}>
-        <View style={styles.scoreBlock}>
-          <Text style={styles.teamLabel}>Uruguay</Text>
-          <Text style={styles.score}>{score.uruguay}</Text>
+        <View style={styles.scoreboardTopRow}>
+          <View style={styles.scoreboardControlSlot}>
+            {canRecord && (
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={currentPeriodState?.timerRunning ? 'Pausar' : 'Reanudar'}
+                hitSlop={8}
+                onPress={toggleTimer}
+                style={({ pressed }) => [styles.headerPillButton, pressed && styles.pressed]}
+              >
+                <Text style={styles.headerPillText}>{currentPeriodState?.timerRunning ? 'Pausar' : 'Reanudar'}</Text>
+              </Pressable>
+            )}
+          </View>
+
+          <Text numberOfLines={1} style={styles.setIndicator}>{formatPeriodName(match.currentPeriod)}</Text>
+
+          <View style={[styles.scoreboardControlSlot, styles.scoreboardControlSlotRight]}>
+            {canRecord && (
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Finalizar tiempo"
+                hitSlop={8}
+                onPress={finishPeriod}
+                style={({ pressed }) => [styles.headerPillButton, styles.headerFinishButton, pressed && styles.pressed]}
+              >
+                <Text style={[styles.headerPillText, styles.headerFinishText]}>Fin tiempo</Text>
+              </Pressable>
+            )}
+          </View>
         </View>
-        <View style={[styles.matchMeta, isPhone && styles.matchMetaPhone]}>
-          <Text style={styles.setIndicator}>{formatPeriodName(match.currentPeriod)}</Text>
-          <Text style={styles.matchTitle}>vs {match.opponent}</Text>
-          <Text style={styles.matchStatus}>{match.status === 'period_break' ? 'Entretiempo' : statusLabel[match.status]}</Text>
-          <Text style={styles.timerLabel}>Tiempo restante</Text>
-          <Text style={styles.timer}>{timerText}</Text>
+
+        <View style={styles.scoreboardScoreRow}>
+          <View style={styles.scoreBlock}>
+            <Text numberOfLines={1} adjustsFontSizeToFit style={styles.teamLabel}>URU</Text>
+            <Text style={styles.score}>{score.uruguay}</Text>
+          </View>
+
+          <View style={styles.matchMeta}>
+            <Text numberOfLines={1} adjustsFontSizeToFit style={styles.matchTitle}>vs {match.opponent}</Text>
+          </View>
+
+          <View style={styles.scoreBlock}>
+            <Text numberOfLines={1} adjustsFontSizeToFit style={styles.teamLabel}>RIVAL</Text>
+            <Text style={styles.score}>{score.opponent}</Text>
+          </View>
         </View>
-        <View style={styles.scoreBlock}>
-          <Text style={styles.teamLabel}>Rival</Text>
-          <Text style={styles.score}>{score.opponent}</Text>
+
+        <View style={styles.scoreboardTimerRow}>
+          <Text numberOfLines={1} adjustsFontSizeToFit style={styles.timerLine}>
+            {match.status === 'period_break' ? 'Entretiempo' : statusLabel[match.status]} · Tiempo restante{' '}
+            <Text style={styles.timerValue}>{timerText}</Text>
+          </Text>
         </View>
       </View>
 
@@ -506,10 +606,7 @@ export function LiveMatchScreen({ navigation, route }: Props) {
           <View style={styles.bigActionGrid}>
             <Pressable
               disabled={!canRecord}
-              onPress={() => {
-                setPointMode('uruguay_point');
-                setSelectedLandingLocation(undefined);
-              }}
+              onPress={openUruguayPointFlow}
               style={({ pressed }) => [styles.bigButton, styles.uruguayButton, !canRecord && styles.disabledButton, pressed && styles.pressed]}
             >
               <Text style={styles.bigButtonLabel}>Punto Uruguay</Text>
@@ -587,11 +684,25 @@ export function LiveMatchScreen({ navigation, route }: Props) {
               slots={lineupSlots}
               selectedPlayerId={changeModeActive ? undefined : selectedPlayerId}
               selectedSlotIndex={changeModeActive ? selectedSubOutSlotIndex : undefined}
+              selectedSecondarySlotIndex={changeModeActive ? selectedSwapSlotIndex : undefined}
               highlightSlots={changeModeActive}
               onSlotPress={(slot) => {
                 if (changeModeActive) {
                   if (slot.playerId) {
-                    setSelectedSubOutSlotIndex(slot.index);
+                    if (typeof selectedSubOutSlotIndex !== 'number') {
+                      setSelectedSubOutSlotIndex(slot.index);
+                      setSelectedBenchPlayerId(undefined);
+                      return;
+                    }
+
+                    if (slot.index === selectedSubOutSlotIndex) {
+                      setSelectedSubOutSlotIndex(undefined);
+                      setSelectedSwapSlotIndex(undefined);
+                      return;
+                    }
+
+                    setSelectedSwapSlotIndex((current) => (current === slot.index ? undefined : slot.index));
+                    setSelectedBenchPlayerId(undefined);
                   }
                   return;
                 }
@@ -606,15 +717,15 @@ export function LiveMatchScreen({ navigation, route }: Props) {
                 <ActionButton label="Cancelar cambio" onPress={cancelChangeMode} variant="secondary" />
                 <Pressable
                   accessibilityRole="button"
-                  disabled={typeof selectedSubOutSlotIndex !== 'number' || !selectedBenchPlayerId}
+                  disabled={typeof selectedSubOutSlotIndex !== 'number' || (!selectedBenchPlayerId && typeof selectedSwapSlotIndex !== 'number')}
                   onPress={confirmSelectedSubstitution}
                   style={({ pressed }) => [
                     styles.confirmChangeButton,
-                    (typeof selectedSubOutSlotIndex !== 'number' || !selectedBenchPlayerId) && styles.confirmChangeDisabled,
+                    (typeof selectedSubOutSlotIndex !== 'number' || (!selectedBenchPlayerId && typeof selectedSwapSlotIndex !== 'number')) && styles.confirmChangeDisabled,
                     pressed && styles.pressed,
                   ]}
                 >
-                  <Text style={styles.confirmChangeText}>Confirmar cambio</Text>
+                  <Text style={styles.confirmChangeText}>{typeof selectedSwapSlotIndex === 'number' ? 'Intercambiar en cancha' : 'Confirmar cambio'}</Text>
                 </Pressable>
               </View>
             ) : (
@@ -625,7 +736,7 @@ export function LiveMatchScreen({ navigation, route }: Props) {
           <View style={styles.panel}>
             <Text style={styles.panelTitle}>Banco</Text>
             <Text style={styles.sectionLabel}>
-              {changeModeActive ? 'Seleccioná jugador del banco' : 'Activá Modo cambio para seleccionar suplente'}
+              {changeModeActive ? 'Seleccioná suplente o dos jugadores en cancha' : 'Activá Modo cambio para seleccionar suplente'}
             </Text>
             <BenchList
               players={benchPlayers}
@@ -654,12 +765,6 @@ export function LiveMatchScreen({ navigation, route }: Props) {
         <View style={styles.matchControlsPanel}>
           <Text style={styles.sectionLabel}>Controles del partido</Text>
           <View style={styles.utilityRow}>
-            {currentPeriodState?.timerRunning ? (
-              <ActionButton label="Pausar" onPress={pauseTimer} variant="secondary" />
-            ) : (
-              <ActionButton label="Reanudar" onPress={resumeTimer} variant="secondary" />
-            )}
-            <ActionButton label="Finalizar tiempo" onPress={finishPeriod} variant="secondary" />
             <ActionButton label="Cancelar partido" onPress={confirmCancel} variant="danger" />
           </View>
         </View>
@@ -675,70 +780,114 @@ const styles = StyleSheet.create({
     fontWeight: '900',
   },
   scoreboard: {
-    minHeight: 112,
+    minHeight: 118,
     borderRadius: 8,
     backgroundColor: '#0b1f33',
-    padding: spacing.md,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    gap: 2,
+  },
+  scoreboardTopRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: spacing.sm,
   },
+  scoreboardControlSlot: {
+    flex: 1,
+    minWidth: 86,
+    alignItems: 'flex-start',
+  },
+  scoreboardControlSlotRight: {
+    alignItems: 'flex-end',
+  },
+  headerPillButton: {
+    minHeight: 30,
+    minWidth: 82,
+    borderRadius: 8,
+    backgroundColor: '#f8fafc',
+    borderWidth: 1,
+    borderColor: '#dbe4ef',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: spacing.sm,
+  },
+  headerFinishButton: {
+    backgroundColor: '#fef2f2',
+    borderColor: '#fca5a5',
+  },
+  headerPillText: {
+    color: '#0b1f33',
+    fontSize: fontSize.tiny,
+    fontWeight: '900',
+    textAlign: 'center',
+  },
+  headerFinishText: {
+    color: '#991b1b',
+  },
+  scoreboardScoreRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing.sm,
+    marginTop: spacing.xs,
+  },
   scoreBlock: {
     flex: 1,
+    minWidth: 64,
     alignItems: 'center',
     justifyContent: 'center',
   },
   teamLabel: {
     color: '#8bd3ff',
-    fontSize: fontSize.small,
+    width: '100%',
+    fontSize: fontSize.tiny,
     fontWeight: '900',
     textTransform: 'uppercase',
+    textAlign: 'center',
   },
   score: {
     color: '#ffffff',
-    fontSize: 42,
+    fontSize: 54,
     fontWeight: '900',
-    lineHeight: 48,
+    lineHeight: 56,
   },
   matchMeta: {
-    width: 178,
+    flex: 1.25,
+    minWidth: 96,
     alignItems: 'center',
-    gap: spacing.xs,
-  },
-  matchMetaPhone: {
-    width: 122,
+    justifyContent: 'center',
   },
   setIndicator: {
     borderRadius: 8,
     backgroundColor: '#ffffff',
     color: '#0b1f33',
-    fontSize: fontSize.small,
+    fontSize: fontSize.tiny,
     fontWeight: '900',
     overflow: 'hidden',
     paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs,
+    paddingVertical: 3,
     textAlign: 'center',
   },
   matchTitle: {
     color: '#ffffff',
-    fontSize: fontSize.body,
+    width: '100%',
+    fontSize: fontSize.small,
     fontWeight: '900',
     textAlign: 'center',
   },
-  matchStatus: {
+  scoreboardTimerRow: {
+    alignItems: 'center',
+  },
+  timerLine: {
     color: '#d7e5f2',
     fontSize: fontSize.tiny,
     fontWeight: '800',
+    textAlign: 'center',
+    width: '100%',
   },
-  timerLabel: {
-    color: '#8bd3ff',
-    fontSize: fontSize.tiny,
-    fontWeight: '800',
-  },
-  timer: {
+  timerValue: {
     color: '#ffffff',
-    fontSize: fontSize.section,
     fontWeight: '900',
   },
   mainGrid: {
@@ -748,34 +897,35 @@ const styles = StyleSheet.create({
   },
   mainGridPhone: {
     flexDirection: 'column',
+    gap: spacing.sm,
   },
   leftColumn: {
     flex: 1,
-    gap: spacing.sm,
+    gap: spacing.xs,
     width: '100%',
   },
   rightColumn: {
     flex: 1,
-    gap: spacing.sm,
+    gap: spacing.xs,
     width: '100%',
   },
   bigActionGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: spacing.sm,
+    gap: spacing.xs,
   },
   bigButton: {
     flexGrow: 1,
     flexBasis: '47%',
-    minHeight: 86,
+    minHeight: 68,
     borderRadius: 8,
-    padding: spacing.md,
+    padding: spacing.sm,
     justifyContent: 'center',
   },
   splitActionButton: {
     flexGrow: 1,
     flexBasis: '47%',
-    minHeight: 86,
+    minHeight: 68,
     borderRadius: 8,
     flexDirection: 'row',
     overflow: 'hidden',
@@ -783,7 +933,7 @@ const styles = StyleSheet.create({
   },
   splitActionHalf: {
     flex: 1,
-    minHeight: 86,
+    minHeight: 68,
     alignItems: 'center',
     paddingHorizontal: spacing.sm,
     paddingVertical: spacing.sm,
@@ -963,14 +1113,14 @@ const styles = StyleSheet.create({
   },
   bigButtonLabel: {
     color: '#ffffff',
-    fontSize: 18,
+    fontSize: fontSize.button,
     fontWeight: '900',
   },
   bigButtonHint: {
     color: '#edf6ff',
-    fontSize: fontSize.small,
+    fontSize: fontSize.tiny,
     fontWeight: '700',
-    marginTop: spacing.xs,
+    marginTop: 2,
   },
   splitButtonLabel: {
     color: '#ffffff',
@@ -987,7 +1137,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   undoButton: {
-    minHeight: 52,
+    minHeight: 42,
     width: '100%',
     maxWidth: 420,
     borderRadius: 8,
@@ -999,13 +1149,13 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: spacing.sm,
     paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
+    paddingVertical: spacing.xs,
   },
   undoIcon: {
     color: '#0b1f33',
-    fontSize: 24,
+    fontSize: 20,
     fontWeight: '900',
-    lineHeight: 28,
+    lineHeight: 24,
   },
   undoText: {
     color: '#0b1f33',

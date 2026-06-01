@@ -124,7 +124,17 @@ export type SubstitutionEvent = BaseMatchEvent & {
   lineupSnapshotId: string;
 };
 
-export type MatchEvent = PointEvent | ErrorEvent | DefenseEvent | SubstitutionEvent;
+export type LineupSwapEvent = BaseMatchEvent & {
+  kind: 'lineup_swap';
+  team: 'uruguay';
+  playerAId: string;
+  playerBId: string;
+  fromSlotIndex: number;
+  toSlotIndex: number;
+  lineupSnapshotId: string;
+};
+
+export type MatchEvent = PointEvent | ErrorEvent | DefenseEvent | SubstitutionEvent | LineupSwapEvent;
 
 export type LineupSnapshot = {
   id: string;

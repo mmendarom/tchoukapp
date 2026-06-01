@@ -30,7 +30,7 @@ const report: MatchReportData = {
       faltas: [{ label: '#3 Nicolas', total: 1 }],
       ownPointsByPlayer: [{ label: '#3 Nicolas', total: 1 }],
       totalErrors: [{ label: '#3 Nicolas', total: 2 }],
-      substitutions: [{ periodLabel: '1er tiempo', clockLabel: '3:20', playerOut: '#2 Marcelo', playerIn: '#4 Vladi' }],
+      substitutions: [{ periodLabel: '1er tiempo', clockLabel: '3:20', kind: 'substitution', playerOut: '#2 Marcelo', playerIn: '#4 Vladi' }],
       insights: [{ severity: 'info', title: 'Tiempo positivo', description: 'Uruguay gano este tiempo por 1 puntos.', suggestedAction: 'Mantener decisiones.' }],
     },
     {
@@ -73,7 +73,10 @@ const report: MatchReportData = {
     ownPointsByPlayer: [{ label: '#3 Nicolas', total: 1 }],
     totalErrors: [{ label: '#3 Nicolas', total: 2 }],
     opponentOwnPoints: 1,
-    substitutions: [{ periodLabel: '1er tiempo', clockLabel: '3:20', playerOut: '#2 Marcelo', playerIn: '#4 Vladi' }],
+    substitutions: [
+      { periodLabel: '1er tiempo', clockLabel: '3:20', kind: 'substitution', playerOut: '#2 Marcelo', playerIn: '#4 Vladi' },
+      { periodLabel: '1er tiempo', clockLabel: '5:10', kind: 'lineup_swap', playerOut: '#1 Mauro', playerIn: '#4 Vladi', playerA: '#1 Mauro', playerB: '#4 Vladi' },
+    ],
     insights: [{ id: 'i-1', severity: 'info', title: 'Puntos regalados por el rival', description: 'El rival entrego 1 punto.', suggestedAction: 'Mantener presion.' }],
   },
   zones: {

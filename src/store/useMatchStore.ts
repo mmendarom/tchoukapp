@@ -3,7 +3,7 @@ import { createJSONStorage, persist } from 'zustand/middleware';
 
 import { initialMatches, upcomingFixtures, uruguayPlayers } from '../domain/mockData';
 import { PERIOD_DURATION_SECONDS } from '../domain/periodStats';
-import { replaceLineupSlotPlayer } from '../domain/lineupSlots';
+import { replaceLineupSlotPlayer, swapLineupSlotPlayers } from '../domain/lineupSlots';
 import {
   CourtZone,
   ErrorType,
@@ -47,6 +47,7 @@ type MatchState = {
   recordDefense: (playerId: string) => void;
   recordError: (playerId: string, errorType: TrackableErrorType) => void;
   substitutePlayer: (input: { playerInId: string; playerOutId?: string; slotIndex?: number }) => void;
+  swapLineupPlayers: (input: { fromSlotIndex: number; toSlotIndex: number }) => void;
   undoLastEvent: () => void;
   advancePeriod: () => void;
   completeActiveMatch: () => void;
@@ -385,6 +386,10 @@ export const useMatchStore = create<MatchState>()(
               return match;
             }
 
+            if (type === 'goal' && side === 'uruguay' && !isPlayerOnCourt(normalized, playerId)) {
+              return match;
+            }
+
             if (type !== 'goal' && !isPlayerOnCourt(normalized, playerId)) {
               return match;
             }
@@ -594,6 +599,76 @@ export const useMatchStore = create<MatchState>()(
           }),
         }));
       },
+      swapLineupPlayers: ({ fromSlotIndex, toSlotIndex }) => {
+        const { activeMatchId } = get();
+
+        if (!activeMatchId) {
+          return;
+        }
+
+        set((state) => ({
+          matches: state.matches.map((match) => {
+            const normalized = normalizeMatch(match);
+
+            if (normalized.id !== activeMatchId || !canRecordInMatch(normalized)) {
+              return match;
+            }
+
+            const currentLineup = getCurrentLineup(normalized, 'uruguay');
+
+            if (!currentLineup) {
+              return match;
+            }
+
+            if (
+              fromSlotIndex < 0 ||
+              toSlotIndex < 0 ||
+              fromSlotIndex >= 7 ||
+              toSlotIndex >= 7 ||
+              fromSlotIndex === toSlotIndex
+            ) {
+              return match;
+            }
+
+            const playerAId = currentLineup.playerIds[fromSlotIndex];
+            const playerBId = currentLineup.playerIds[toSlotIndex];
+
+            if (!playerAId || !playerBId) {
+              return match;
+            }
+
+            const nextLineupId = createId();
+            const capturedAt = new Date().toISOString();
+            const nextLineup = {
+              ...currentLineup,
+              id: nextLineupId,
+              capturedAt,
+              clock: { ...normalized.clock, period: normalized.currentPeriod },
+              playerIds: swapLineupSlotPlayers(currentLineup.playerIds, fromSlotIndex, toSlotIndex),
+            };
+            const event: MatchEvent = {
+              id: createId(),
+              matchId: normalized.id,
+              periodNumber: normalized.currentPeriod,
+              kind: 'lineup_swap',
+              team: 'uruguay',
+              playerAId,
+              playerBId,
+              fromSlotIndex,
+              toSlotIndex,
+              lineupSnapshotId: nextLineupId,
+              timestamp: capturedAt,
+              clock: { ...normalized.clock, period: normalized.currentPeriod },
+            };
+
+            return {
+              ...normalized,
+              lineupSnapshots: [...normalized.lineupSnapshots, nextLineup],
+              events: [event, ...normalized.events],
+            };
+          }),
+        }));
+      },
       undoLastEvent: () => {
         const { activeMatchId } = get();
 
@@ -611,7 +686,7 @@ export const useMatchStore = create<MatchState>()(
 
             const [eventToUndo, ...remainingEvents] = normalized.events;
             const lineupSnapshots =
-              eventToUndo.kind === 'substitution'
+              eventToUndo.kind === 'substitution' || eventToUndo.kind === 'lineup_swap'
                 ? normalized.lineupSnapshots.filter((lineup) => lineup.id !== eventToUndo.lineupSnapshotId)
                 : normalized.lineupSnapshots;
 

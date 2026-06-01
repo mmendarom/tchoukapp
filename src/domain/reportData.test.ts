@@ -71,6 +71,7 @@ describe('buildMatchReportData', () => {
         point({ id: 'f-1', kind: 'error', team: 'uruguay', playerId: 'p2', errorType: 'falta' } as Partial<MatchEvent>),
         point({ id: 'd-1', kind: 'defense', team: 'uruguay', playerId: 'p1' } as Partial<MatchEvent>),
         point({ id: 's-1', kind: 'substitution', team: 'uruguay', playerOutId: 'p2', playerInId: 'p3', lineupSnapshotId: 'lineup-final' } as Partial<MatchEvent>),
+        point({ id: 'swap-1', kind: 'lineup_swap', team: 'uruguay', playerAId: 'p1', playerBId: 'p3', fromSlotIndex: 0, toSlotIndex: 1, lineupSnapshotId: 'lineup-final' } as Partial<MatchEvent>),
       ]),
       players,
     );
@@ -89,7 +90,12 @@ describe('buildMatchReportData', () => {
     expect(report.totals.ownPointsByPlayer).toEqual([{ label: '#2 Marcelo', total: 1 }]);
     expect(report.totals.totalErrors).toEqual([{ label: '#2 Marcelo', total: 2 }]);
     expect(report.totals.opponentOwnPoints).toBe(1);
-    expect(report.totals.substitutions[0]).toMatchObject({ playerOut: '#2 Marcelo', playerIn: '#3 Nicolas' });
+    expect(report.totals.substitutions).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ kind: 'substitution', playerOut: '#2 Marcelo', playerIn: '#3 Nicolas' }),
+        expect.objectContaining({ kind: 'lineup_swap', playerA: '#1 Mauro', playerB: '#3 Nicolas' }),
+      ]),
+    );
     expect(report.lineups.initial).toEqual(['#1 Mauro', '#2 Marcelo']);
     expect(report.lineups.final).toEqual(['#1 Mauro', '#3 Nicolas']);
     expect(report.zones.attack[0]).toMatchObject({ label: 'Zona derecha', total: 1 });

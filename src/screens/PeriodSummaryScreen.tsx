@@ -17,6 +17,7 @@ import {
   getErrorsByPlayerByPeriod,
   getErrorsByTypeByPlayerByPeriod,
   getSubstitutionsByPeriod,
+  getLineupSwapsByPeriod,
   getTopScorersByPeriod,
   getEventsByPeriod,
   getOpponentOwnPointsByPeriod,
@@ -55,6 +56,7 @@ export function PeriodSummaryScreen({ navigation, route }: Props) {
   const errorBreakdown = getErrorsByTypeByPlayerByPeriod(match.events, periodNumber);
   const defenses = getDefensesByPlayerByPeriod(match.events, periodNumber);
   const substitutions = getSubstitutionsByPeriod(match.events, periodNumber);
+  const lineupSwaps = getLineupSwapsByPeriod(match.events, periodNumber);
   const opponentOwnPoints = getOpponentOwnPointsByPeriod(match.events, periodNumber);
   const periodEvents = getEventsByPeriod(match.events, periodNumber);
   const effectiveZones = groupPointsByZone(periodEvents);
@@ -161,7 +163,7 @@ export function PeriodSummaryScreen({ navigation, route }: Props) {
 
       <View style={styles.card}>
         <Text style={styles.sectionTitle}>Cambios</Text>
-        <Text style={styles.metric}>{substitutions.length} cambios en este tiempo.</Text>
+        <Text style={styles.metric}>{substitutions.length} cambios y {lineupSwaps.length} intercambios en cancha en este tiempo.</Text>
       </View>
 
       <View style={styles.actions}>

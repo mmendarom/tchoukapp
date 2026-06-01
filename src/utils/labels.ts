@@ -75,6 +75,8 @@ export const eventKindLabel = (event: MatchEvent) => {
       return 'Defensa';
     case 'substitution':
       return 'Cambio';
+    case 'lineup_swap':
+      return 'Intercambio en cancha';
     default:
       return 'Acción';
   }

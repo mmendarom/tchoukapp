@@ -12,6 +12,8 @@ import {
   getErrorsByTypeByPlayer,
   getErrorsByTypeByPlayerByPeriod,
   getEventsByPeriod,
+  getLineupSwaps,
+  getLineupSwapsByPeriod,
   getOpponentOwnPoints,
   getOpponentOwnPointsByPeriod,
   getPointsByPlayer,
@@ -21,7 +23,7 @@ import {
   getTopScorersByPeriod,
   PeriodInsight,
 } from './periodStats';
-import { Match, MatchPeriod, Player, Score, SubstitutionEvent } from './types';
+import { LineupSwapEvent, Match, MatchEvent, MatchPeriod, Player, Score, SubstitutionEvent } from './types';
 
 export type ReportStat = {
   label: string;
@@ -31,8 +33,11 @@ export type ReportStat = {
 export type ReportSubstitution = {
   periodLabel: string;
   clockLabel: string;
+  kind: 'substitution' | 'lineup_swap';
   playerOut: string;
   playerIn: string;
+  playerA?: string;
+  playerB?: string;
 };
 
 export type PeriodReportData = {
@@ -114,7 +119,7 @@ const formatClock = (secondsElapsed: number | undefined) => {
   return `${minutes}:${seconds.toString().padStart(2, '0')}`;
 };
 
-const sortSubstitutions = (items: SubstitutionEvent[]) =>
+const sortLineupActions = (items: Array<SubstitutionEvent | LineupSwapEvent>) =>
   [...items].sort((a, b) => a.periodNumber - b.periodNumber || a.clock.secondsElapsed - b.clock.secondsElapsed);
 
 const createPlayerLabeler = (players: Player[]) => {
@@ -156,16 +161,36 @@ const mapOwnPointsByPlayer = (
     .filter((stat) => stat.puntosEnContra > 0)
     .map((stat) => ({ label: getPlayerLabel(stat.playerId), total: stat.puntosEnContra }));
 
-const mapSubstitutions = (
-  substitutions: SubstitutionEvent[],
+const mapLineupActions = (
+  lineupActions: Array<SubstitutionEvent | LineupSwapEvent>,
   getPlayerLabel: (playerId: string | undefined) => string,
 ): ReportSubstitution[] =>
-  sortSubstitutions(substitutions).map((event) => ({
-    periodLabel: formatPeriodName(event.periodNumber),
-    clockLabel: formatClock(event.clock.secondsElapsed),
-    playerOut: getPlayerLabel(event.playerOutId),
-    playerIn: getPlayerLabel(event.playerInId),
-  }));
+  sortLineupActions(lineupActions).map((event) => {
+    if (event.kind === 'lineup_swap') {
+      const playerA = getPlayerLabel(event.playerAId);
+      const playerB = getPlayerLabel(event.playerBId);
+
+      return {
+        periodLabel: formatPeriodName(event.periodNumber),
+        clockLabel: formatClock(event.clock.secondsElapsed),
+        kind: 'lineup_swap',
+        playerOut: playerA,
+        playerIn: playerB,
+        playerA,
+        playerB,
+      };
+    }
+
+    return {
+      periodLabel: formatPeriodName(event.periodNumber),
+      clockLabel: formatClock(event.clock.secondsElapsed),
+      kind: 'substitution',
+      playerOut: getPlayerLabel(event.playerOutId),
+      playerIn: getPlayerLabel(event.playerInId),
+    };
+  });
+
+const getLineupActions = (events: MatchEvent[]) => [...getSubstitutions(events), ...getLineupSwaps(events)];
 
 const mapLineup = (
   playerIds: string[] | undefined,
@@ -197,7 +222,10 @@ export function buildMatchReportData(match: Match, players: Player[]): MatchRepo
       faltas: mapFaltas(errorBreakdown, getPlayerLabel),
       ownPointsByPlayer: mapOwnPointsByPlayer(errorBreakdown, getPlayerLabel),
       totalErrors: mapPlayerStats(getErrorsByPlayerByPeriod(match.events, periodNumber), getPlayerLabel),
-      substitutions: mapSubstitutions(getSubstitutionsByPeriod(match.events, periodNumber), getPlayerLabel),
+      substitutions: mapLineupActions(
+        [...getSubstitutionsByPeriod(match.events, periodNumber), ...getLineupSwapsByPeriod(match.events, periodNumber)],
+        getPlayerLabel,
+      ),
       insights: generatePeriodInsights({ ...match, events: periodEvents }, periodNumber, (playerId) => getPlayerLabel(playerId)),
     };
   });
@@ -222,7 +250,7 @@ export function buildMatchReportData(match: Match, players: Player[]): MatchRepo
       ownPointsByPlayer: mapOwnPointsByPlayer(totalErrorBreakdown, getPlayerLabel),
       totalErrors: mapPlayerStats(getErrorsByPlayer(match.events), getPlayerLabel),
       opponentOwnPoints: getOpponentOwnPoints(match.events),
-      substitutions: mapSubstitutions(getSubstitutions(match.events), getPlayerLabel),
+      substitutions: mapLineupActions(getLineupActions(match.events), getPlayerLabel),
       insights: createTacticalInsights({
         events: match.events,
         lineupSnapshots: match.lineupSnapshots,

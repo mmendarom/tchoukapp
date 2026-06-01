@@ -25,7 +25,11 @@ const substitutionsHtml = (items: ReportSubstitution[]) =>
   items.length === 0
     ? '<p class="muted">Sin cambios registrados.</p>'
     : `<ul>${items
-        .map((item) => `<li>${escapeHtml(item.periodLabel)} ${escapeHtml(item.clockLabel)} - entra ${escapeHtml(item.playerIn)}, sale ${escapeHtml(item.playerOut)}</li>`)
+        .map((item) =>
+          item.kind === 'lineup_swap'
+            ? `<li>${escapeHtml(item.periodLabel)} ${escapeHtml(item.clockLabel)} - intercambio en cancha: ${escapeHtml(item.playerA ?? item.playerOut)} ↔ ${escapeHtml(item.playerB ?? item.playerIn)}</li>`
+            : `<li>${escapeHtml(item.periodLabel)} ${escapeHtml(item.clockLabel)} - entra ${escapeHtml(item.playerIn)}, sale ${escapeHtml(item.playerOut)}</li>`,
+        )
         .join('')}</ul>`;
 
 const insightsHtml = (items: Array<{ title: string; description: string; suggestedAction: string }>) =>
@@ -177,7 +181,11 @@ export function buildMatchReportText(report: MatchReportData) {
     'Cambios',
     ...(report.totals.substitutions.length === 0
       ? ['- Sin cambios registrados.']
-      : report.totals.substitutions.map((item) => `- ${item.periodLabel} ${item.clockLabel}: entra ${item.playerIn}, sale ${item.playerOut}`)),
+      : report.totals.substitutions.map((item) =>
+          item.kind === 'lineup_swap'
+            ? `- ${item.periodLabel} ${item.clockLabel}: intercambio en cancha ${item.playerA ?? item.playerOut} ↔ ${item.playerB ?? item.playerIn}`
+            : `- ${item.periodLabel} ${item.clockLabel}: entra ${item.playerIn}, sale ${item.playerOut}`,
+        )),
     '',
     'Formacion inicial',
     ...report.lineups.initial.map((item) => `- ${item}`),

@@ -1,5 +1,140 @@
 # Implementation Log
 
+## 2026-05-31 - Scoreboard compact height fix
+
+Se corrigio el exceso de altura del marcador observado en Expo Go.
+
+- Causa: el refinamiento anterior aumento `minHeight` y mantenia estado, label de tiempo y timer en tres lineas, generando espacio vertical innecesario.
+- El marcador ahora reduce `minHeight`, padding vertical, altura de botones y tamano del badge de tiempo.
+- El footer del marcador se compacto en una sola linea: `En vivo · Tiempo restante 14:48`.
+- Los scores siguen siendo grandes y protagonistas, con una reduccion leve para entrar en una tarjeta mas baja.
+- No se cambio comportamiento de timer, finalizar tiempo, score, puntos, defensa/error, cambios, resumenes ni export PDF.
+
+QA manual recomendado:
+
+- Abrir partido en vivo en telefono en portrait.
+- Verificar que el marcador es mas bajo que la version anterior.
+- Verificar que los numeros de score siguen grandes y legibles.
+- Verificar que no hay grandes espacios verticales sin uso.
+- Verificar que el timer sigue legible.
+- Verificar que el badge de tiempo sigue legible.
+- Verificar que pausar/reanudar y finalizar tiempo siguen siendo faciles de tocar.
+- Verificar que no hay solapamientos.
+- Rotar a landscape y revisar el layout.
+- Confirmar que el timer no cambio su comportamiento.
+- Confirmar que finalizar tiempo no cambio su comportamiento.
+
+## 2026-05-31 - Scoreboard score hierarchy refinement
+
+Se ajusto la jerarquia visual del marcador tras prueba manual en Expo Go.
+
+- Los numeros de score de Uruguay y Rival ahora son mas grandes y vuelven a ser el elemento dominante del marcador.
+- Se aprovecha mejor el espacio vertical disponible dentro de la tarjeta sin volver a posicionamiento absoluto.
+- Se redujeron gaps internos del bloque de timer para evitar aire innecesario debajo del score.
+- Los controles `Pausar` / `Reanudar` y `Fin tiempo` mantienen su fila dedicada y no se superponen con labels o scores.
+- No se cambio comportamiento de timer, finalizar tiempo, score, puntos, defensa/error, cambios, resumenes ni export PDF.
+
+QA manual recomendado:
+
+- Abrir partido en vivo en telefono en portrait.
+- Verificar que los numeros de score son mas grandes y prominentes.
+- Verificar que no hay solapamiento con controles, labels, badge de tiempo ni rival.
+- Verificar que el timer sigue legible.
+- Verificar que el badge de tiempo sigue legible.
+- Rotar a landscape y verificar que el marcador mantiene balance.
+- Tocar pausar/reanudar.
+- Tocar finalizar tiempo.
+
+## 2026-05-31 - Live match vertical density refinement
+
+Se compacto la pantalla de partido en vivo para mejorar el espacio disponible en telefonos.
+
+- El header del marcador mantiene la estructura sin solapamientos, pero usa menor alto, padding y score mas compacto.
+- Los botones del header conservan superficie visual compacta y suman `hitSlop` para mantenerlos faciles de tocar.
+- Las acciones principales (`Punto Uruguay`, `Punto rival`, `En contra rival`, `Defensa`, `Error`) reducen alto y padding para liberar espacio vertical.
+- El boton `Deshacer` y los gaps entre columnas/paneles se compactaron para que la cancha y las acciones importantes entren antes en el viewport.
+- No se cambio comportamiento de timer, score, puntos, defensa/error, cambios, undo, resumenes ni export PDF.
+
+QA manual recomendado:
+
+- Abrir partido en vivo en telefono en portrait.
+- Verificar que el marcador sigue legible y sin solapamientos.
+- Verificar que los botones principales siguen siendo faciles de tocar.
+- Verificar que cancha y acciones principales aparecen mas arriba en el viewport.
+- Seleccionar jugador en cancha.
+- Registrar punto Uruguay, punto rival, punto en contra rival, defensa y error.
+- Usar `Deshacer`.
+- Rotar a landscape y verificar que el layout sigue legible.
+
+## 2026-05-31 - Scoreboard header overlap fix
+
+Se corrigio el layout del header del marcador tras prueba manual en Expo Go.
+
+- Causa: los controles de pausa/reanudar y finalizar tiempo estaban posicionados en absoluto sobre el mismo contenedor de labels y scores, por lo que en telefonos reales podian pisar `URU` y `RIVAL`.
+- El header ahora usa filas dedicadas: controles + tiempo arriba, score y rival al medio, estado/timer abajo.
+- Los controles ahora son botones pill compactos con texto (`Pausar`, `Reanudar`, `Fin tiempo`) y alto contraste, integrados al layout sin superponerse.
+- El marcador usa labels compactos `URU` y `RIVAL` para evitar cortes o wrapping feo.
+- No se cambio comportamiento de timer, finalizar tiempo, score, puntos, defensa/error, cambios, resumenes ni export PDF.
+
+QA manual recomendado:
+
+- Abrir partido en vivo en telefono en portrait.
+- Verificar que `Pausar` / `Reanudar` no se superpone con `URU`.
+- Verificar que `Fin tiempo` no se superpone con `RIVAL`.
+- Verificar que los labels de equipos son legibles.
+- Verificar que los scores son legibles.
+- Verificar que el badge de tiempo es legible.
+- Verificar que el timer es legible.
+- Tocar pausar.
+- Tocar reanudar.
+- Tocar finalizar tiempo.
+- Rotar a landscape.
+- Verificar que no hay solapamientos.
+- Verificar que los controles siguen siendo faciles de tocar.
+- Verificar que barras nativas de Android no interfieren con el header.
+
+## 2026-05-31 - Scoreboard header visual refinement
+
+Se refino visualmente el header del marcador en partido en vivo.
+
+- Los controles `Pausar` / `Reanudar` y `Finalizar tiempo` ahora usan botones de mayor contraste sobre el fondo oscuro.
+- Los iconos quedan anclados mas cerca de las esquinas superiores del marcador para mejorar balance visual.
+- El boton de finalizar tiempo queda visualmente diferenciado con superficie roja y texto blanco.
+- En phone, el label de Uruguay se muestra como `URU` para evitar cortes feos del texto; `Rival` conserva lectura limpia.
+- No se cambio comportamiento de timer, score, puntos, defensa/error, cambios, resumenes ni export PDF.
+
+QA manual recomendado:
+
+- Abrir partido en vivo.
+- Verificar que el icono de pausar/reanudar se lee bien sobre el marcador oscuro.
+- Verificar que el icono de finalizar tiempo se lee bien y queda claramente diferenciado.
+- Verificar que los botones se ven balanceados en el header.
+- Verificar que `URU` / `Uruguay` y `Rival` son legibles y no se cortan mal.
+- Verificar que periodo, rival y timer siguen claros en el centro.
+- Probar portrait y landscape.
+- Confirmar que los iconos siguen siendo faciles de tocar.
+- Confirmar que barras nativas de Android no pisan el header.
+- Confirmar que pausar/reanudar sigue funcionando.
+- Confirmar que finalizar tiempo sigue funcionando.
+
+## 2026-05-31 - Field testing bugfix batch
+
+Se corrigieron tres puntos detectados en pruebas de campo.
+
+- `Cambiar jugadores` ahora permite seleccionar dos jugadores en cancha e intercambiar sus slots.
+- El intercambio en cancha registra un evento `lineup_swap`, crea un nuevo `LineupSnapshot`, aparece en ultimas acciones y se puede deshacer.
+- El flujo cancha + banco sigue registrando sustituciones normales.
+- `Punto Uruguay` ahora requiere un jugador uruguayo seleccionado y actualmente en cancha antes de abrir el mapa.
+- `Punto rival` y `Punto en contra rival` no requieren jugador uruguayo y mantienen su comportamiento.
+- Los controles `Pausar` / `Reanudar` y `Finalizar tiempo` se movieron al header del marcador como botones compactos con iconos.
+- La seccion inferior de controles queda enfocada en `Cancelar partido` para evitar duplicar acciones.
+- No se cambio el timer, undo, defensa/error, mapa de cancha, PDF export ni reglas de `landingLocation`.
+
+Validacion:
+
+- `npm test`: pasa, 9 archivos de test y 80 tests.
+- `npx tsc --noEmit`: pasa.
+
 ## 2026-05-31 - Match report PDF export
 
 Se implemento exportacion de reporte post-partido desde `Resumen final`.

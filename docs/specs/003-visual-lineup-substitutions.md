@@ -44,6 +44,16 @@ Reliable change mode implemented
   - slots 5, 6 y 7 en el tercio derecho.
 - No se reintrodujo drag/drop ni `PanResponder`.
 
+## Implementacion court swap refinement
+
+- En modo `Cambiar jugadores`, ahora se puede seleccionar dos jugadores que ya estan en cancha e intercambiar sus slots.
+- El intercambio no mueve jugadores al banco ni trae suplentes.
+- Se registra un evento explicito `lineup_swap` con `playerAId`, `playerBId`, `fromSlotIndex`, `toSlotIndex` y `lineupSnapshotId`.
+- El intercambio crea un nuevo `LineupSnapshot`.
+- Deshacer remueve el evento `lineup_swap` y el snapshot creado, restaurando la formacion anterior.
+- El flujo existente cancha + banco sigue registrando `substitution`.
+- No se agregaron restricciones tacticas ni drag/drop.
+
 ## Contexto
 
 Field testing showed that the current substitution flow works but is not visual enough for live match use.

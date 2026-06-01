@@ -3,6 +3,7 @@ import {
   DefenseEvent,
   ErrorEvent,
   ErrorType,
+  LineupSwapEvent,
   Match,
   MatchEvent,
   MatchPeriod,
@@ -43,6 +44,7 @@ const isPointEvent = (event: MatchEvent): event is PointEvent => event.kind === 
 const isErrorEvent = (event: MatchEvent): event is ErrorEvent => event.kind === 'error';
 const isDefenseEvent = (event: MatchEvent): event is DefenseEvent => event.kind === 'defense';
 const isSubstitutionEvent = (event: MatchEvent): event is SubstitutionEvent => event.kind === 'substitution';
+const isLineupSwapEvent = (event: MatchEvent): event is LineupSwapEvent => event.kind === 'lineup_swap';
 const isOpponentOwnPointEvent = (event: MatchEvent): event is PointEvent =>
   isPointEvent(event) && event.scoringTeam === 'uruguay' && event.pointSource === 'opponent_own_point';
 
@@ -216,6 +218,14 @@ export function getSubstitutions(events: MatchEvent[]) {
 
 export function getSubstitutionsByPeriod(events: MatchEvent[], periodNumber: MatchPeriod) {
   return getSubstitutions(getEventsByPeriod(events, periodNumber));
+}
+
+export function getLineupSwaps(events: MatchEvent[]) {
+  return events.filter(isLineupSwapEvent);
+}
+
+export function getLineupSwapsByPeriod(events: MatchEvent[], periodNumber: MatchPeriod) {
+  return getLineupSwaps(getEventsByPeriod(events, periodNumber));
 }
 
 export function getOpponentOwnPoints(events: MatchEvent[]) {
