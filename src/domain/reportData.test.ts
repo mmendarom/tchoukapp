@@ -105,6 +105,22 @@ describe('buildMatchReportData', () => {
     expect(report.zones.attack[0]).toMatchObject({ label: 'Zona derecha', total: 1 });
     expect(report.zones.against[0]).toMatchObject({ label: 'Zona izquierda', total: 1 });
     expect(report.zones.defended[0]).toMatchObject({ label: 'Zona central', total: 2 });
+    expect(report.executiveSummary).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ label: 'Resultado final', value: 'Uruguay 2 - 2 Argentina' }),
+        expect.objectContaining({ label: 'Puntos en contra del rival', value: '1' }),
+      ]),
+    );
+    expect(report.periods).toHaveLength(3);
+    expect(report.periods[0].maps.uruguayPoints).toEqual([{ x: 0.75, y: 0.3 }]);
+    expect(report.periods[0].maps.opponentPoints).toEqual([{ x: 0.25, y: 0.4 }]);
+    expect(report.periods[0].maps.opponentDefenses).toEqual([
+      { x: 0.52, y: 0.3 },
+      { x: 0.48, y: 0.4 },
+    ]);
+    expect(report.totalMaps.uruguayPoints).toEqual([{ x: 0.75, y: 0.3 }]);
+    expect(report.totalMaps.opponentPoints).toEqual([{ x: 0.25, y: 0.4 }]);
+    expect(report.totalMaps.opponentDefenses).toHaveLength(2);
   });
 
   it('uses safe fallbacks for missing data and old events', () => {
@@ -129,5 +145,8 @@ describe('buildMatchReportData', () => {
     expect(report.notes).toBe('Sin notas registradas.');
     expect(report.zones.attack).toEqual([]);
     expect(report.zones.defended).toEqual([]);
+    expect(report.totalMaps.uruguayPoints).toEqual([]);
+    expect(report.totalMaps.opponentPoints).toEqual([]);
+    expect(report.totalMaps.opponentDefenses).toEqual([]);
   });
 });

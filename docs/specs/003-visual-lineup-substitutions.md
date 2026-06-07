@@ -54,6 +54,15 @@ Reliable change mode implemented
 - El flujo existente cancha + banco sigue registrando `substitution`.
 - No se agregaron restricciones tacticas ni drag/drop.
 
+## Implementacion tablet field refinement
+
+- En pantalla live, el banco queda oculto por defecto para limpiar el viewport de seguimiento normal.
+- `Cambiar jugadores` sigue viviendo junto a la cancha y activa el modo cambio.
+- Al activar modo cambio se muestra `Banco`, se selecciona jugador en cancha + suplente o dos jugadores en cancha, y se confirma igual que antes.
+- Al cancelar o confirmar, el modo cambio se cierra y el banco vuelve a colapsar.
+- En tablet landscape la columna de acciones recibe mas ancho relativo para que resultado, acciones y cancha convivan mejor.
+- No se cambio el modelo de datos, eventos, undo ni reglas de sustitucion.
+
 ## Contexto
 
 Field testing showed that the current substitution flow works but is not visual enough for live match use.

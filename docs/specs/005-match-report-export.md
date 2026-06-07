@@ -211,6 +211,272 @@ PDF/share:
 - [x] `npm test` pasa.
 - [x] `npx tsc --noEmit` pasa.
 
+## Report Export v2
+
+Estado: Implemented.
+
+### Contexto
+
+La primera version exporta PDF y texto compartible correctamente, pero el reporte no es todavia suficientemente util para coaching post-partido. Hoy incluye muchos datos como texto/listas, pero le falta una narrativa clara, mejor separacion por tiempo, mapas visuales exportables y un resumen ejecutivo que ayude a entender el partido rapido.
+
+### Auditoria de implementacion actual
+
+Archivos actuales:
+
+- `src/domain/reportData.ts`: arma `MatchReportData` desde `Match` y `Player[]`. Incluye score final, score por tiempo, secciones por tiempo, totales, zonas textuales, formacion inicial/final, cambios, intercambios e insights.
+- `src/export/reportHtml.ts`: genera HTML de PDF y fallback textual. Usa listas y grids simples. No renderiza mapas visuales; muestra resumen textual de zonas y nota de mapa pendiente.
+- `src/export/exportMatchReport.ts`: integra `expo-print` y `expo-sharing`.
+- `src/screens/FinalSummaryScreen.tsx`: llama `buildMatchReportData`, `exportMatchReportPdf` y `buildMatchReportText`.
+- `src/domain/court.ts`: deriva zonas y filtra eventos con `landingLocation` o `defenseLocation`.
+- `src/components/CourtMapSummary.tsx`: muestra mapas en app con puntos/densidad, pero no se reutiliza en PDF.
+
+Incluido hoy:
+
+- Resultado final.
+- Resultado por tiempos.
+- Stats por tiempo para puntos, puntos en contra, puntos en contra rival, goleadores, defensas Uruguay, defensas rival, faltas, errores, cambios e insights.
+- Totales de goleadores, defensas Uruguay, defensas rival, faltas, puntos en contra, errores, puntos en contra rival, cambios, formacion inicial/final, insights y notas.
+- Resumen textual de zonas: ataque, puntos recibidos y defensas rivales.
+- Fallback textual compartible.
+
+Limitaciones actuales:
+
+- No hay portada/resumen ejecutivo fuerte.
+- No hay mapas/heatmaps visuales en PDF.
+- Las zonas del PDF son listas textuales, menos utiles que un mapa.
+- Las secciones por tiempo existen, pero no tienen una jerarquia visual suficientemente clara.
+- No hay mapas por tiempo.
+- El texto compartible es largo y no prioriza top stats/insights para WhatsApp.
+- `competitionLabel` usa fallback porque `Match` no guarda competencia/tipo.
+- No conviene incluir timeline crudo como cuerpo principal porque puede meter ruido.
+
+### Datos disponibles hoy
+
+Match:
+
+- `opponent`, `venue`, `startsAt`, `notes`, `status`, `currentPeriod`, `periods`, `clock`.
+- No existe `competition` o `matchType` en `Match`.
+
+Eventos:
+
+- Puntos Uruguay: `PointEvent` con `scoringTeam: 'uruguay'`, `pointSource: 'attack'`, jugador opcional y `landingLocation` cuando fue registrado con mapa.
+- Puntos rival: `PointEvent` con `scoringTeam: 'opponent'` y `landingLocation`.
+- Punto en contra: `ErrorEvent` Uruguay con `errorType: 'punto_en_contra'`, suma al rival y no tiene mapa.
+- Punto en contra rival: `PointEvent` Uruguay con `pointSource: 'opponent_own_point'`, suma a Uruguay, sin jugador ni mapa.
+- Defensas Uruguay: `DefenseEvent` con jugador Uruguay.
+- Defensas rival: `OpponentDefenseEvent` con `defenseLocation`.
+- Faltas: `ErrorEvent` Uruguay con `errorType: 'falta'`.
+- Sustituciones: `SubstitutionEvent`.
+- Intercambios en cancha: `LineupSwapEvent`.
+
+Location data:
+
+- `landingLocation` para puntos Uruguay y puntos rival cuando fueron registrados con mapa.
+- `defenseLocation` para defensas rivales.
+- No hay ubicacion para defensas Uruguay, punto en contra ni punto en contra rival, y no debe inferirse.
+
+Derived stats:
+
+- Scores por eventos.
+- Goleadores por periodo y total.
+- Defensas Uruguay por jugador.
+- Defensas rival por total y zonas.
+- Faltas, puntos en contra y errores por jugador.
+- Puntos en contra rival por periodo y total.
+- Zonas frecuentes e insights tacticos.
+- Lineup inicial/final, sustituciones e intercambios.
+
+### Estructura objetivo v2
+
+#### A. Header / portada
+
+- `Reporte del partido`.
+- `Uruguay vs {rival}`.
+- Fecha.
+- Sede.
+- Competencia/tipo si existe; fallback `Sin competencia registrada`.
+- Resultado final.
+- Resultado por tiempos.
+
+#### B. Resumen ejecutivo
+
+Seccion corta, arriba del PDF:
+
+- Resultado final.
+- Mejor goleador.
+- Jugador con mas defensas.
+- Total de errores.
+- Puntos en contra.
+- Puntos en contra del rival.
+- Zona mas efectiva.
+- Zona mas vulnerable.
+- Zona donde mas nos defendieron.
+- 2 o 3 insights generales priorizados.
+
+#### C. Seccion por tiempo
+
+Para `1er tiempo`, `2do tiempo`, `3er tiempo`:
+
+- Score del tiempo.
+- Puntos Uruguay.
+- Puntos rival.
+- Puntos en contra.
+- Puntos en contra rival.
+- Goleadores del tiempo.
+- Defensas Uruguay del tiempo.
+- Defensas rival del tiempo.
+- Faltas del tiempo.
+- Puntos en contra por jugador.
+- Cambios del tiempo.
+- Intercambios en cancha del tiempo.
+- Insights del tiempo.
+- Mapas del tiempo:
+  - `Donde hicimos los puntos`.
+  - `Donde nos hicieron puntos`.
+  - `Donde nos defendieron`.
+
+#### D. Totales del partido
+
+- Resultado final.
+- Resultado por tiempos.
+- Goleadores totales.
+- Defensas Uruguay totales.
+- Defensas rival totales.
+- Faltas totales.
+- Puntos en contra totales.
+- Puntos en contra rival total.
+- Total de errores por jugador.
+- Cambios totales.
+- Intercambios en cancha totales.
+- Formacion inicial.
+- Formacion final.
+- Insights generales.
+- Mapas totales:
+  - `Donde hicimos los puntos`.
+  - `Donde nos hicieron puntos`.
+  - `Donde nos defendieron`.
+
+#### E. Apendice opcional
+
+Incluir solo si no vuelve ruidoso el PDF:
+
+- Timeline compacto de eventos importantes.
+- Snapshots de alineacion detallados.
+
+No incluir una lista cruda completa como seccion principal en v2.
+
+### Mapas/heatmaps en PDF
+
+Enfoque elegido: inline SVG dentro del HTML del PDF.
+
+Motivos:
+
+- Funciona dentro de HTML generado para `expo-print`.
+- No depende de componentes React Native.
+- No requiere dependencias nuevas.
+- Permite dibujar cancha, marcos y puntos desde coordenadas normalizadas.
+- Es testeable como string HTML.
+
+Reglas:
+
+- Usar `landingLocation` para puntos Uruguay y puntos rival.
+- Usar `defenseLocation` para defensas rivales.
+- No inferir ubicaciones.
+- Ignorar eventos sin ubicacion.
+- Excluir `Punto en contra` y `Punto en contra rival` de mapas.
+- Renderizar mapas por tiempo y mapas totales.
+- Usar puntos con tamano/opacidad por densidad cercana como primer heatmap liviano.
+
+Implementado en `src/export/reportHtml.ts` con SVG inline:
+
+- Mapa `Donde hicimos los puntos`.
+- Mapa `Donde nos hicieron puntos`.
+- Mapa `Donde nos defendieron`.
+- Mapas por tiempo y mapas totales.
+- Fallback visible `Sin ubicaciones registradas`.
+- Sin dependencias nuevas.
+- El HTML declara `UTF-8` y el fallback textual usa strings UTF-8 normales para evitar mojibake en acentos.
+
+Limitaciones:
+
+- No es un heatmap continuo real.
+- La fidelidad visual puede variar levemente entre plataformas PDF.
+- Si hay demasiados puntos, puede requerir clustering mejorado en una iteracion futura.
+
+### Arquitectura v2
+
+Mantener responsabilidades:
+
+- `src/domain/reportData.ts`: builder puro.
+- `src/export/reportHtml.ts`: HTML/texto solamente.
+- `src/export/exportMatchReport.ts`: print/share solamente.
+- `FinalSummaryScreen`: acciones de export/share solamente.
+
+Funciones a agregar o evolucionar:
+
+- `buildPeriodReportData`.
+- `buildTotalReportData`.
+- `getPlayerPointsByPeriod`.
+- `getPlayerPointsTotal`.
+- `getReportLocationMapsByPeriod`.
+- `getReportTotalLocationMaps`.
+- `getReportExecutiveSummary`.
+- `renderReportCourtMap`.
+- `renderReportStatTable`.
+- `buildMatchReportTextV2` o evolucionar `buildMatchReportText`.
+
+### Fallback textual v2
+
+El resumen para WhatsApp debe ser mas corto que el PDF:
+
+- Resultado final.
+- Resultado por tiempos.
+- Top 3 goleadores.
+- Top defensas.
+- Errores principales.
+- Puntos en contra.
+- Puntos en contra rival.
+- Zonas principales:
+  - donde hicimos puntos.
+  - donde nos hicieron puntos.
+  - donde nos defendieron.
+- 2 o 3 insights tacticos.
+
+### Testing v2
+
+- [x] Reporte incluye los 3 tiempos separados.
+- [x] Reporte incluye totales del partido.
+- [x] Score final y por tiempo son correctos.
+- [x] `Punto en contra` suma al rival.
+- [x] `Punto en contra rival` suma a Uruguay.
+- [x] Puntos por jugador por tiempo y total son correctos.
+- [x] `Punto en contra rival` no cuenta como gol de jugador.
+- [x] Mapas de puntos Uruguay incluyen solo ubicaciones de puntos Uruguay.
+- [x] Mapas de puntos rival incluyen solo ubicaciones de puntos rival.
+- [x] Mapas de defensas rival incluyen solo `defenseLocation`.
+- [x] Eventos sin ubicacion no crashean.
+- [x] Formacion inicial/final, sustituciones e intercambios aparecen.
+- [x] Defensas, faltas y puntos en contra aparecen.
+- [x] HTML incluye secciones de mapas.
+- [x] Texto fallback incluye stats clave.
+- [x] HTML/texto no muestran enums crudos.
+- [x] HTML/texto no contienen mojibake como `Ã`, `Â` o `�`.
+- [x] HTML/texto renderizan palabras acentuadas como `formación`, `está`, `tácticas` y `ubicación`.
+
+### QA manual v2
+
+- Finalizar un partido con datos en los 3 tiempos.
+- Incluir puntos de varios jugadores, puntos rival, punto en contra, punto en contra rival, defensas Uruguay, defensas rival, faltas, sustituciones e intercambios.
+- Exportar PDF.
+- Verificar datos por tiempo y totales.
+- Verificar mapas por tiempo y totales.
+- Verificar que los puntos del mapa coinciden razonablemente con las ubicaciones registradas.
+- Verificar goleadores y defensas.
+- Verificar que no hay enums crudos.
+- Verificar que el PDF se lee bien en telefono.
+- Compartir por WhatsApp/Drive/email si esta disponible.
+- Probar partido con pocos datos y confirmar que no crashea.
+
 ## QA manual
 
 - Finalizar un partido.

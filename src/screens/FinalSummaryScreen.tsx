@@ -28,7 +28,7 @@ import { fontSize, spacing } from '../utils/responsive';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'FinalSummary'>;
 
-export function FinalSummaryScreen({ route }: Props) {
+export function FinalSummaryScreen({ navigation, route }: Props) {
   const [exporting, setExporting] = useState(false);
   const [exportMessage, setExportMessage] = useState<string | undefined>();
   const matches = useMatchStore((state) => state.matches);
@@ -208,6 +208,9 @@ export function FinalSummaryScreen({ route }: Props) {
           <ActionButton label="Compartir resumen" onPress={shareTextReport} variant="secondary" disabled={exporting} />
         </View>
         {exportMessage ? <Text style={styles.metric}>{exportMessage}</Text> : null}
+      </View>
+      <View style={styles.card}>
+        <ActionButton label="Volver al inicio" onPress={() => navigation.navigate('Home')} variant="secondary" />
       </View>
     </Screen>
   );

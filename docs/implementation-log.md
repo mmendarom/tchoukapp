@@ -1,5 +1,88 @@
 # Implementation Log
 
+## 2026-06-06 - Field testing UX/report refinements
+
+Se implemento un batch de bugfixes luego de pruebas reales en tablet/iPad, sin cambiar reglas de score, modelos de eventos ni persistencia.
+
+- `LiveMatchScreen` ajusta el layout en tablet landscape para dar mas ancho relativo a la zona de acciones.
+- El banco queda oculto fuera de `Cambiar jugadores`; aparece solo en modo cambio y vuelve a colapsar al cancelar o confirmar.
+- `CourtMapInput` reduce levemente la altura de la cancha y agranda las acciones inferiores para mejorar taps de `Cancelar` y `Confirmar ubicacion`.
+- `CourtMapSummary` fuerza `borderRadius` dinamico segun el tamano real del marcador para que los puntos se vean circulares en iPad/tablet.
+- `src/domain/insights.ts` corrige mojibake en textos con acentos que pueden aparecer en PDF y resumen compartido.
+- `src/export/reportHtml.ts` declara `UTF-8` y usa labels acentuados en el reporte.
+- `FinalSummaryScreen` agrega `Volver al inicio` sin borrar datos ni resetear estado.
+
+Validacion:
+
+- `npm test`: 9 archivos, 87 tests pasaron.
+- `npx tsc --noEmit`: paso.
+
+QA manual recomendado:
+
+- Probar pantalla live en tablet landscape.
+- Verificar que los botones de accion tienen espacio suficiente.
+- Verificar que el banco esta oculto hasta tocar `Cambiar jugadores`.
+- Verificar que sustituciones e intercambios siguen funcionando.
+- Abrir mapa de ubicacion y verificar botones inferiores grandes y faciles de tocar.
+- Registrar ubicaciones y verificar precision de tap.
+- Finalizar tiempo y verificar que los marcadores de resumen se ven circulares.
+- Exportar PDF y verificar acentos: `formacion/formación`, `convirtio/convirtió`, `esta/está`, `tacticas/tácticas`, `ubicacion/ubicación`.
+- Compartir resumen textual y verificar que no aparece `Ã`, `Â` ni `�`.
+- Finalizar partido y tocar `Volver al inicio`.
+- Confirmar que vuelve a Home sin borrar el partido.
+- Probar telefono portrait y tablet landscape.
+
+## 2026-06-04 - Report Export v2 implemented
+
+Se implemento `Report Export v2` sobre el export existente, sin cambiar el flujo en vivo ni los modelos persistidos.
+
+- `src/domain/reportData.ts` ahora expone resumen ejecutivo y datasets de mapas por tiempo/totales.
+- `src/export/reportHtml.ts` ahora genera un PDF con mejor jerarquia: portada, resumen ejecutivo, tiempos, totales, mapas, formaciones y notas.
+- El PDF incluye SVG inline para:
+  - `Donde hicimos los puntos`.
+  - `Donde nos hicieron puntos`.
+  - `Donde nos defendieron`.
+- Los mapas usan coordenadas normalizadas existentes y no infieren ubicaciones.
+- `Punto en contra` y `Punto en contra rival` quedan fuera de mapas porque no tienen ubicacion tactica.
+- El resumen textual para compartir se acorto para WhatsApp e incluye resultado, parciales, top stats, zonas e insights.
+- No se agregaron dependencias nuevas; se mantiene `expo-print` y `expo-sharing`.
+
+Validacion:
+
+- `npm test`: 9 archivos, 87 tests pasaron.
+- `npx tsc --noEmit`: paso.
+
+QA manual pendiente:
+
+- Finalizar un partido con datos en los 3 tiempos.
+- Incluir puntos Uruguay por distintos jugadores, puntos rival, punto en contra, punto en contra rival, defensas Uruguay, defensas rival, faltas, sustituciones e intercambios.
+- Exportar PDF.
+- Verificar que abre/share sheet funciona.
+- Verificar que cada tiempo tiene datos correctos.
+- Verificar que la seccion de totales tiene datos correctos.
+- Verificar que los mapas aparecen y que los puntos coinciden razonablemente con las ubicaciones registradas.
+- Verificar que los puntos de jugador no incluyen punto en contra rival.
+- Verificar que no aparecen enums crudos.
+- Verificar que el PDF es legible en telefono.
+- Probar `Compartir resumen`.
+- Probar un partido con pocos datos y confirmar que el reporte no crashea.
+
+## 2026-06-04 - Report Export v2 planning
+
+Se planifico `Report Export v2` sin modificar codigo de produccion ni comportamiento de la app.
+
+- Se audito la implementacion actual de export:
+  - `src/domain/reportData.ts` arma datos puros.
+  - `src/export/reportHtml.ts` genera HTML y texto compartible.
+  - `src/export/exportMatchReport.ts` integra `expo-print` y `expo-sharing`.
+  - `FinalSummaryScreen` llama las acciones de export/share.
+- Se documento que el reporte actual ya incluye score, stats por periodo, totales, defensas, defensas rivales, faltas, puntos en contra, puntos en contra rival, cambios, intercambios, formaciones, insights, notas y zonas textuales.
+- Se documento la brecha principal: falta resumen ejecutivo fuerte, mapas visuales exportables por periodo/total y un fallback textual mas corto para WhatsApp.
+- Se actualizo `docs/specs/005-match-report-export.md` con la seccion `Report Export v2`.
+- Se actualizo `docs/plans/005-match-report-export-plan.md` con etapas incrementales para datos, HTML, mapas SVG, texto y QA.
+- Se extendio `docs/decisions/002-match-report-export-format.md` para elegir SVG inline en HTML como enfoque de mapas PDF sin dependencias nuevas.
+- No se implemento Report Export v2 todavia.
+
 ## 2026-05-31 - Live action grid equal-width rows
 
 Se refino la grilla de acciones del partido en vivo para equilibrar area tactil y peso visual.

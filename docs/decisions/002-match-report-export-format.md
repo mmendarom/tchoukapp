@@ -48,3 +48,53 @@ Costos:
 - `react-native-view-shot`: util para imagen, pero agrega dependencia y riesgo de captura/layout.
 - Backend para generar PDFs: rechazado por romper offline-first y agregar infraestructura.
 - Persistir reportes generados: rechazado porque los datos derivados deben recalcularse desde eventos.
+
+## V2 extension - visual maps in PDF
+
+## Date
+
+2026-06-04
+
+## Status
+
+Implemented
+
+## Context
+
+El Report Export v2 necesita mapas visuales para datos con ubicacion: puntos Uruguay, puntos rival y defensas rivales. La app ya guarda coordenadas normalizadas en `landingLocation` y `defenseLocation`, y ya muestra mapas en React Native con `CourtMapSummary`. El PDF se genera desde HTML con `expo-print`, por lo que no conviene depender de componentes React Native para renderizar mapas dentro del PDF.
+
+## Decision
+
+Renderizar mapas del reporte v2 como SVG inline dentro del HTML generado.
+
+Reglas:
+
+- Usar coordenadas normalizadas existentes.
+- No inferir ubicaciones.
+- Ignorar eventos sin ubicacion.
+- Excluir `Punto en contra` y `Punto en contra rival`.
+- Generar mapas por tiempo y totales.
+- Usar puntos con tamano/opacidad por densidad cercana como heatmap liviano.
+- No agregar dependencias nuevas para v2.
+
+Implementacion:
+
+- `src/domain/reportData.ts` expone datasets de ubicaciones por tiempo y totales.
+- `src/export/reportHtml.ts` renderiza mapas SVG inline para puntos Uruguay, puntos rival y defensas rivales.
+- El PDF mantiene `expo-print` y `expo-sharing`.
+- No se agregaron dependencias nuevas.
+
+## Consequences
+
+Beneficios:
+
+- Mantiene el export offline-first.
+- Es compatible con el enfoque HTML/PDF actual.
+- Permite tests simples sobre HTML generado.
+- Evita depender de captura visual o librerias pesadas.
+
+Costos:
+
+- No es un heatmap continuo real.
+- La fidelidad visual debe validarse en PDF real en Expo Go.
+- Si hay muchos puntos, puede requerir clustering mejorado en una iteracion futura.

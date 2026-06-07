@@ -1,4 +1,11 @@
-import { groupOpponentDefensesByZone, groupOpponentPointsByZone, groupPointsByZone, LandingZoneStat } from './court';
+import {
+  getOpponentDefenseEventsWithLocation,
+  getPointEventsWithLocation,
+  groupOpponentDefensesByZone,
+  groupOpponentPointsByZone,
+  groupPointsByZone,
+  LandingZoneStat,
+} from './court';
 import { createTacticalInsights, InsightCard } from './insights';
 import {
   calculatePeriodScore,
@@ -25,11 +32,22 @@ import {
   getTopScorersByPeriod,
   PeriodInsight,
 } from './periodStats';
-import { LineupSwapEvent, Match, MatchEvent, MatchPeriod, Player, Score, SubstitutionEvent } from './types';
+import { CourtLocation, LineupSwapEvent, Match, MatchEvent, MatchPeriod, Player, Score, SubstitutionEvent } from './types';
 
 export type ReportStat = {
   label: string;
   total: number;
+};
+
+export type ReportSummaryCard = {
+  label: string;
+  value: string;
+};
+
+export type ReportLocationMaps = {
+  uruguayPoints: CourtLocation[];
+  opponentPoints: CourtLocation[];
+  opponentDefenses: CourtLocation[];
 };
 
 export type ReportSubstitution = {
@@ -59,6 +77,7 @@ export type PeriodReportData = {
   totalErrors: ReportStat[];
   substitutions: ReportSubstitution[];
   insights: PeriodInsight[];
+  maps: ReportLocationMaps;
 };
 
 export type MatchReportData = {
@@ -68,6 +87,7 @@ export type MatchReportData = {
   dateLabel: string;
   venueLabel: string;
   competitionLabel: string;
+  executiveSummary: ReportSummaryCard[];
   finalScore: Score;
   scoreByPeriod: Array<{
     periodLabel: string;
@@ -90,6 +110,7 @@ export type MatchReportData = {
     against: LandingZoneStat[];
     defended: LandingZoneStat[];
   };
+  totalMaps: ReportLocationMaps;
   lineups: {
     initial: string[];
     final: string[];
@@ -203,12 +224,21 @@ const mapLineup = (
   getPlayerLabel: (playerId: string | undefined) => string,
 ) => (playerIds && playerIds.length > 0 ? playerIds.map(getPlayerLabel) : [emptyLabel]);
 
+const buildReportLocationMaps = (events: MatchEvent[]): ReportLocationMaps => ({
+  uruguayPoints: getPointEventsWithLocation(events, 'uruguay').map((event) => event.landingLocation),
+  opponentPoints: getPointEventsWithLocation(events, 'opponent').map((event) => event.landingLocation),
+  opponentDefenses: getOpponentDefenseEventsWithLocation(events).map((event) => event.defenseLocation),
+});
+
 export function buildMatchReportData(match: Match, players: Player[]): MatchReportData {
   const getPlayerLabel = createPlayerLabeler(players);
   const finalScore = calculateTotalScore(match.events);
   const initialLineup = match.lineupSnapshots.find((lineup) => lineup.team === 'uruguay');
   const finalLineup = [...match.lineupSnapshots].reverse().find((lineup) => lineup.team === 'uruguay');
   const totalErrorBreakdown = getErrorsByTypeByPlayer(match.events);
+  const attackZones = groupPointsByZone(match.events);
+  const againstZones = groupOpponentPointsByZone(match.events);
+  const defendedZones = groupOpponentDefensesByZone(match.events);
   const periods = periodNumbers.map((periodNumber): PeriodReportData => {
     const periodEvents = getEventsByPeriod(match.events, periodNumber);
     const periodScore = calculatePeriodScore(match.events, periodNumber);
@@ -235,8 +265,17 @@ export function buildMatchReportData(match: Match, players: Player[]): MatchRepo
         getPlayerLabel,
       ),
       insights: generatePeriodInsights({ ...match, events: periodEvents }, periodNumber, (playerId) => getPlayerLabel(playerId)),
+      maps: buildReportLocationMaps(periodEvents),
     };
   });
+  const topScorers = mapPlayerStats(getPointsByPlayer(match.events), getPlayerLabel);
+  const defenses = mapPlayerStats(getDefensesByPlayer(match.events), getPlayerLabel);
+  const faltas = mapFaltas(totalErrorBreakdown, getPlayerLabel);
+  const ownPointsByPlayer = mapOwnPointsByPlayer(totalErrorBreakdown, getPlayerLabel);
+  const totalErrors = mapPlayerStats(getErrorsByPlayer(match.events), getPlayerLabel);
+  const opponentOwnPoints = getOpponentOwnPoints(match.events);
+  const opponentDefenses = getOpponentDefenses(match.events).length;
+  const totalErrorCount = totalErrors.reduce((sum, stat) => sum + stat.total, 0);
 
   return {
     title: 'Reporte del partido',
@@ -245,6 +284,17 @@ export function buildMatchReportData(match: Match, players: Player[]): MatchRepo
     dateLabel: formatMatchDateTime(match.startsAt),
     venueLabel: match.venue || 'Sin sede registrada',
     competitionLabel: 'Sin competencia registrada',
+    executiveSummary: [
+      { label: 'Resultado final', value: `Uruguay ${finalScore.uruguay} - ${finalScore.opponent} ${match.opponent || 'Rival'}` },
+      { label: 'Mejor goleador', value: topScorers[0] ? `${topScorers[0].label} (${topScorers[0].total})` : emptyLabel },
+      { label: 'Mas defensas Uruguay', value: defenses[0] ? `${defenses[0].label} (${defenses[0].total})` : emptyLabel },
+      { label: 'Errores totales', value: String(totalErrorCount) },
+      { label: 'Puntos en contra', value: String(ownPointsByPlayer.reduce((sum, stat) => sum + stat.total, 0)) },
+      { label: 'Puntos en contra del rival', value: String(opponentOwnPoints) },
+      { label: 'Zona mas efectiva', value: attackZones[0] ? `${attackZones[0].label} (${attackZones[0].total})` : emptyLabel },
+      { label: 'Zona vulnerable', value: againstZones[0] ? `${againstZones[0].label} (${againstZones[0].total})` : emptyLabel },
+      { label: 'Zona donde mas nos defendieron', value: defendedZones[0] ? `${defendedZones[0].label} (${defendedZones[0].total})` : emptyLabel },
+    ],
     finalScore,
     scoreByPeriod: getScoreByPeriod(match.events).map((item) => ({
       periodLabel: formatPeriodName(item.periodNumber),
@@ -252,13 +302,13 @@ export function buildMatchReportData(match: Match, players: Player[]): MatchRepo
     })),
     periods,
     totals: {
-      topScorers: mapPlayerStats(getPointsByPlayer(match.events), getPlayerLabel),
-      defenses: mapPlayerStats(getDefensesByPlayer(match.events), getPlayerLabel),
-      opponentDefenses: getOpponentDefenses(match.events).length,
-      faltas: mapFaltas(totalErrorBreakdown, getPlayerLabel),
-      ownPointsByPlayer: mapOwnPointsByPlayer(totalErrorBreakdown, getPlayerLabel),
-      totalErrors: mapPlayerStats(getErrorsByPlayer(match.events), getPlayerLabel),
-      opponentOwnPoints: getOpponentOwnPoints(match.events),
+      topScorers,
+      defenses,
+      opponentDefenses,
+      faltas,
+      ownPointsByPlayer,
+      totalErrors,
+      opponentOwnPoints,
       substitutions: mapLineupActions(getLineupActions(match.events), getPlayerLabel),
       insights: createTacticalInsights({
         events: match.events,
@@ -268,10 +318,11 @@ export function buildMatchReportData(match: Match, players: Player[]): MatchRepo
       }),
     },
     zones: {
-      attack: groupPointsByZone(match.events),
-      against: groupOpponentPointsByZone(match.events),
-      defended: groupOpponentDefensesByZone(match.events),
+      attack: attackZones,
+      against: againstZones,
+      defended: defendedZones,
     },
+    totalMaps: buildReportLocationMaps(match.events),
     lineups: {
       initial: mapLineup(initialLineup?.playerIds, getPlayerLabel),
       final: mapLineup(finalLineup?.playerIds, getPlayerLabel),

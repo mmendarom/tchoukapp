@@ -70,9 +70,155 @@ Spec relacionada: `docs/specs/005-match-report-export.md`
 - Ejecutar `npx tsc --noEmit`.
 - Actualizar log con resultados.
 
+## Report Export v2 - Plan
+
+Estado: Implemented.
+
+### Objetivo v2
+
+Convertir el export post-partido en un reporte de coaching mas util, con resumen ejecutivo, separacion clara por tiempo, totales completos, mapas visuales exportables y fallback textual mas corto para compartir.
+
+### Stage 1 - Data builder v2
+
+- [x] Evolucionar `src/domain/reportData.ts`.
+- Mantener `buildMatchReportData(match, players)` como API principal o versionarla de forma compatible.
+- Separar internamente:
+  - `buildPeriodReportData`.
+  - `buildTotalReportData`.
+  - `getReportExecutiveSummary`.
+  - `getReportLocationMapsByPeriod`.
+  - `getReportTotalLocationMaps`.
+- [x] Incluir en data:
+  - score final.
+  - score por tiempo.
+  - stats por cada tiempo.
+  - totales del partido.
+  - puntos por jugador por tiempo.
+  - puntos por jugador total.
+  - defensas Uruguay.
+  - defensas rival.
+  - faltas.
+  - puntos en contra.
+  - puntos en contra rival.
+  - errores totales.
+  - sustituciones.
+  - intercambios en cancha.
+  - formacion inicial y final.
+  - insights por tiempo y generales.
+  - datasets de mapas por tiempo y totales.
+- Tests primero para `reportData`.
+
+### Stage 2 - HTML layout v2
+
+- [x] Evolucionar `src/export/reportHtml.ts`.
+- Crear helpers:
+  - `renderReportStatTable`.
+  - `renderReportSection`.
+  - `renderExecutiveSummary`.
+  - `renderPeriodSection`.
+  - `renderTotalsSection`.
+- [x] Mejorar jerarquia:
+  - portada.
+  - resumen ejecutivo.
+  - tiempos.
+  - totales.
+  - formaciones/notas.
+- Mantener labels en espanol.
+- Evitar enums crudos.
+- Tests de HTML para estructura y labels.
+
+### Stage 3 - Mapas PDF con inline SVG
+
+- [x] Implementar `renderReportCourtMap` en `src/export/reportHtml.ts` o archivo helper dentro de `src/export`.
+- [x] Usar SVG inline con coordenadas normalizadas.
+- [x] Renderizar:
+  - puntos Uruguay.
+  - puntos rival.
+  - defensas rival.
+- Crear mapas por tiempo y total.
+- [x] Excluir:
+  - eventos sin ubicacion.
+  - `Punto en contra`.
+  - `Punto en contra rival`.
+- Usar puntos con tamano/opacidad por densidad cercana como heatmap liviano.
+- [x] No usar componentes React Native para PDF.
+- [x] No agregar dependencias.
+- [x] Tests de HTML del mapa:
+  - incluye `<svg`.
+  - incluye cantidad esperada de puntos.
+  - no incluye eventos sin ubicacion.
+
+### Stage 4 - Fallback textual v2
+
+- [x] Evolucionar `buildMatchReportText`.
+- [x] Mantenerlo corto para WhatsApp.
+- [x] Incluir:
+  - resultado final.
+  - resultado por tiempos.
+  - top 3 goleadores.
+  - top defensas.
+  - errores principales.
+  - puntos en contra.
+  - puntos en contra rival.
+  - zonas principales.
+  - 2 o 3 insights.
+- Tests para contenido clave y ausencia de enums crudos.
+
+### Stage 5 - Integracion y QA
+
+- [x] Mantener `src/export/exportMatchReport.ts` sin logica de datos.
+- [x] `FinalSummaryScreen` solo llama acciones de export/share.
+- [ ] Validar PDF real en Expo Go.
+- [x] Actualizar docs y implementation log.
+
+### Tests v2 a agregar
+
+- Reporte incluye 3 tiempos separados.
+- Reporte incluye total match summary.
+- Score final correcto.
+- Score por tiempo correcto.
+- `Punto en contra` afecta score rival.
+- `Punto en contra rival` afecta score Uruguay.
+- Puntos por jugador por tiempo correctos.
+- Puntos por jugador total correctos.
+- `Punto en contra rival` no cuenta como punto de jugador.
+- Mapa Uruguay incluye solo puntos Uruguay con `landingLocation`.
+- Mapa rival incluye solo puntos rival con `landingLocation`.
+- Mapa defensas rival incluye solo `opponent_defense` con `defenseLocation`.
+- Eventos sin ubicacion no crashean.
+- Formaciones, sustituciones e intercambios aparecen.
+- Defensas, faltas y puntos en contra aparecen.
+- HTML incluye secciones de mapas.
+- Texto fallback incluye stats clave.
+- HTML/texto no contienen enums raw.
+
+### QA manual v2
+
+- Finalizar un partido con datos en los 3 tiempos.
+- Incluir puntos por distintos jugadores.
+- Incluir puntos rival.
+- Incluir `Punto en contra`.
+- Incluir `Punto en contra rival`.
+- Incluir defensas Uruguay.
+- Incluir defensas rival con ubicacion.
+- Incluir faltas.
+- Incluir sustituciones.
+- Incluir intercambios en cancha.
+- Exportar PDF.
+- Verificar cada tiempo.
+- Verificar totales.
+- Verificar mapas.
+- Verificar que los puntos del mapa coinciden razonablemente.
+- Verificar que no hay enums crudos.
+- Verificar legibilidad en telefono.
+- Compartir por WhatsApp/Drive/email si esta disponible.
+- Probar partido con pocos datos.
+
 ## Riesgos / detenerse si
 
 - `expo install` no encuentra versiones compatibles para SDK 54.
 - El import nativo rompe tests de Node.
 - El PDF requiere una API no disponible en Expo Go.
 - La UI de resumen final queda demasiado cargada.
+- El HTML SVG no se renderiza bien en `expo-print` en algun dispositivo.
+- El reporte se vuelve demasiado largo para compartir.

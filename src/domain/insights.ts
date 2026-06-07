@@ -146,9 +146,9 @@ const createFrequentScorerInsights = (
     .map(([playerId, total]) => ({
       id: `frequent-scorer-${playerId}`,
       severity: 'info',
-      title: `${getPlayerLabel(players, playerId)} estÃ¡ anotando seguido`,
-      description: `${getPlayerLabel(players, playerId)} convirtiÃ³ ${total} puntos en la secuencia reciente.`,
-      suggestedAction: 'Mantenerlo como referencia ofensiva y repetir combinaciones de marco y zona que estÃ©n funcionando.',
+      title: `${getPlayerLabel(players, playerId)} está anotando seguido`,
+      description: `${getPlayerLabel(players, playerId)} convirtió ${total} puntos en la secuencia reciente.`,
+      suggestedAction: 'Mantenerlo como referencia ofensiva y repetir combinaciones de marco y zona que estén funcionando.',
     }));
 };
 
@@ -169,8 +169,8 @@ const createRecentErrorInsights = (
       id: `recent-errors-${playerId}`,
       severity: total >= rules.criticalRecentErrors ? 'critical' : 'warning',
       title: `${getPlayerLabel(players, playerId)} acumula errores recientes`,
-      description: `${getPlayerLabel(players, playerId)} cometiÃ³ ${total} errores en las Ãºltimas ${rules.recentEventLimit} acciones registradas.`,
-      suggestedAction: 'Bajar el riesgo en las prÃ³ximas posesiones, simplificar pases o considerar un cambio corto.',
+      description: `${getPlayerLabel(players, playerId)} cometió ${total} errores en las últimas ${rules.recentEventLimit} acciones registradas.`,
+      suggestedAction: 'Bajar el riesgo en las próximas posesiones, simplificar pases o considerar un cambio corto.',
     }));
 };
 
@@ -257,7 +257,7 @@ const createOpponentZoneInsights = (
       severity: total >= rules.repeatedOpponentZoneCritical ? 'critical' : 'warning',
       title: `${opponentName} repite puntos en ${label.toLowerCase()}`,
             description: `${opponentName} convirtió ${total} puntos recientes hacia ${label.toLowerCase()}.`,
-      suggestedAction: 'Ajustar la cobertura hacia esa zona y presionar la lÃ­nea de pase antes del lanzamiento al marco.',
+      suggestedAction: 'Ajustar la cobertura hacia esa zona y presionar la línea de pase antes del lanzamiento al marco.',
     }));
 };
 
@@ -316,9 +316,9 @@ const createCurrentLineupInsight = (
       {
         id: `lineup-plus-minus-${currentLineup.id}`,
         severity: 'info',
-        title: 'La formaciÃ³n actual tiene plus/minus positivo',
-        description: `Esta formaciÃ³n estÃ¡ ${lineupScore.plusMinus >= 0 ? '+' : ''}${lineupScore.plusMinus} en las acciones de punto registradas.`,
-        suggestedAction: 'Mantener esta formaciÃ³n mientras sostenga la ventaja del emparejamiento.',
+        title: 'La formación actual tiene plus/minus positivo',
+        description: `Esta formación está ${lineupScore.plusMinus >= 0 ? '+' : ''}${lineupScore.plusMinus} en las acciones de punto registradas.`,
+        suggestedAction: 'Mantener esta formación mientras sostenga la ventaja del emparejamiento.',
       },
     ];
   }
@@ -328,9 +328,9 @@ const createCurrentLineupInsight = (
       {
         id: `lineup-plus-minus-${currentLineup.id}`,
         severity: lineupScore.plusMinus <= rules.negativeLineupPlusMinusCritical ? 'critical' : 'warning',
-        title: 'La formaciÃ³n actual tiene plus/minus negativo',
-        description: `Esta formaciÃ³n estÃ¡ ${lineupScore.plusMinus} en las acciones de punto registradas.`,
-        suggestedAction: 'Cambiar un jugador, ajustar la ocupaciÃ³n defensiva o pedir tiempo antes de que crezca la diferencia.',
+        title: 'La formación actual tiene plus/minus negativo',
+        description: `Esta formación está ${lineupScore.plusMinus} en las acciones de punto registradas.`,
+        suggestedAction: 'Cambiar un jugador, ajustar la ocupación defensiva o pedir tiempo antes de que crezca la diferencia.',
       },
     ];
   }
@@ -374,8 +374,8 @@ const createLowInvolvementInsights = (
       id: `low-involvement-${playerId}`,
       severity: 'warning',
       title: `${getPlayerLabel(players, playerId)} participa poco en ataque`,
-      description: `${getPlayerLabel(players, playerId)} no tiene puntos ni asistencias registradas mientras esta formaciÃ³n convirtiÃ³ ${lineupPointEvents.length} puntos.`,
-      suggestedAction: 'Buscar una jugada por su zona o rotarlo si el rival estÃ¡ anulando su rol.',
+      description: `${getPlayerLabel(players, playerId)} no tiene puntos ni asistencias registradas mientras esta formación convirtió ${lineupPointEvents.length} puntos.`,
+      suggestedAction: 'Buscar una jugada por su zona o rotarlo si el rival está anulando su rol.',
     }));
 };
 

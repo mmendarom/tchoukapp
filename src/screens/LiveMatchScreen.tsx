@@ -57,8 +57,9 @@ const describeEvent = (event: MatchEvent, players: Player[]) => {
 };
 
 export function LiveMatchScreen({ navigation, route }: Props) {
-  const { width } = useWindowDimensions();
+  const { height, width } = useWindowDimensions();
   const isPhone = width < 768;
+  const isTabletLandscape = width >= 900 && width > height;
   const [selectedPlayerId, setSelectedPlayerId] = useState<string | undefined>();
   const [changeModeActive, setChangeModeActive] = useState(false);
   const [selectedSubOutSlotIndex, setSelectedSubOutSlotIndex] = useState<number | undefined>();
@@ -393,7 +394,7 @@ export function LiveMatchScreen({ navigation, route }: Props) {
 
   const handleBenchPlayerPress = (player: Player) => {
     if (!changeModeActive) {
-      setFeedbackMessage('TocÃ¡ Cambiar jugadores para iniciar un cambio.');
+      setFeedbackMessage('Tocá Cambiar jugadores para iniciar un cambio.');
       return;
     }
 
@@ -628,8 +629,8 @@ export function LiveMatchScreen({ navigation, route }: Props) {
         </Animated.View>
       )}
 
-      <View style={[styles.mainGrid, isPhone && styles.mainGridPhone]}>
-        <View style={styles.leftColumn}>
+      <View style={[styles.mainGrid, isPhone && styles.mainGridPhone, isTabletLandscape && styles.mainGridTabletLandscape]}>
+        <View style={[styles.leftColumn, isTabletLandscape && styles.leftColumnTabletLandscape]}>
           <View style={styles.actionGrid}>
             <View style={styles.actionRow}>
               <Pressable
@@ -728,7 +729,7 @@ export function LiveMatchScreen({ navigation, route }: Props) {
           )}
         </View>
 
-        <View style={styles.rightColumn}>
+        <View style={[styles.rightColumn, isTabletLandscape && styles.rightColumnTabletLandscape]}>
           <View style={styles.panel}>
             <LineupCourt
               slots={lineupSlots}
@@ -783,17 +784,17 @@ export function LiveMatchScreen({ navigation, route }: Props) {
             )}
           </View>
 
-          <View style={styles.panel}>
-            <Text style={styles.panelTitle}>Banco</Text>
-            <Text style={styles.sectionLabel}>
-              {changeModeActive ? 'Seleccioná suplente o dos jugadores en cancha' : 'Activá Modo cambio para seleccionar suplente'}
-            </Text>
-            <BenchList
-              players={benchPlayers}
-              selectedPlayerId={selectedBenchPlayerId}
-              onPlayerPress={handleBenchPlayerPress}
-            />
-          </View>
+          {changeModeActive && (
+            <View style={styles.panel}>
+              <Text style={styles.panelTitle}>Banco</Text>
+              <Text style={styles.sectionLabel}>Seleccioná suplente o dos jugadores en cancha</Text>
+              <BenchList
+                players={benchPlayers}
+                selectedPlayerId={selectedBenchPlayerId}
+                onPlayerPress={handleBenchPlayerPress}
+              />
+            </View>
+          )}
 
           <View style={styles.panel}>
             <Text style={styles.panelTitle}>Últimas acciones</Text>
@@ -945,6 +946,9 @@ const styles = StyleSheet.create({
     gap: spacing.md,
     alignItems: 'flex-start',
   },
+  mainGridTabletLandscape: {
+    gap: spacing.lg,
+  },
   mainGridPhone: {
     flexDirection: 'column',
     gap: spacing.sm,
@@ -954,10 +958,16 @@ const styles = StyleSheet.create({
     gap: spacing.xs,
     width: '100%',
   },
+  leftColumnTabletLandscape: {
+    flex: 1.25,
+  },
   rightColumn: {
     flex: 1,
     gap: spacing.xs,
     width: '100%',
+  },
+  rightColumnTabletLandscape: {
+    flex: 0.9,
   },
   actionGrid: {
     gap: spacing.xs,

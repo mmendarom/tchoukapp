@@ -62,10 +62,10 @@ export function CourtMapInput({ selectedLocation, onSelectLocation, onConfirm, o
     const verticalInsets = insets.top + insets.bottom;
 
     if (isLandscape) {
-      return Math.max(200, windowHeight - verticalInsets - 178);
+      return Math.max(190, windowHeight - verticalInsets - 226);
     }
 
-    return Math.min(Math.max(windowWidth * 0.82, 300), (windowHeight - verticalInsets) * 0.56);
+    return Math.min(Math.max(windowWidth * 0.72, 260), (windowHeight - verticalInsets) * 0.5);
   }, [insets.bottom, insets.top, isLandscape, windowHeight, windowWidth]);
   const markerPixelLocation = useMemo(() => {
     if (!selectedLocation || !courtRect || !isValidCourtLayout(courtRect.width, courtRect.height)) {
@@ -317,25 +317,29 @@ const styles = StyleSheet.create({
   help: {
     color: '#5d6b7a',
     fontSize: fontSize.small,
+    fontWeight: '800',
+    textAlign: 'center',
   },
   actions: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: spacing.sm,
+    alignItems: 'stretch',
   },
   actionsLandscape: {
     justifyContent: 'flex-end',
   },
   confirmWrap: {
     flexGrow: 1,
+    flexBasis: 220,
   },
   button: {
-    minHeight: 44,
+    minHeight: 58,
     borderRadius: 8,
     justifyContent: 'center',
     alignItems: 'center',
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
   },
   primary: {
     backgroundColor: '#0b6bcb',

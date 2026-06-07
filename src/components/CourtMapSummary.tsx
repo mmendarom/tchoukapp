@@ -45,6 +45,7 @@ export function CourtMapSummary({ title, events, team = 'uruguay', source = 'poi
                   ? styles.uruguayDot
                   : styles.opponentDot,
               {
+                borderRadius: size / 2,
                 height: size,
                 left: `${location.x * 100}%`,
                 marginLeft: -size / 2,
