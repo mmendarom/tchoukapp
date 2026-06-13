@@ -5,6 +5,7 @@ import { ActionButton } from '../components/ActionButton';
 import { Screen } from '../components/Screen';
 import { StatCard } from '../components/StatCard';
 import { createTacticalInsights } from '../domain/insights';
+import { normalizeOpponentName } from '../domain/opponent';
 import {
   calculateScore,
   getDefensesByPlayer,
@@ -45,6 +46,7 @@ export function MatchDashboardScreen({ navigation, route }: Props) {
     return player ? player.lastName || player.firstName : playerId;
   };
   const score = calculateScore(match.events);
+  const opponentName = normalizeOpponentName(match.opponent);
   const topScorers = getTopScorers(match.events);
   const errorsByPlayer = getErrorsByPlayer(match.events);
   const errorBreakdown = getErrorsByTypeByPlayer(match.events);
@@ -58,14 +60,14 @@ export function MatchDashboardScreen({ navigation, route }: Props) {
     events: match.events,
     lineupSnapshots: match.lineupSnapshots,
     players,
-    opponentName: match.opponent,
+    opponentName,
   });
 
   return (
     <Screen>
       <View style={styles.header}>
         <Text style={styles.kicker}>{statusLabel[match.status].toUpperCase()}</Text>
-        <Text style={styles.title}>Uruguay {score.uruguay} - {score.opponent} {match.opponent}</Text>
+        <Text style={styles.title}>Uruguay {score.uruguay} - {score.opponent} {opponentName}</Text>
       </View>
 
       <View style={styles.statsRow}>

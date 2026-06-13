@@ -149,4 +149,28 @@ describe('buildMatchReportData', () => {
     expect(report.totalMaps.opponentPoints).toEqual([]);
     expect(report.totalMaps.opponentDefenses).toEqual([]);
   });
+
+  it('uses custom rival name in report labels', () => {
+    const report = buildMatchReportData({ ...match(), opponent: 'Brasil' }, players);
+
+    expect(report.matchLabel).toBe('Uruguay vs Brasil');
+    expect(report.opponent).toBe('Brasil');
+    expect(report.executiveSummary).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ label: 'Resultado final', value: 'Uruguay 0 - 0 Brasil' }),
+      ]),
+    );
+  });
+
+  it('uses Rival fallback when old matches have no opponent', () => {
+    const report = buildMatchReportData({ ...match(), opponent: undefined } as unknown as Match, players);
+
+    expect(report.matchLabel).toBe('Uruguay vs Rival');
+    expect(report.opponent).toBe('Rival');
+    expect(report.executiveSummary).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ label: 'Resultado final', value: 'Uruguay 0 - 0 Rival' }),
+      ]),
+    );
+  });
 });

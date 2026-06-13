@@ -53,6 +53,47 @@ describe('useMatchStore period stability', () => {
     expect(calculatePeriodScore(match.events, 1)).toEqual({ uruguay: 1, opponent: 0 });
   });
 
+  it('creates a draft match with a custom rival name', () => {
+    const matchId = useMatchStore.getState().createMatch({ opponent: 'Brasil' });
+    const match = useMatchStore.getState().matches.find((item) => item.id === matchId);
+
+    expect(match).toMatchObject({
+      opponent: 'Brasil',
+      status: 'draft',
+      venue: 'Partido',
+    });
+    expect(useMatchStore.getState().activeMatchId).toBe(matchId);
+  });
+
+  it('falls back to Rival when creating a match without rival name', () => {
+    const matchId = useMatchStore.getState().createMatch({ opponent: '   ' });
+    const match = useMatchStore.getState().matches.find((item) => item.id === matchId);
+
+    expect(match?.opponent).toBe('Rival');
+  });
+
+  it('keeps demo match creation using Argentina', () => {
+    const matchId = useMatchStore.getState().createDemoMatch();
+    const match = useMatchStore.getState().matches.find((item) => item.id === matchId);
+
+    expect(match?.opponent).toBe('Argentina');
+    expect(match?.venue).toBe('Partido demo');
+  });
+
+  it('normalizes old matches without opponent when starting them', () => {
+    const matchId = useMatchStore.getState().createMatch({ opponent: 'Chile' });
+    useMatchStore.setState((state) => ({
+      matches: state.matches.map((match) =>
+        match.id === matchId ? ({ ...match, opponent: undefined } as unknown as typeof match) : match,
+      ),
+    }));
+
+    useMatchStore.getState().startMatch(matchId);
+
+    const match = useMatchStore.getState().matches.find((item) => item.id === matchId);
+    expect(match?.opponent).toBe('Rival');
+  });
+
   it('prevents events outside a live period', () => {
     const state = useMatchStore.getState();
     const matchId = state.createDemoMatch();

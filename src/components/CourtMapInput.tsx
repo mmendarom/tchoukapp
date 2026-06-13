@@ -47,6 +47,7 @@ export function CourtMapInput({ selectedLocation, onSelectLocation, onConfirm, o
   const [lastTap, setLastTap] = useState<{ x: number; y: number } | null>(null);
 
   const isLandscape = windowWidth > windowHeight;
+  const isTablet = windowWidth >= 768;
   const title =
     mode === 'uruguay_point'
       ? '¿Dónde cayó nuestro punto?'
@@ -60,13 +61,14 @@ export function CourtMapInput({ selectedLocation, onSelectLocation, onConfirm, o
       : 'Tip: girá el celular para marcar con más precisión.';
   const mapHeight = useMemo(() => {
     const verticalInsets = insets.top + insets.bottom;
+    const availableHeight = windowHeight - verticalInsets;
 
     if (isLandscape) {
-      return Math.max(190, windowHeight - verticalInsets - 226);
+      return Math.max(170, Math.min(availableHeight * 0.58, availableHeight - (isTablet ? 320 : 280)));
     }
 
-    return Math.min(Math.max(windowWidth * 0.72, 260), (windowHeight - verticalInsets) * 0.5);
-  }, [insets.bottom, insets.top, isLandscape, windowHeight, windowWidth]);
+    return Math.min(Math.max(windowWidth * 0.62, 220), availableHeight * 0.42);
+  }, [insets.bottom, insets.top, isLandscape, isTablet, windowHeight, windowWidth]);
   const markerPixelLocation = useMemo(() => {
     if (!selectedLocation || !courtRect || !isValidCourtLayout(courtRect.width, courtRect.height)) {
       return null;
@@ -226,11 +228,11 @@ export function CourtMapInput({ selectedLocation, onSelectLocation, onConfirm, o
           </Text>
 
           <View style={[styles.actions, isLandscape && styles.actionsLandscape]}>
-            <Pressable onPress={onCancel} style={[styles.button, styles.secondary]}>
+            <Pressable onPress={onCancel} style={[styles.button, styles.actionButton, styles.secondary]}>
               <Text style={styles.secondaryText}>Cancelar</Text>
             </Pressable>
             <Animated.View style={[styles.confirmWrap, { opacity: confirmOpacity }]}>
-              <Pressable onPress={onConfirm} style={[styles.button, styles.primary]}>
+              <Pressable onPress={onConfirm} style={[styles.button, styles.actionButton, styles.primary]}>
                 <Text style={styles.primaryText}>
                   {selectedLocation ? 'Confirmar ubicación' : 'Cambiar ubicación'}
                 </Text>
@@ -331,15 +333,19 @@ const styles = StyleSheet.create({
   },
   confirmWrap: {
     flexGrow: 1,
-    flexBasis: 220,
+    flexBasis: 260,
   },
   button: {
-    minHeight: 58,
+    minHeight: 92,
     borderRadius: 8,
     justifyContent: 'center',
     alignItems: 'center',
     paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
+    paddingVertical: spacing.lg,
+  },
+  actionButton: {
+    flexGrow: 1,
+    flexBasis: 180,
   },
   primary: {
     backgroundColor: '#0b6bcb',

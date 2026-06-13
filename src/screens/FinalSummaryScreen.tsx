@@ -5,6 +5,7 @@ import { Share, StyleSheet, Text, TextInput, View } from 'react-native';
 import { ActionButton } from '../components/ActionButton';
 import { CourtMapSummary } from '../components/CourtMapSummary';
 import { Screen } from '../components/Screen';
+import { normalizeOpponentName } from '../domain/opponent';
 import { groupOpponentDefensesByZone, groupOpponentPointsByZone, groupPointsByZone } from '../domain/court';
 import { createTacticalInsights } from '../domain/insights';
 import { buildMatchReportData } from '../domain/reportData';
@@ -85,6 +86,7 @@ export function FinalSummaryScreen({ navigation, route }: Props) {
     return player ? player.lastName || player.firstName : playerId;
   };
   const totalScore = calculateTotalScore(match.events);
+  const opponentName = normalizeOpponentName(match.opponent);
   const scoreByPeriod = getScoreByPeriod(match.events);
   const scorers = getPointsByPlayer(match.events);
   const errors = getErrorsByPlayer(match.events);
@@ -101,14 +103,14 @@ export function FinalSummaryScreen({ navigation, route }: Props) {
     events: match.events,
     lineupSnapshots: match.lineupSnapshots,
     players,
-    opponentName: match.opponent,
+    opponentName,
   });
 
   return (
     <Screen>
       <Text style={styles.title}>Resumen final del partido</Text>
       <View style={styles.card}>
-        <Text style={styles.score}>Uruguay {totalScore.uruguay} - {totalScore.opponent} {match.opponent}</Text>
+        <Text style={styles.score}>Uruguay {totalScore.uruguay} - {totalScore.opponent} {opponentName}</Text>
       </View>
       <View style={styles.card}>
         <Text style={styles.sectionTitle}>Resultado por tiempos</Text>

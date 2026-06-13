@@ -9,6 +9,7 @@ import {
   groupOpponentDefensesByZone,
   groupPointsByZone,
 } from '../domain/court';
+import { normalizeOpponentName } from '../domain/opponent';
 import {
   calculatePeriodScore,
   calculateTotalScore,
@@ -53,6 +54,7 @@ export function PeriodSummaryScreen({ navigation, route }: Props) {
   const periodNumber = route.params.periodNumber;
   const periodScore = calculatePeriodScore(match.events, periodNumber);
   const totalScore = calculateTotalScore(match.events);
+  const opponentName = normalizeOpponentName(match.opponent);
   const scorers = getTopScorersByPeriod(match.events, periodNumber);
   const errors = getErrorsByPlayerByPeriod(match.events, periodNumber);
   const errorBreakdown = getErrorsByTypeByPlayerByPeriod(match.events, periodNumber);
@@ -78,8 +80,8 @@ export function PeriodSummaryScreen({ navigation, route }: Props) {
       <Text style={styles.title}>Resumen del tiempo</Text>
       <View style={styles.card}>
         <Text style={styles.sectionTitle}>{formatPeriodName(periodNumber)}</Text>
-        <Text style={styles.score}>Uruguay {periodScore.uruguay} - {periodScore.opponent} {match.opponent}</Text>
-        <Text style={styles.metric}>Global: Uruguay {totalScore.uruguay} - {totalScore.opponent} {match.opponent}</Text>
+        <Text style={styles.score}>Uruguay {periodScore.uruguay} - {periodScore.opponent} {opponentName}</Text>
+        <Text style={styles.metric}>Global: Uruguay {totalScore.uruguay} - {totalScore.opponent} {opponentName}</Text>
       </View>
 
       <View style={styles.card}>

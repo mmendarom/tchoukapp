@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
 
 import { initialMatches, upcomingFixtures, uruguayPlayers } from '../domain/mockData';
+import { normalizeOpponentName } from '../domain/opponent';
 import { PERIOD_DURATION_SECONDS } from '../domain/periodStats';
 import { replaceLineupSlotPlayer, swapLineupSlotPlayers } from '../domain/lineupSlots';
 import {
@@ -29,6 +30,7 @@ type MatchState = {
   fixtures: Fixture[];
   activeMatchId?: string;
   startMatch: (matchId: string) => void;
+  createMatch: (input: { opponent?: string; venue?: string; startsAt?: string }) => string;
   createDemoMatch: () => string;
   startCurrentPeriod: () => void;
   endCurrentPeriod: () => void;
@@ -92,8 +94,42 @@ const createInitialPeriods = (): MatchPeriodState[] => [
   },
 ];
 
+const createDraftMatch = (input: {
+  opponent?: string;
+  players: Player[];
+  startsAt?: string;
+  venue?: string;
+}): Match => {
+  const matchId = `match-${createId()}`;
+  const lineupId = `lineup-${createId()}`;
+  const startsAt = input.startsAt ?? new Date().toISOString();
+
+  return {
+    id: matchId,
+    opponent: normalizeOpponentName(input.opponent),
+    venue: input.venue?.trim() || 'Partido',
+    startsAt,
+    status: 'draft',
+    currentPeriod: 1,
+    periods: createInitialPeriods(),
+    clock: { period: 1, secondsElapsed: 0 },
+    lineupSnapshots: [
+      {
+        id: lineupId,
+        matchId,
+        team: 'uruguay',
+        playerIds: input.players.slice(0, 7).map((player) => player.id),
+        capturedAt: startsAt,
+        clock: { period: 1, secondsElapsed: 0 },
+      },
+    ],
+    events: [],
+  };
+};
+
 const normalizeMatch = (match: Match): Match => ({
   ...match,
+  opponent: normalizeOpponentName(match.opponent),
   status: match.status === ('scheduled' as Match['status']) ? 'draft' : match.status,
   currentPeriod: match.currentPeriod ?? match.clock.period ?? 1,
   periods: (match.periods ?? createInitialPeriods()).map((period) => ({
@@ -165,37 +201,34 @@ export const useMatchStore = create<MatchState>()(
             match.id === matchId ? { ...normalizeMatch(match), status: 'live' } : match,
           ),
         })),
-      createDemoMatch: () => {
-        const matchId = `match-${createId()}`;
-        const lineupId = `lineup-${createId()}`;
-        const match: Match = {
-          id: matchId,
-          opponent: 'Argentina',
-          venue: 'Partido demo',
-          startsAt: new Date().toISOString(),
-          status: 'draft',
-          currentPeriod: 1,
-          periods: createInitialPeriods(),
-          clock: { period: 1, secondsElapsed: 0 },
-          lineupSnapshots: [
-            {
-              id: lineupId,
-              matchId,
-              team: 'uruguay',
-              playerIds: uruguayPlayers.slice(0, 7).map((player) => player.id),
-              capturedAt: new Date().toISOString(),
-              clock: { period: 1, secondsElapsed: 0 },
-            },
-          ],
-          events: [],
-        };
+      createMatch: (input) => {
+        const match = createDraftMatch({
+          opponent: input.opponent,
+          venue: input.venue,
+          startsAt: input.startsAt,
+          players: get().players,
+        });
 
         set((state) => ({
-          activeMatchId: matchId,
+          activeMatchId: match.id,
           matches: [match, ...state.matches],
         }));
 
-        return matchId;
+        return match.id;
+      },
+      createDemoMatch: () => {
+        const match = createDraftMatch({
+          opponent: 'Argentina',
+          venue: 'Partido demo',
+          players: get().players,
+        });
+
+        set((state) => ({
+          activeMatchId: match.id,
+          matches: [match, ...state.matches],
+        }));
+
+        return match.id;
       },
       startCurrentPeriod: () => {
         const { activeMatchId } = get();

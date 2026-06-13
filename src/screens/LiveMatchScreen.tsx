@@ -6,8 +6,10 @@ import { ActionButton } from '../components/ActionButton';
 import { BenchList } from '../components/BenchList';
 import { CourtMapInput } from '../components/CourtMapInput';
 import { LineupCourt } from '../components/LineupCourt';
+import { LiveMapPanel } from '../components/LiveMapPanel';
 import { Screen } from '../components/Screen';
 import { createLineupSlots, getBenchPlayers } from '../domain/lineupSlots';
+import { normalizeOpponentName } from '../domain/opponent';
 import { calculateTotalScore, formatPeriodName, formatTimer } from '../domain/periodStats';
 import { getCurrentLineup } from '../domain/stats';
 import { CourtLocation, MatchEvent, Player } from '../domain/types';
@@ -69,6 +71,7 @@ export function LiveMatchScreen({ navigation, route }: Props) {
   const [errorModalVisible, setErrorModalVisible] = useState(false);
   const [selectedErrorPlayerId, setSelectedErrorPlayerId] = useState<string | undefined>();
   const [feedbackMessage, setFeedbackMessage] = useState<string | undefined>();
+  const [liveMapsExpanded, setLiveMapsExpanded] = useState(false);
   const [selectedLandingLocation, setSelectedLandingLocation] = useState<CourtLocation | undefined>();
   const feedbackOpacity = useRef(new Animated.Value(0)).current;
   const feedbackTranslateY = useRef(new Animated.Value(-8)).current;
@@ -205,7 +208,18 @@ export function LiveMatchScreen({ navigation, route }: Props) {
   const score = calculateTotalScore(match.events);
   const canRecord = match.status === 'live' && currentPeriodState?.status === 'live';
   const lastFiveEvents = match.events.slice(0, 5);
+  const opponentName = normalizeOpponentName(match.opponent);
   const timerText = currentPeriodState?.remainingSeconds === 0 ? 'Tiempo cumplido' : formatTimer(currentPeriodState?.remainingSeconds ?? 0);
+  const shouldShowLiveMaps = match.status === 'live';
+  const liveMapPanel = shouldShowLiveMaps ? (
+    <LiveMapPanel
+      collapsible={!isTabletLandscape}
+      events={match.events}
+      expanded={isTabletLandscape || liveMapsExpanded}
+      onToggleExpanded={() => setLiveMapsExpanded((current) => !current)}
+      periodNumber={match.currentPeriod}
+    />
+  ) : undefined;
 
   const confirmCancel = () => {
     Alert.alert(
@@ -507,7 +521,7 @@ export function LiveMatchScreen({ navigation, route }: Props) {
           </View>
 
           <View style={styles.matchMeta}>
-            <Text numberOfLines={1} adjustsFontSizeToFit style={styles.matchTitle}>vs {match.opponent}</Text>
+            <Text numberOfLines={1} adjustsFontSizeToFit style={styles.matchTitle}>vs {opponentName}</Text>
           </View>
 
           <View style={styles.scoreBlock}>
@@ -727,6 +741,8 @@ export function LiveMatchScreen({ navigation, route }: Props) {
               </Pressable>
             </View>
           )}
+
+          {isTabletLandscape && liveMapPanel}
         </View>
 
         <View style={[styles.rightColumn, isTabletLandscape && styles.rightColumnTabletLandscape]}>
@@ -811,6 +827,8 @@ export function LiveMatchScreen({ navigation, route }: Props) {
           </View>
         </View>
       </View>
+
+      {!isTabletLandscape && liveMapPanel}
 
       {match.status === 'live' && (
         <View style={styles.matchControlsPanel}>

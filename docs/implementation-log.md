@@ -1,5 +1,162 @@
 # Implementation Log
 
+## 2026-06-13 - Editable rivals Stage 1
+
+Se implemento Stage 1 de rivales editables sin agregar CRUD, recientes, backend, auth ni cloud.
+
+- `Crear partido` ahora abre un modal con campo `Rival`.
+- El usuario puede ingresar un nombre libre, por ejemplo `Brasil`.
+- El nuevo partido guarda el rival en `Match.opponent`.
+- Si el campo queda vacio, el rival se normaliza a `Rival`.
+- `createDemoMatch` y `Reiniciar datos demo` mantienen `Argentina` como dato demo.
+- Partidos viejos sin `opponent` se normalizan de forma defensiva a `Rival`.
+- Marcador live, lista de partidos, resumen por tiempo, resumen final, dashboard y reportes usan el nombre normalizado.
+- Lista de rivales recientes y CRUD completo quedan diferidos.
+
+Validacion:
+
+- `npx tsc --noEmit`: paso.
+- `npm test`: no se pudo ejecutar en esta sesion porque la herramienta rechazo el comando por limite de uso.
+
+QA manual recomendado:
+
+- Crear partido con rival `Brasil`.
+- Confirmar que el marcador muestra `vs Brasil`.
+- Registrar puntos y finalizar un tiempo.
+- Confirmar que el resumen del tiempo usa `Brasil`.
+- Finalizar el partido y confirmar que el resumen final usa `Brasil`.
+- Exportar PDF y compartir texto; confirmar `Uruguay vs Brasil`.
+- Crear partido con rival vacio y confirmar fallback `Rival`.
+- Reiniciar datos demo y confirmar que el demo sigue funcionando con `Argentina`.
+
+## 2026-06-13 - Live map panel compact polish
+
+Se documento e implemento el polish compacto del panel de mapas en vivo.
+
+- `Combinado` pasa a ser el primer tab y la vista seleccionada por defecto.
+- Se quitan los textos `Mapas en vivo` y `Tiempo actual` del panel para liberar espacio visual.
+- El comportamiento de tiempo actual no cambia.
+- `Defensas nuestras` como heatmap queda explicitamente diferido: defensas Uruguay registran quien defendio, no ubicacion.
+- Uruguay defensas siguen siendo estadistica por jugador solamente.
+
+Validacion:
+
+- `npm test`: 10 archivos, 94 tests pasaron.
+- `npx tsc --noEmit`: paso.
+
+QA manual recomendado:
+
+- Abrir partido en vivo.
+- Confirmar que no aparece el titulo `Mapas en vivo`.
+- Confirmar que no aparece el subtitulo `Tiempo actual`.
+- Confirmar orden de tabs: `Combinado`, `Puntos nuestros`, `Puntos rivales`, `Defensas rivales`.
+- Confirmar que `Combinado` queda seleccionado por defecto.
+- Registrar punto Uruguay, punto rival y defensa rival; confirmar que `Combinado` se actualiza.
+- Registrar defensa Uruguay y confirmar que no aparece en mapas.
+- Confirmar que los mapas siguen usando solo el tiempo actual.
+
+## 2026-06-13 - Live maps combined view
+
+Se documento e implemento un refinamiento del panel `Mapas en vivo`, sin cambiar reglas de score, eventos, persistencia, timer, sustituciones ni export PDF.
+
+- El panel suma el cuarto tab `Combinado`.
+- `Combinado` superpone en un mismo mapa:
+  - puntos nuestros con marcador azul;
+  - puntos rivales con marcador rojo;
+  - defensas rivales con marcador violeta.
+- La vista combinada sigue usando solo eventos del tiempo actual.
+- `Punto en contra`, `Punto en contra rival`, defensas Uruguay y eventos sin ubicacion siguen fuera de mapas.
+- Uruguay defensas siguen siendo estadistica por jugador, no mapa.
+
+Validacion:
+
+- `npm test`: 10 archivos, 94 tests pasaron.
+- `npx tsc --noEmit`: paso.
+
+QA manual recomendado:
+
+- Abrir partido en vivo en tablet landscape.
+- Confirmar tabs `Puntos nuestros`, `Puntos rivales`, `Defensas rivales` y `Combinado`.
+- Registrar puntos Uruguay con ubicacion.
+- Registrar puntos rivales con ubicacion.
+- Registrar defensas rivales con ubicacion.
+- Abrir `Combinado` y verificar que aparecen los tres colores.
+- Verificar leyenda azul/rojo/violeta.
+- Registrar `Punto en contra` y `Punto en contra rival`; confirmar que no aparecen en `Combinado`.
+- Usar `Deshacer` y confirmar que el mapa combinado se actualiza.
+- Finalizar el tiempo e iniciar el siguiente; confirmar que `Combinado` muestra solo el tiempo actual.
+- Probar telefono portrait y confirmar que los 4 tabs siguen usables.
+
+## 2026-06-13 - Live maps panel
+
+Se implemento el panel de mapas en vivo para `LiveMatchScreen`, sin cambiar reglas de score, eventos, persistencia ni export PDF.
+
+- En tablet landscape, `Mapas en vivo` aparece en la columna izquierda bajo las acciones/deshacer, usando el espacio libre detectado en pruebas.
+- En telefono y layouts mas chicos, el panel aparece mas abajo y queda colapsable para no entorpecer el registro.
+- El panel muestra un mapa por vez con tabs:
+  - `Puntos nuestros`.
+  - `Puntos rivales`.
+  - `Defensas rivales`.
+- Los mapas usan solo datos del tiempo actual.
+- `Puntos nuestros` incluye puntos Uruguay normales con `landingLocation`.
+- `Puntos rivales` incluye puntos rivales normales con `landingLocation`.
+- `Defensas rivales` incluye eventos `opponent_defense` con `defenseLocation`.
+- `Punto en contra`, `Punto en contra rival` y defensas Uruguay quedan fuera de mapas live porque no tienen ubicacion tactica real.
+- Se extrajo `CourtLocationMap` para reutilizar cancha y marcadores entre resumenes y mapas live.
+- Se agregaron helpers puros en `src/domain/liveMaps.ts` y tests de filtrado por tiempo/tipo de evento.
+
+Validacion:
+
+- `npm test`: 10 archivos, 92 tests pasaron.
+- `npx tsc --noEmit`: paso.
+
+QA manual recomendado:
+
+- Abrir partido en vivo en tablet landscape.
+- Confirmar que `Mapas en vivo` aparece bajo las acciones del lado izquierdo.
+- Confirmar tabs `Puntos nuestros`, `Puntos rivales` y `Defensas rivales`.
+- Registrar un punto Uruguay con ubicacion y confirmar que aparece en `Puntos nuestros`.
+- Registrar un punto rival con ubicacion y confirmar que aparece en `Puntos rivales`.
+- Registrar una defensa rival con ubicacion y confirmar que aparece en `Defensas rivales`.
+- Registrar `Punto en contra` y confirmar que no aparece en mapas.
+- Registrar `Punto en contra rival` y confirmar que no aparece en mapas.
+- Usar `Deshacer` y confirmar que el mapa se actualiza.
+- Finalizar un tiempo e iniciar el siguiente; confirmar que los mapas muestran el tiempo actual.
+- Probar telefono portrait y confirmar que el panel colapsable no incomoda las acciones.
+
+## 2026-06-13 - Editable rivals and live maps planning
+
+Se planificaron las proximas mejoras de producto sin modificar codigo de produccion ni comportamiento de la app.
+
+- Se agrego `docs/specs/007-opponents-and-live-heatmaps.md` para cubrir rivales editables y mapas/estadisticas en vivo.
+- Se agrego `docs/plans/007-opponents-and-live-heatmaps-plan.md` con implementacion por etapas.
+- La etapa recomendada para el MVP es usar `Match.opponent` como texto libre al crear partido, con fallback `Rival` y demo default `Argentina`.
+- La lista local de rivales recientes queda como Stage 2 opcional.
+- Los mapas en vivo quedan planificados solo para eventos con ubicacion real: puntos Uruguay, puntos rival y defensas del rival.
+- Las defensas de Uruguay quedan como estadistica por jugador, no como mapa, porque no registran ubicacion.
+
+## 2026-06-13 - Court map tablet readability refinement
+
+Se refino la UI de mapas luego de pruebas en tablet/iPad, sin cambiar el modelo de ubicacion ni la logica de coordenadas normalizadas.
+
+- `CourtMapInput` agranda sustancialmente los botones inferiores `Cancelar` y `Confirmar ubicacion` / `Cambiar ubicacion`.
+- La cancha del input reduce su altura maxima para reservar una zona inferior clara y comoda de tocar.
+- Se mantiene la medicion real del rectangulo de cancha y la normalizacion `x/y` desde el tap.
+- `CourtMapSummary` aumenta la altura de los mapas en telefono y tablet, con una altura mayor en tablet landscape.
+- Los marcadores de resumen siguen posicionados por porcentaje desde coordenadas normalizadas y mantienen forma circular.
+
+QA manual recomendado:
+
+- Abrir un partido en vivo.
+- Tocar `Punto Uruguay` con jugador seleccionado.
+- Verificar que `Cancelar` y `Confirmar ubicacion` / `Cambiar ubicacion` son grandes y faciles de tocar.
+- Tocar varias zonas de la cancha y confirmar que el marcador aparece donde se toca.
+- Repetir con `Punto rival` y `Defensa rival`.
+- Probar telefono portrait, telefono landscape y tablet landscape.
+- Finalizar un tiempo con puntos y defensas rivales en distintas zonas.
+- Verificar que los mapas de resumen son mas altos, legibles y con marcadores circulares.
+- Verificar que `Sin ubicaciones registradas` sigue apareciendo en mapas vacios.
+
 ## 2026-06-06 - Field testing UX/report refinements
 
 Se implemento un batch de bugfixes luego de pruebas reales en tablet/iPad, sin cambiar reglas de score, modelos de eventos ni persistencia.

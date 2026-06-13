@@ -7,6 +7,7 @@ import {
   LandingZoneStat,
 } from './court';
 import { createTacticalInsights, InsightCard } from './insights';
+import { normalizeOpponentName } from './opponent';
 import {
   calculatePeriodScore,
   calculateTotalScore,
@@ -231,6 +232,7 @@ const buildReportLocationMaps = (events: MatchEvent[]): ReportLocationMaps => ({
 });
 
 export function buildMatchReportData(match: Match, players: Player[]): MatchReportData {
+  const opponentName = normalizeOpponentName(match.opponent);
   const getPlayerLabel = createPlayerLabeler(players);
   const finalScore = calculateTotalScore(match.events);
   const initialLineup = match.lineupSnapshots.find((lineup) => lineup.team === 'uruguay');
@@ -279,13 +281,13 @@ export function buildMatchReportData(match: Match, players: Player[]): MatchRepo
 
   return {
     title: 'Reporte del partido',
-    matchLabel: `Uruguay vs ${match.opponent || 'Rival'}`,
-    opponent: match.opponent || 'Rival',
+    matchLabel: `Uruguay vs ${opponentName}`,
+    opponent: opponentName,
     dateLabel: formatMatchDateTime(match.startsAt),
     venueLabel: match.venue || 'Sin sede registrada',
     competitionLabel: 'Sin competencia registrada',
     executiveSummary: [
-      { label: 'Resultado final', value: `Uruguay ${finalScore.uruguay} - ${finalScore.opponent} ${match.opponent || 'Rival'}` },
+      { label: 'Resultado final', value: `Uruguay ${finalScore.uruguay} - ${finalScore.opponent} ${opponentName}` },
       { label: 'Mejor goleador', value: topScorers[0] ? `${topScorers[0].label} (${topScorers[0].total})` : emptyLabel },
       { label: 'Mas defensas Uruguay', value: defenses[0] ? `${defenses[0].label} (${defenses[0].total})` : emptyLabel },
       { label: 'Errores totales', value: String(totalErrorCount) },
@@ -314,7 +316,7 @@ export function buildMatchReportData(match: Match, players: Player[]): MatchRepo
         events: match.events,
         lineupSnapshots: match.lineupSnapshots,
         players,
-        opponentName: match.opponent,
+        opponentName,
       }),
     },
     zones: {
