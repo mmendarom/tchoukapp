@@ -162,6 +162,17 @@ describe('buildMatchReportData', () => {
     );
   });
 
+  it('includes team pool name when available', () => {
+    const report = buildMatchReportData({ ...match(), teamPoolName: 'Mayores' }, players);
+
+    expect(report.teamPoolName).toBe('Mayores');
+    expect(report.executiveSummary).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ label: 'Plantel', value: 'Mayores' }),
+      ]),
+    );
+  });
+
   it('uses Rival fallback when old matches have no opponent', () => {
     const report = buildMatchReportData({ ...match(), opponent: undefined } as unknown as Match, players);
 

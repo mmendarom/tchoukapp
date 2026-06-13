@@ -9,6 +9,7 @@ import { LineupCourt } from '../components/LineupCourt';
 import { LiveMapPanel } from '../components/LiveMapPanel';
 import { Screen } from '../components/Screen';
 import { createLineupSlots, getBenchPlayers } from '../domain/lineupSlots';
+import { resolveMatchAvailablePlayers } from '../domain/matchSetup';
 import { normalizeOpponentName } from '../domain/opponent';
 import { calculateTotalScore, formatPeriodName, formatTimer } from '../domain/periodStats';
 import { getCurrentLineup } from '../domain/stats';
@@ -120,11 +121,12 @@ export function LiveMatchScreen({ navigation, route }: Props) {
 
   const currentLineup = match ? getCurrentLineup(match, 'uruguay') : undefined;
   const lineupSlots = useMemo(() => createLineupSlots(currentLineup, players), [currentLineup, players]);
+  const availablePlayers = useMemo(() => resolveMatchAvailablePlayers(match, players), [match, players]);
   const onCourtPlayers = useMemo(
-    () => players.filter((player) => currentLineup?.playerIds.includes(player.id)),
-    [currentLineup?.playerIds, players],
+    () => availablePlayers.filter((player) => currentLineup?.playerIds.includes(player.id)),
+    [availablePlayers, currentLineup?.playerIds],
   );
-  const benchPlayers = useMemo(() => getBenchPlayers(players, currentLineup), [currentLineup, players]);
+  const benchPlayers = useMemo(() => getBenchPlayers(players, currentLineup, match), [currentLineup, match, players]);
   const selectedOnCourtPlayer = onCourtPlayers.find((player) => player.id === selectedPlayerId);
 
   useEffect(() => {
@@ -514,11 +516,15 @@ export function LiveMatchScreen({ navigation, route }: Props) {
           </View>
         </View>
 
-        <View style={styles.scoreboardScoreRow}>
+          <View style={styles.scoreboardScoreRow}>
           <View style={styles.scoreBlock}>
             <Text numberOfLines={1} adjustsFontSizeToFit style={styles.teamLabel}>URU</Text>
             <Text style={styles.score}>{score.uruguay}</Text>
           </View>
+
+          {match.teamPoolName && (
+            <Text numberOfLines={1} style={styles.poolLabel}>Plantel: {match.teamPoolName}</Text>
+          )}
 
           <View style={styles.matchMeta}>
             <Text numberOfLines={1} adjustsFontSizeToFit style={styles.matchTitle}>vs {opponentName}</Text>
@@ -958,6 +964,19 @@ const styles = StyleSheet.create({
   timerValue: {
     color: '#ffffff',
     fontWeight: '900',
+  },
+  poolLabel: {
+    alignSelf: 'center',
+    borderRadius: 8,
+    backgroundColor: 'rgba(139, 211, 255, 0.16)',
+    color: '#d7e5f2',
+    fontSize: fontSize.small,
+    fontWeight: '900',
+    marginTop: 2,
+    overflow: 'hidden',
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 3,
+    textAlign: 'center',
   },
   mainGrid: {
     flexDirection: 'row',

@@ -14,6 +14,7 @@ import { getCurrentLineup } from '../domain/stats';
 import { useMatchStore } from './useMatchStore';
 
 const landingLocation = { x: 0.72, y: 0.44 };
+const starterIds = ['mauro', 'marcelo', 'nicolas', 'vladi', 'errazquin', 'leon', 'mathias'];
 
 const getActiveMatch = () => {
   const state = useMatchStore.getState();
@@ -54,22 +55,50 @@ describe('useMatchStore period stability', () => {
   });
 
   it('creates a draft match with a custom rival name', () => {
-    const matchId = useMatchStore.getState().createMatch({ opponent: 'Brasil' });
+    const matchId = useMatchStore.getState().createMatch({
+      opponent: 'Brasil',
+      teamPoolId: 'mayores',
+      teamPoolName: 'Mayores',
+      availablePlayerIds: useMatchStore.getState().teamPools[0].playerIds,
+      initialPlayerIds: starterIds,
+    });
     const match = useMatchStore.getState().matches.find((item) => item.id === matchId);
 
     expect(match).toMatchObject({
       opponent: 'Brasil',
+      teamPoolId: 'mayores',
+      teamPoolName: 'Mayores',
+      availablePlayerIds: useMatchStore.getState().teamPools[0].playerIds,
       status: 'draft',
       venue: 'Partido',
     });
+    expect(match?.lineupSnapshots[0].playerIds).toEqual(starterIds);
     expect(useMatchStore.getState().activeMatchId).toBe(matchId);
   });
 
   it('falls back to Rival when creating a match without rival name', () => {
-    const matchId = useMatchStore.getState().createMatch({ opponent: '   ' });
+    const matchId = useMatchStore.getState().createMatch({
+      opponent: '   ',
+      teamPoolId: 'mayores',
+      availablePlayerIds: useMatchStore.getState().teamPools[0].playerIds,
+      initialPlayerIds: starterIds,
+    });
     const match = useMatchStore.getState().matches.find((item) => item.id === matchId);
 
     expect(match?.opponent).toBe('Rival');
+  });
+
+  it('does not create a match without exactly 7 starters', () => {
+    const previousMatchCount = useMatchStore.getState().matches.length;
+    const matchId = useMatchStore.getState().createMatch({
+      opponent: 'Brasil',
+      teamPoolId: 'mayores',
+      availablePlayerIds: useMatchStore.getState().teamPools[0].playerIds,
+      initialPlayerIds: starterIds.slice(0, 6),
+    });
+
+    expect(matchId).toBe('');
+    expect(useMatchStore.getState().matches).toHaveLength(previousMatchCount);
   });
 
   it('keeps demo match creation using Argentina', () => {
@@ -77,11 +106,97 @@ describe('useMatchStore period stability', () => {
     const match = useMatchStore.getState().matches.find((item) => item.id === matchId);
 
     expect(match?.opponent).toBe('Argentina');
+    expect(match?.teamPoolName).toBe('Mayores');
+    expect(match?.availablePlayerIds).toEqual(useMatchStore.getState().teamPools[0].playerIds);
     expect(match?.venue).toBe('Partido demo');
   });
 
+  it('creates team pools with trimmed names and existing players', () => {
+    const poolId = useMatchStore.getState().createTeamPool('  Sub 18  ', ['mauro', 'no-existe', 'tadeo', 'mauro']);
+    const pool = useMatchStore.getState().teamPools.find((item) => item.id === poolId);
+
+    expect(poolId).toBeTruthy();
+    expect(pool).toMatchObject({
+      name: 'Sub 18',
+      playerIds: ['mauro', 'tadeo'],
+    });
+  });
+
+  it('rejects team pools with empty names or no valid players', () => {
+    const previousPools = useMatchStore.getState().teamPools;
+
+    expect(useMatchStore.getState().createTeamPool('   ', ['mauro'])).toBe('');
+    expect(useMatchStore.getState().createTeamPool('Sub 18', [])).toBe('');
+    expect(useMatchStore.getState().createTeamPool('Sub 18', ['no-existe'])).toBe('');
+    expect(useMatchStore.getState().teamPools).toEqual(previousPools);
+  });
+
+  it('updates team pool name and players while preserving id', () => {
+    const poolId = useMatchStore.getState().createTeamPool('Sub 18', ['mauro', 'tadeo']);
+
+    expect(useMatchStore.getState().updateTeamPool(poolId, { name: '  +40  ', playerIds: ['juan', 'fede', 'no-existe'] })).toBe(true);
+
+    const pool = useMatchStore.getState().teamPools.find((item) => item.id === poolId);
+    expect(pool).toEqual({
+      id: poolId,
+      name: '+40',
+      playerIds: ['juan', 'fede'],
+    });
+  });
+
+  it('does not update team pools to invalid data', () => {
+    const poolId = useMatchStore.getState().createTeamPool('Sub 18', ['mauro']);
+    const before = useMatchStore.getState().teamPools.find((item) => item.id === poolId);
+
+    expect(useMatchStore.getState().updateTeamPool(poolId, { name: '   ' })).toBe(false);
+    expect(useMatchStore.getState().updateTeamPool(poolId, { playerIds: [] })).toBe(false);
+    expect(useMatchStore.getState().teamPools.find((item) => item.id === poolId)).toEqual(before);
+  });
+
+  it('updating a team pool does not mutate existing match roster snapshots', () => {
+    const poolId = useMatchStore.getState().createTeamPool('Sub 18', ['mauro', 'marcelo', 'nicolas', 'vladi', 'errazquin', 'leon', 'mathias', 'tadeo']);
+    const matchId = useMatchStore.getState().createMatch({
+      opponent: 'Brasil',
+      teamPoolId: poolId,
+      teamPoolName: 'Sub 18',
+      availablePlayerIds: ['mauro', 'marcelo', 'nicolas', 'vladi', 'errazquin', 'leon', 'mathias', 'tadeo'],
+      initialPlayerIds: starterIds,
+    });
+    const before = useMatchStore.getState().matches.find((match) => match.id === matchId)?.availablePlayerIds;
+
+    useMatchStore.getState().updateTeamPool(poolId, { playerIds: ['mauro'] });
+
+    expect(useMatchStore.getState().matches.find((match) => match.id === matchId)?.availablePlayerIds).toEqual(before);
+  });
+
+  it('reset demo data preserves user-created team pools and keeps Mayores seeded', () => {
+    const poolId = useMatchStore.getState().createTeamPool('Sub 18', ['mauro', 'tadeo']);
+
+    useMatchStore.getState().resetDemoData();
+
+    expect(useMatchStore.getState().teamPools.some((pool) => pool.id === poolId)).toBe(true);
+    expect(useMatchStore.getState().teamPools.filter((pool) => pool.id === 'mayores')).toHaveLength(1);
+  });
+
+  it('does not restart finished matches', () => {
+    const matchId = createLivePeriodMatch();
+    useMatchStore.getState().completeActiveMatch();
+
+    useMatchStore.getState().startMatch(matchId);
+
+    const state = useMatchStore.getState();
+    const match = state.matches.find((item) => item.id === matchId);
+    expect(match?.status).toBe('finished');
+    expect(state.activeMatchId).toBeUndefined();
+  });
+
   it('normalizes old matches without opponent when starting them', () => {
-    const matchId = useMatchStore.getState().createMatch({ opponent: 'Chile' });
+    const matchId = useMatchStore.getState().createMatch({
+      opponent: 'Chile',
+      teamPoolId: 'mayores',
+      availablePlayerIds: useMatchStore.getState().teamPools[0].playerIds,
+      initialPlayerIds: starterIds,
+    });
     useMatchStore.setState((state) => ({
       matches: state.matches.map((match) =>
         match.id === matchId ? ({ ...match, opponent: undefined } as unknown as typeof match) : match,
@@ -347,6 +462,25 @@ describe('useMatchStore period stability', () => {
     useMatchStore.getState().substitutePlayer({ playerOutId: 'mauro', playerInId: 'juan', slotIndex: 0 });
 
     expect(getCurrentLineup(getActiveMatch(), 'uruguay')?.playerIds[0]).toBe('juan');
+  });
+
+  it('prevents substitutions with players outside the match roster snapshot', () => {
+    const state = useMatchStore.getState();
+    const availablePlayerIds = ['mauro', 'marcelo', 'nicolas', 'vladi', 'errazquin', 'leon', 'mathias', 'tadeo'];
+    const matchId = state.createMatch({
+      opponent: 'Brasil',
+      teamPoolId: 'mayores',
+      availablePlayerIds,
+      initialPlayerIds: availablePlayerIds.slice(0, 7),
+    });
+    state.startMatch(matchId);
+    useMatchStore.getState().startCurrentPeriod();
+
+    useMatchStore.getState().substitutePlayer({ playerOutId: 'mauro', playerInId: 'juan', slotIndex: 0 });
+
+    const match = getActiveMatch();
+    expect(match.events).toHaveLength(0);
+    expect(getCurrentLineup(match, 'uruguay')?.playerIds[0]).toBe('mauro');
   });
 
   it('does not change lineup when substitution is cancelled before store action', () => {

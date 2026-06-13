@@ -15,6 +15,12 @@ export type Player = {
   blocks: number;
 };
 
+export type TeamPool = {
+  id: string;
+  name: string;
+  playerIds: string[];
+};
+
 export type MatchStatus = 'draft' | 'live' | 'period_break' | 'finished' | 'cancelled';
 
 export type PeriodStatus = 'not_started' | 'live' | 'finished';
@@ -154,6 +160,9 @@ export type LineupSnapshot = {
 export type Match = {
   id: string;
   opponent: string;
+  teamPoolId?: string;
+  teamPoolName?: string;
+  availablePlayerIds?: string[];
   venue: string;
   startsAt: string;
   status: MatchStatus;

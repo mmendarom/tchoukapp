@@ -193,6 +193,7 @@ export function buildMatchReportHtml(report: MatchReportData) {
   <div class="hero">
     <h1>${escapeHtml(report.title)}</h1>
     <p>${escapeHtml(report.matchLabel)}</p>
+    ${report.teamPoolName ? `<p>Plantel: ${escapeHtml(report.teamPoolName)}</p>` : ''}
     <p>${escapeHtml(report.dateLabel)} - ${escapeHtml(report.venueLabel)}</p>
     <p>${escapeHtml(report.competitionLabel)}</p>
     <p class="score">${escapeHtml(scoreText(report.finalScore.uruguay, report.finalScore.opponent, report.opponent))}</p>
@@ -279,6 +280,7 @@ export function buildMatchReportText(report: MatchReportData) {
   const lines = [
     report.title,
     report.matchLabel,
+    ...(report.teamPoolName ? [`Plantel: ${report.teamPoolName}`] : []),
     `${report.dateLabel} - ${report.venueLabel}`,
     scoreText(report.finalScore.uruguay, report.finalScore.opponent, report.opponent),
     '',

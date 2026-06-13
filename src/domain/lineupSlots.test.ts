@@ -40,6 +40,20 @@ describe('lineup slot helpers', () => {
     expect(benchPlayers.map((player) => player.id)).not.toContain('mauro');
   });
 
+  it('determines bench players from match available players when present', () => {
+    const benchPlayers = getBenchPlayers(
+      uruguayPlayers,
+      {
+        playerIds: ['mauro', 'marcelo', 'nicolas', 'vladi', 'errazquin', 'leon', 'mathias'],
+      },
+      {
+        availablePlayerIds: ['mauro', 'marcelo', 'nicolas', 'vladi', 'errazquin', 'leon', 'mathias', 'tadeo'],
+      },
+    );
+
+    expect(benchPlayers.map((player) => player.id)).toEqual(['tadeo']);
+  });
+
   it('maps neutral visual slots as 3 left, 1 center and 3 right', () => {
     expect([0, 1, 2].map(getNeutralSlotVisualGroup)).toEqual(['left', 'left', 'left']);
     expect(getNeutralSlotVisualGroup(3)).toBe('center');

@@ -85,6 +85,7 @@ export type MatchReportData = {
   title: string;
   matchLabel: string;
   opponent: string;
+  teamPoolName?: string;
   dateLabel: string;
   venueLabel: string;
   competitionLabel: string;
@@ -233,6 +234,7 @@ const buildReportLocationMaps = (events: MatchEvent[]): ReportLocationMaps => ({
 
 export function buildMatchReportData(match: Match, players: Player[]): MatchReportData {
   const opponentName = normalizeOpponentName(match.opponent);
+  const teamPoolName = match.teamPoolName?.trim() || undefined;
   const getPlayerLabel = createPlayerLabeler(players);
   const finalScore = calculateTotalScore(match.events);
   const initialLineup = match.lineupSnapshots.find((lineup) => lineup.team === 'uruguay');
@@ -283,11 +285,13 @@ export function buildMatchReportData(match: Match, players: Player[]): MatchRepo
     title: 'Reporte del partido',
     matchLabel: `Uruguay vs ${opponentName}`,
     opponent: opponentName,
+    teamPoolName,
     dateLabel: formatMatchDateTime(match.startsAt),
     venueLabel: match.venue || 'Sin sede registrada',
     competitionLabel: 'Sin competencia registrada',
     executiveSummary: [
       { label: 'Resultado final', value: `Uruguay ${finalScore.uruguay} - ${finalScore.opponent} ${opponentName}` },
+      ...(teamPoolName ? [{ label: 'Plantel', value: teamPoolName }] : []),
       { label: 'Mejor goleador', value: topScorers[0] ? `${topScorers[0].label} (${topScorers[0].total})` : emptyLabel },
       { label: 'Mas defensas Uruguay', value: defenses[0] ? `${defenses[0].label} (${defenses[0].total})` : emptyLabel },
       { label: 'Errores totales', value: String(totalErrorCount) },

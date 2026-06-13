@@ -1,5 +1,145 @@
 # Implementation Log
 
+## 2026-06-13 - Team pools Stage 2B management UI
+
+Se implemento Stage 2B de planteles/categorias con UI simple de gestion, sin integrar todavia planteles custom en la creacion de partidos.
+
+- `MatchesScreen` agrega la accion secundaria `Gestionar planteles`.
+- El modal `Planteles` lista planteles existentes con nombre y cantidad de jugadores.
+- Se puede crear un `Nuevo plantel` usando jugadores globales existentes.
+- Se puede editar nombre y jugadores de un plantel existente.
+- La seleccion de jugadores es multi-select y muestra conteo de seleccionados.
+- La UI valida nombre vacio, lista sin jugadores y errores del store.
+- Se reutilizan `createTeamPool` y `updateTeamPool`.
+- Delete de planteles, player CRUD, fotos e integracion con creacion de partido quedan diferidos.
+- Para preservar alcance, la creacion de partido sigue usando `Mayores` hasta Stage 2C.
+
+Validacion:
+
+- `npm test`: no se pudo ejecutar en esta entrada porque la herramienta rechazo el comando por limite de uso.
+- `npx tsc --noEmit`: paso.
+
+QA manual recomendado:
+
+- Abrir `Partidos`.
+- Tocar `Gestionar planteles`.
+- Verificar que aparece `Mayores`.
+- Tocar `Nuevo plantel`.
+- Intentar guardar con nombre vacio y confirmar validacion.
+- Ingresar `Sub 18`.
+- Intentar guardar sin jugadores y confirmar validacion.
+- Seleccionar jugadores y confirmar que el conteo sube.
+- Guardar y verificar que `Sub 18` aparece en la lista.
+- Editar `Sub 18`, cambiar nombre o jugadores y guardar.
+- Cancelar una creacion/edicion y confirmar que no guarda cambios.
+- Confirmar que `Crear partido` sigue usando el flujo actual con `Mayores`.
+
+## 2026-06-13 - Team pools Stage 2A store and persistence
+
+Se implemento Stage 2A de planteles/categorias sin agregar UI de gestion ni cambiar el flujo de partido en vivo.
+
+- `teamPools` queda como parte del store persistido offline-first.
+- Se agregaron helpers puros para normalizar nombres, filtrar jugadores existentes y asegurar el pool default `Mayores`.
+- `createTeamPool(name, playerIds)` crea planteles locales y rechaza nombres vacios o listas sin jugadores validos.
+- `updateTeamPool(poolId, updates)` actualiza nombre y jugadores preservando el `id`.
+- Editar un plantel no modifica partidos existentes: los partidos siguen usando su snapshot historico `availablePlayerIds`.
+- `Mayores` se asegura por default/migracion sin duplicarse.
+- `resetDemoData` conserva planteles creados por el usuario y mantiene `Mayores`.
+- Delete de planteles, UI de gestion y rosters reales de `Sub 18` / `+40` quedan diferidos.
+
+Validacion:
+
+- `npm test`: 12 archivos, 119 tests pasaron.
+- `npx tsc --noEmit`: paso.
+
+QA manual recomendado cuando exista UI:
+
+- Crear/editar planteles locales.
+- Confirmar que sobreviven reinicio de app.
+- Confirmar que editar un plantel no cambia partidos ya creados.
+- Confirmar que `Mayores` no se duplica.
+
+## 2026-06-13 - Real match setup field bugfixes
+
+Se corrigieron dos problemas detectados al probar el setup real de partido, sin cambiar scoring, eventos, timer, mapas, sustituciones ni export.
+
+- Los partidos `Finalizado` ya no se pueden reiniciar desde la lista de partidos.
+- Tocar una tarjeta finalizada o `Ver resumen` navega a `Resumen final`.
+- `startMatch` ahora ignora partidos `finished` y `cancelled` como segunda linea de defensa.
+- El label/chip `Plantel: Mayores` queda centrado y mas legible en tarjetas de partidos.
+- El selector de `Plantel` en el setup queda centrado y con mayor peso visual.
+- El label de plantel en el marcador live se muestra como badge compacto centrado.
+
+Validacion:
+
+- `npm test`: 11 archivos, 109 tests pasaron.
+- `npx tsc --noEmit`: paso.
+
+QA manual recomendado:
+
+- Crear partido.
+- Finalizar partido.
+- Volver a la lista de partidos.
+- Tocar el partido finalizado y confirmar que abre `Resumen final`.
+- Confirmar que no aparece `Iniciar partido` ni `Retomar` para partidos finalizados.
+- Confirmar que PDF/share siguen disponibles desde el resumen final.
+- Crear/abrir partido con `Plantel: Mayores`.
+- Confirmar que el plantel se ve centrado, balanceado y legible en telefono portrait y tablet landscape.
+
+## 2026-06-13 - Real match setup planning
+
+Se planifico la proxima feature importante sin modificar codigo de produccion ni comportamiento de la app.
+
+- Se agrego `docs/specs/008-real-match-setup.md` para definir un flujo real de setup de partido.
+- Se agrego `docs/plans/008-real-match-setup-plan.md` con implementacion por etapas.
+- El Stage 1 propuesto reemplaza la creacion demo-like por un wizard/modal con rival, convocados, 7 titulares, banco derivado y revision.
+- El modelo recomendado mantiene `LineupSnapshot.playerIds` como fuente de los 7 slots neutrales y agrega un campo opcional de convocados, por ejemplo `availablePlayerIds`.
+- El banco debe seguir siendo derivado, no una fuente independiente.
+- Stage 2 queda para colocar titulares en cancha visual 3 izquierda - 1 centro - 3 derecha.
+- Stage 3 queda para presets locales de convocados si field testing lo justifica.
+- No se implementaron cambios de app.
+
+Actualizacion previa a Stage 1:
+
+- Se agrego explicitamente el concepto `TeamPool` / `Plantel`.
+- Los planteles referencian jugadores globales por `id`.
+- Stage 1 usara solo `Mayores` con el roster real actual para evitar pools vacios confusos.
+- `Sub 18` y `+40` quedan documentados como categorias futuras hasta que existan listas reales.
+- El partido debe guardar `teamPoolId`, `teamPoolName` y `availablePlayerIds` como snapshot historico.
+- El banco sigue derivado desde `availablePlayerIds - LineupSnapshot.playerIds`.
+
+Implementacion Stage 1:
+
+- Se agrego `TeamPool` al dominio.
+- Se sembro el plantel `Mayores` con el roster actual de Uruguay.
+- `Sub 18` y `+40` quedan diferidos hasta contar con listas reales; no se agregaron pools vacios seleccionables.
+- `Match` ahora puede guardar `teamPoolId`, `teamPoolName` y `availablePlayerIds`.
+- `Crear partido` abre un setup con rival, plantel, seleccion de 7 titulares y banco derivado.
+- Stage 1 usa todos los jugadores de `Mayores` como convocados para reducir riesgo; seleccion manual de convocados queda diferida.
+- El live usa `availablePlayerIds` para calcular el banco, con fallback al roster global en partidos viejos.
+- Las sustituciones rechazan jugadores fuera del roster snapshot del partido.
+- El reporte incluye `Plantel: Mayores` cuando esta disponible.
+
+Validacion:
+
+- `npm test`: 11 archivos, 108 tests pasaron.
+- `npx tsc --noEmit`: paso.
+
+QA manual recomendado:
+
+- Crear partido.
+- Ingresar rival `Brasil`.
+- Confirmar plantel `Mayores`.
+- Elegir 7 titulares.
+- Confirmar que el banco se muestra con los restantes de Mayores.
+- Crear partido y verificar que el live muestra esos 7 en cancha.
+- Entrar a `Cambiar jugadores` y confirmar que solo aparecen suplentes del roster del partido.
+- Hacer una sustitucion y usar `Deshacer`.
+- Finalizar tiempo y partido.
+- Exportar PDF y confirmar `Plantel: Mayores`.
+- Reiniciar datos demo y confirmar que el demo sigue funcionando.
+- Abrir partido viejo si existe y confirmar fallback sin crash.
+
 ## 2026-06-13 - Editable rivals Stage 1
 
 Se implemento Stage 1 de rivales editables sin agregar CRUD, recientes, backend, auth ni cloud.

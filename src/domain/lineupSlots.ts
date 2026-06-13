@@ -1,4 +1,5 @@
-import { LineupSnapshot, Player } from './types';
+import { deriveBenchPlayers } from './matchSetup';
+import { LineupSnapshot, Match, Player } from './types';
 
 export const LINEUP_SLOT_COUNT = 7;
 
@@ -83,9 +84,12 @@ export function swapLineupSlotPlayers(playerIds: string[], fromSlotIndex: number
   return nextPlayerIds;
 }
 
-export function getBenchPlayers(players: Player[], lineup: Pick<LineupSnapshot, 'playerIds'> | undefined) {
-  const onCourtIds = new Set((lineup?.playerIds ?? []).filter(Boolean));
-  return players.filter((player) => !onCourtIds.has(player.id));
+export function getBenchPlayers(
+  players: Player[],
+  lineup: Pick<LineupSnapshot, 'playerIds'> | undefined,
+  match?: Pick<Match, 'availablePlayerIds'>,
+) {
+  return deriveBenchPlayers(players, lineup, match);
 }
 
 export function getNeutralSlotVisualGroup(slotIndex: number): 'left' | 'center' | 'right' | 'unknown' {
