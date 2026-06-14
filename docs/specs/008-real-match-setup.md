@@ -156,6 +156,12 @@ Hoy la app decide titulares de forma automatica desde el orden del roster, lo qu
   - crear/editar jugadores usa `createPlayer` y `updatePlayer`;
   - nuevos jugadores quedan disponibles para seleccion manual en `Gestionar planteles`;
   - delete de jugadores sigue diferido.
+- Stage 3C implementado:
+  - `Gestionar planteles` permite crear un `Nuevo jugador` desde el formulario de plantel;
+  - el formulario de jugador se reutiliza entre `Gestionar jugadores` y `Gestionar planteles`;
+  - cancelar la creacion de jugador vuelve al plantel sin perder nombre ni jugadores seleccionados;
+  - guardar crea el jugador con `createPlayer`, vuelve al plantel y lo selecciona automaticamente;
+  - delete de jugadores y delete de planteles siguen diferidos.
 - Guardar/reusar presets locales de convocados si el flujo real lo justifica.
 
 ## Requisitos funcionales
@@ -309,6 +315,11 @@ No cambiar:
   - accion `Nuevo jugador`;
   - accion `Editar`;
   - formulario con `Nombre`, `Apellido`, `Número`, `Posición`, `Zona habitual` y `Mano dominante`.
+- Stage 3C agrega creacion contextual desde `Planteles`:
+  - accion `Nuevo jugador` junto a la seleccion de jugadores del plantel;
+  - formulario reutilizado de jugador;
+  - retorno al formulario de plantel al cancelar o guardar;
+  - auto-seleccion del jugador recien creado en el plantel actual.
 - La pantalla live no debe mostrar jugadores no convocados en banco.
 - El setup debe ser legible en telefono y tablet.
 
@@ -330,8 +341,10 @@ No cambiar:
   - `createPlayer(input)`;
   - `updatePlayer(playerId, updates)`.
 - Stage 3B no agrega nuevas acciones de estado; reutiliza `createPlayer` y `updatePlayer`.
+- Stage 3C no agrega nuevas acciones de estado; reutiliza `createPlayer`.
 - `players` debe persistir localmente y mergear jugadores default faltantes en migraciones.
 - Crear/editar jugadores no debe mutar `Match.availablePlayerIds`, eventos ni snapshots historicos.
+- Crear un jugador desde un formulario de plantel solo modifica el plantel en edicion si el usuario luego guarda ese plantel.
 - `createTeamPool` debe rechazar nombres vacios y pools sin jugadores validos.
 - `updateTeamPool` debe preservar `id` y rechazar updates invalidos.
 - Editar un pool no debe modificar `availablePlayerIds` de partidos ya creados.
@@ -388,6 +401,16 @@ No cambiar:
   - confirmar que el jugador nuevo aparece en `Gestionar planteles`;
   - agregar jugador nuevo a un plantel;
   - crear partido con ese plantel.
+- Verificar Stage 3C de planteles:
+  - abrir `Gestionar planteles`;
+  - crear o editar un plantel;
+  - seleccionar jugadores existentes;
+  - tocar `Nuevo jugador`;
+  - cancelar y confirmar que la seleccion se conserva;
+  - crear jugador nuevo;
+  - confirmar que vuelve al plantel y queda seleccionado;
+  - guardar plantel;
+  - confirmar que el jugador queda disponible en `Gestionar jugadores` y match creation.
 
 ## Riesgos
 
@@ -448,6 +471,8 @@ Resumen por etapas:
 - [x] Home permite abrir `Gestionar jugadores`.
 - [x] UI de jugadores permite crear y editar jugadores.
 - [x] Jugadores nuevos aparecen en seleccion de planteles.
+- [x] Planteles permite crear un jugador sin salir del flujo.
+- [x] Jugador creado desde plantel queda seleccionado automaticamente en el plantel actual.
 - [x] Player delete queda diferido.
 - [x] Snapshots historicos de nombres de jugador quedan diferidos.
 - [x] No se agregan backend/auth/cloud.

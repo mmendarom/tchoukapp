@@ -1,5 +1,71 @@
 # Implementation Log
 
+## 2026-06-14 - Player roster Stage 3C plantel inline creation
+
+Se implemento Stage 3C para crear jugadores desde `Gestionar planteles`, sin agregar delete, sin cambiar match creation, scoring, mapas, sustituciones, timer, resumenes ni export.
+
+- Se extrajo `PlayerForm` como formulario reutilizable para alta/edicion de jugadores.
+- `PlayerManagerModal` reutiliza `PlayerForm` y mantiene el flujo standalone de `Gestionar jugadores`.
+- `TeamPoolManagerModal` agrega `Nuevo jugador` junto a la seleccion de jugadores.
+- Al tocar `Nuevo jugador` dentro de un plantel se abre el formulario de alta sin cerrar el modal.
+- `Cancelar` vuelve al formulario de plantel conservando nombre y jugadores seleccionados.
+- `Guardar` usa `createPlayer`.
+- Si el alta es exitosa, el nuevo jugador queda seleccionado automaticamente en el plantel actual.
+- El plantel se persiste solo cuando el usuario toca `Guardar` en el plantel.
+
+QA manual recomendado:
+
+- Home -> `Gestionar planteles`.
+- Crear un plantel nuevo.
+- Seleccionar algunos jugadores existentes.
+- Tocar `Nuevo jugador`.
+- Tocar `Cancelar`.
+- Confirmar que los jugadores seleccionados siguen seleccionados.
+- Tocar `Nuevo jugador` otra vez.
+- Crear `Jugador Prueba`.
+- Confirmar que vuelve al formulario de plantel.
+- Confirmar que `Jugador Prueba` aparece seleccionado.
+- Guardar el plantel.
+- Reabrir el plantel y confirmar que el jugador sigue incluido.
+- Crear partido con ese plantel y confirmar que el jugador puede ser titular.
+- Home -> `Gestionar jugadores`.
+- Confirmar que el jugador aparece ahi tambien.
+- Editar el jugador y confirmar que el plantel sigue referenciando el mismo registro.
+
+## 2026-06-14 - Player manager modal interaction fix
+
+Se corrigio la interaccion de `PlayerManagerModal` sin cambiar store, planteles, match creation, scoring, mapas, sustituciones, resumenes ni export.
+
+- Causa: `Nuevo jugador` y `Editar` cambiaban el estado del modal, pero el formulario se renderizaba debajo de toda la lista dentro del `ScrollView`; con un roster largo la pantalla seguia mostrando la lista y parecia que los botones no respondian.
+- `PlayerManagerModal` ahora tiene estados visuales claros:
+  - lista de jugadores;
+  - formulario `Nuevo jugador`;
+  - formulario `Editar jugador`.
+- Tocar `Nuevo jugador` reemplaza la lista por el formulario vacio.
+- Tocar `Editar` reemplaza la lista por el formulario precargado del jugador.
+- `Cancelar` vuelve a la lista sin guardar.
+- `Guardar` sigue usando `createPlayer` o `updatePlayer`.
+- `Cerrar` sigue cerrando el modal.
+
+QA manual recomendado:
+
+- Home -> `Gestionar jugadores`.
+- Tocar `Nuevo jugador`.
+- Confirmar que abre el formulario de alta.
+- Tocar `Cancelar`.
+- Confirmar que vuelve a la lista.
+- Tocar `Nuevo jugador` otra vez.
+- Crear un jugador.
+- Confirmar que aparece en la lista.
+- Tocar `Editar` en ese jugador.
+- Confirmar que abre el formulario precargado.
+- Cambiar nombre o numero.
+- Guardar.
+- Confirmar que la lista se actualiza.
+- Cerrar el modal.
+- Abrir `Gestionar planteles`.
+- Confirmar que el jugador nuevo/editado aparece en la seleccion.
+
 ## 2026-06-14 - Player roster Stage 3B management UI
 
 Se implemento Stage 3B de gestion de jugadores sin agregar delete ni cambiar scoring, match creation, mapas, sustituciones, timer, resumenes o export.

@@ -2,7 +2,7 @@
 
 Spec relacionada: `docs/specs/008-real-match-setup.md`
 
-Estado: Stage 2C implemented
+Estado: Stage 3C implemented
 
 ## Objetivo
 
@@ -343,6 +343,27 @@ Estado: Implemented.
 - Delete de jugadores.
 - Snapshots historicos de nombres de jugador.
 - Alta automatica de jugadores en planteles.
+
+## Stage 3C - Crear jugadores desde gestion de planteles
+
+Estado: Implemented.
+
+### Cambios implementados
+
+1. Se extrajo `PlayerForm` como formulario reutilizable de jugador.
+2. `PlayerManagerModal` reutiliza `PlayerForm` para alta y edicion.
+3. `TeamPoolManagerModal` agrega la accion `Nuevo jugador` junto a la seleccion de jugadores.
+4. Tocar `Nuevo jugador` dentro de un plantel abre el formulario de alta sin cerrar `Planteles`.
+5. `Cancelar` vuelve al formulario de plantel y conserva nombre/jugadores seleccionados.
+6. `Guardar` usa `createPlayer`.
+7. Si el alta es exitosa, el nuevo jugador queda disponible y seleccionado automaticamente en el plantel actual.
+8. El plantel solo se persiste cuando el usuario guarda el plantel.
+
+### Diferido
+
+- Delete de jugadores.
+- Delete de planteles.
+- Snapshots historicos de nombres de jugador.
 
 ## Stage 3 - Presets locales de convocados
 

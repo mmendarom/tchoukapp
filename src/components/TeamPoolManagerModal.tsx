@@ -1,9 +1,11 @@
 import { useState } from 'react';
 import { Modal, Pressable, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 
+import { CreatePlayerInput } from '../domain/players';
 import { useMatchStore } from '../store/useMatchStore';
 import { fontSize, spacing } from '../utils/responsive';
 import { ActionButton } from './ActionButton';
+import { PlayerForm } from './PlayerForm';
 
 type TeamPoolManagerModalProps = {
   visible: boolean;
@@ -15,8 +17,10 @@ export function TeamPoolManagerModal({ visible, onClose }: TeamPoolManagerModalP
   const [poolNameInput, setPoolNameInput] = useState('');
   const [selectedPoolPlayerIds, setSelectedPoolPlayerIds] = useState<string[]>([]);
   const [poolError, setPoolError] = useState<string | undefined>();
+  const [creatingPlayer, setCreatingPlayer] = useState(false);
   const players = useMatchStore((state) => state.players);
   const teamPools = useMatchStore((state) => state.teamPools);
+  const createPlayer = useMatchStore((state) => state.createPlayer);
   const createTeamPool = useMatchStore((state) => state.createTeamPool);
   const updateTeamPool = useMatchStore((state) => state.updateTeamPool);
   const resetPoolForm = () => {
@@ -24,6 +28,7 @@ export function TeamPoolManagerModal({ visible, onClose }: TeamPoolManagerModalP
     setPoolNameInput('');
     setSelectedPoolPlayerIds([]);
     setPoolError(undefined);
+    setCreatingPlayer(false);
   };
   const openEditPoolForm = (poolId: string) => {
     const pool = teamPools.find((item) => item.id === poolId);
@@ -36,6 +41,7 @@ export function TeamPoolManagerModal({ visible, onClose }: TeamPoolManagerModalP
     setPoolNameInput(pool.name);
     setSelectedPoolPlayerIds(pool.playerIds);
     setPoolError(undefined);
+    setCreatingPlayer(false);
   };
   const closeModal = () => {
     onClose();
@@ -47,6 +53,18 @@ export function TeamPoolManagerModal({ visible, onClose }: TeamPoolManagerModalP
         ? current.filter((id) => id !== playerId)
         : [...current, playerId],
     );
+  };
+  const savePlayerFromPoolForm = (input: CreatePlayerInput) => {
+    const playerId = createPlayer(input);
+
+    if (!playerId) {
+      return false;
+    }
+
+    setSelectedPoolPlayerIds((current) => (current.includes(playerId) ? current : [...current, playerId]));
+    setPoolError(undefined);
+    setCreatingPlayer(false);
+    return true;
   };
   const savePool = () => {
     if (!poolNameInput.trim()) {
@@ -88,75 +106,89 @@ export function TeamPoolManagerModal({ visible, onClose }: TeamPoolManagerModalP
               </Pressable>
             </View>
 
-            <View style={styles.poolList}>
-              {teamPools.map((pool) => (
-                <View key={pool.id} style={styles.poolListItem}>
-                  <View style={styles.poolListText}>
-                    <Text style={styles.poolListName}>{pool.name}</Text>
-                    <Text style={styles.helperText}>{pool.playerIds.length} jugadores</Text>
-                  </View>
-                  <ActionButton label="Editar" onPress={() => openEditPoolForm(pool.id)} variant="secondary" />
-                </View>
-              ))}
-            </View>
-
-            <View style={styles.divider} />
-
-            <View style={styles.setupSection}>
-              <Text style={styles.inputLabel}>{editingPoolId ? 'Editar plantel' : 'Nuevo plantel'}</Text>
-              <TextInput
-                autoCapitalize="words"
-                onChangeText={(value) => {
-                  setPoolNameInput(value);
-                  setPoolError(undefined);
-                }}
-                placeholder="Nombre del plantel"
-                placeholderTextColor="#8a98a8"
-                returnKeyType="done"
-                style={styles.input}
-                value={poolNameInput}
+            {creatingPlayer ? (
+              <PlayerForm
+                key="pool-new-player"
+                title="Nuevo jugador"
+                onCancel={() => setCreatingPlayer(false)}
+                onSave={savePlayerFromPoolForm}
               />
-            </View>
+            ) : (
+              <>
+                <View style={styles.poolList}>
+                  {teamPools.map((pool) => (
+                    <View key={pool.id} style={styles.poolListItem}>
+                      <View style={styles.poolListText}>
+                        <Text style={styles.poolListName}>{pool.name}</Text>
+                        <Text style={styles.helperText}>{pool.playerIds.length} jugadores</Text>
+                      </View>
+                      <ActionButton label="Editar" onPress={() => openEditPoolForm(pool.id)} variant="secondary" />
+                    </View>
+                  ))}
+                </View>
 
-            <View style={styles.setupSection}>
-              <View style={styles.sectionHeader}>
-                <Text style={styles.inputLabel}>Jugadores</Text>
-                <Text style={styles.countBadge}>{selectedPoolPlayerIds.length} seleccionados</Text>
-              </View>
-              <View style={styles.playerGrid}>
-                {players.map((player) => {
-                  const selected = selectedPoolPlayerIds.includes(player.id);
+                <View style={styles.divider} />
 
-                  return (
-                    <Pressable
-                      key={player.id}
-                      onPress={() => {
-                        togglePoolPlayer(player.id);
-                        setPoolError(undefined);
-                      }}
-                      style={({ pressed }) => [styles.playerTile, selected && styles.playerTileSelected, pressed && styles.pressed]}
-                    >
-                      <Text style={[styles.playerNumber, selected && styles.playerTileSelectedText]}>#{player.number}</Text>
-                      <Text numberOfLines={1} style={[styles.playerName, selected && styles.playerTileSelectedText]}>
-                        {player.lastName || player.firstName}
-                      </Text>
-                    </Pressable>
-                  );
-                })}
-              </View>
-            </View>
+                <View style={styles.setupSection}>
+                  <Text style={styles.inputLabel}>{editingPoolId ? 'Editar plantel' : 'Nuevo plantel'}</Text>
+                  <TextInput
+                    autoCapitalize="words"
+                    onChangeText={(value) => {
+                      setPoolNameInput(value);
+                      setPoolError(undefined);
+                    }}
+                    placeholder="Nombre del plantel"
+                    placeholderTextColor="#8a98a8"
+                    returnKeyType="done"
+                    style={styles.input}
+                    value={poolNameInput}
+                  />
+                </View>
 
-            {poolError && <Text style={styles.errorText}>{poolError}</Text>}
+                <View style={styles.setupSection}>
+                  <View style={styles.sectionHeader}>
+                    <Text style={styles.inputLabel}>Jugadores</Text>
+                    <Text style={styles.countBadge}>{selectedPoolPlayerIds.length} seleccionados</Text>
+                  </View>
+                  <View style={styles.playerToolbar}>
+                    <ActionButton label="Nuevo jugador" onPress={() => setCreatingPlayer(true)} variant="secondary" />
+                  </View>
+                  <View style={styles.playerGrid}>
+                    {players.map((player) => {
+                      const selected = selectedPoolPlayerIds.includes(player.id);
 
-            <View style={styles.modalActions}>
-              <ActionButton label="Cancelar" onPress={resetPoolForm} variant="secondary" />
-              <Pressable
-                onPress={savePool}
-                style={({ pressed }) => [styles.createButton, (!poolNameInput.trim() || selectedPoolPlayerIds.length === 0) && styles.createButtonDisabled, pressed && styles.pressed]}
-              >
-                <Text style={styles.createButtonText}>Guardar</Text>
-              </Pressable>
-            </View>
+                      return (
+                        <Pressable
+                          key={player.id}
+                          onPress={() => {
+                            togglePoolPlayer(player.id);
+                            setPoolError(undefined);
+                          }}
+                          style={({ pressed }) => [styles.playerTile, selected && styles.playerTileSelected, pressed && styles.pressed]}
+                        >
+                          <Text style={[styles.playerNumber, selected && styles.playerTileSelectedText]}>#{player.number}</Text>
+                          <Text numberOfLines={1} style={[styles.playerName, selected && styles.playerTileSelectedText]}>
+                            {player.lastName || player.firstName}
+                          </Text>
+                        </Pressable>
+                      );
+                    })}
+                  </View>
+                </View>
+
+                {poolError && <Text style={styles.errorText}>{poolError}</Text>}
+
+                <View style={styles.modalActions}>
+                  <ActionButton label="Cancelar" onPress={resetPoolForm} variant="secondary" />
+                  <Pressable
+                    onPress={savePool}
+                    style={({ pressed }) => [styles.createButton, (!poolNameInput.trim() || selectedPoolPlayerIds.length === 0) && styles.createButtonDisabled, pressed && styles.pressed]}
+                  >
+                    <Text style={styles.createButtonText}>Guardar</Text>
+                  </Pressable>
+                </View>
+              </>
+            )}
 
             <View style={styles.closeFooter}>
               <ActionButton label="Cerrar" onPress={closeModal} variant="secondary" />
@@ -289,6 +321,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: spacing.xs,
+  },
+  playerToolbar: {
+    alignItems: 'flex-start',
   },
   playerTile: {
     width: '31.8%',
