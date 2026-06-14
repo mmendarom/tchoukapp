@@ -25,7 +25,7 @@ export function validateMatchSetup(input: {
   const errors: string[] = [];
 
   if (availablePlayerIds.length < LINEUP_STARTER_COUNT) {
-    errors.push('El plantel necesita al menos 7 jugadores disponibles.');
+    errors.push('El plantel necesita al menos 7 jugadores.');
   }
 
   if (initialPlayerIds.length !== LINEUP_STARTER_COUNT) {

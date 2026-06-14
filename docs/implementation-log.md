@@ -1,5 +1,226 @@
 # Implementation Log
 
+## 2026-06-14 - Player roster Stage 3B management UI
+
+Se implemento Stage 3B de gestion de jugadores sin agregar delete ni cambiar scoring, match creation, mapas, sustituciones, timer, resumenes o export.
+
+- Home agrega la accion `Gestionar jugadores`.
+- Se agrego `PlayerManagerModal` para listar, crear y editar jugadores.
+- La lista muestra numero, nombre, posicion, zona habitual y mano dominante.
+- El formulario permite editar `Nombre`, `Apellido`, `Número`, `Posición`, `Zona habitual` y `Mano dominante`.
+- La UI valida nombre, posicion, zona habitual y mano dominante antes de guardar.
+- Crear jugadores usa `createPlayer`.
+- Editar jugadores usa `updatePlayer` y preserva `id`.
+- Los jugadores nuevos quedan disponibles en `Gestionar planteles` porque el modal de planteles lee `players` del store.
+- Los jugadores nuevos no se agregan automaticamente a ningun plantel.
+
+Validacion:
+
+- `npm test`: 13 archivos, 136 tests pasaron.
+- `npx tsc --noEmit`: paso.
+
+QA manual recomendado:
+
+- Abrir Home.
+- Tocar `Gestionar jugadores`.
+- Confirmar que abre la lista `Jugadores`.
+- Tocar `Nuevo jugador` usando el formulario vacio y confirmar validaciones.
+- Crear jugador `Test Player`.
+- Confirmar que aparece en la lista.
+- Editar nombre/numero del jugador.
+- Abrir `Gestionar planteles`.
+- Confirmar que el jugador nuevo aparece en la seleccion.
+- Agregarlo a un plantel.
+- Crear partido con ese plantel.
+- Confirmar que el jugador puede seleccionarse como titular.
+- Confirmar que live y reportes muestran el nombre.
+
+## 2026-06-14 - Player roster Stage 3A local state
+
+Se implemento Stage 3A de gestion de roster sin agregar UI nueva, delete de jugadores ni cambios en scoring, mapas, sustituciones, timer, resumenes o export.
+
+- `players` queda como fuente de datos local persistida en Zustand.
+- Los jugadores iniciales se siembran desde `uruguayPlayers`.
+- La migracion mergea jugadores default faltantes sin duplicar ids existentes.
+- Se agrego `createPlayer(input)` al store.
+- `createPlayer` valida campos requeridos, genera `id` unico desde nombre/apellido, autoasigna numero si falta y usa `caps/goals/blocks` en `0`.
+- Se agrego `updatePlayer(playerId, updates)` al store.
+- `updatePlayer` preserva `id`, valida campos editables y devuelve `true`/`false`.
+- `resetDemoData` preserva jugadores locales y restaura partidos/fixtures demo.
+- Crear/editar jugadores no agrega automaticamente jugadores a planteles.
+- Team pools siguen validandose contra `players` del store.
+- Partidos, eventos y snapshots historicos `availablePlayerIds` no se mutan.
+
+Validacion:
+
+- `npm test`: 13 archivos, 136 tests pasaron.
+- `npx tsc --noEmit`: paso.
+
+Limitacion documentada:
+
+- Si se edita el nombre de un jugador, reportes/eventos viejos pueden mostrar el nombre actualizado porque todavia no hay snapshot historico de nombre.
+- UI de gestion de jugadores, delete de jugadores y alta automatica en planteles quedan diferidos.
+
+## 2026-06-14 - Team pool manager close UX and Mayores cleanup
+
+Se corrigieron dos problemas del flujo de `Planteles` sin cambiar match creation, scoring, live match, mapas, sustituciones, resumenes ni export.
+
+- `TeamPoolManagerModal` ahora tiene titulo `Planteles` con cierre compacto `✕` en el encabezado.
+- Se agrego una accion `Cerrar` al pie del modal para una salida mas clara.
+- `Cancelar` queda como accion de formulario para descartar creacion/edicion sin cerrar necesariamente el modal.
+- Los pools default persistidos se normalizan por `id`.
+- `Mayores` se fuerza al roster mayor original y elimina cualquier `plus40-*` persistido.
+- `+40` se mantiene como pool fijo separado con sus ids default.
+- Planteles creados por el usuario se preservan sin normalizarlos contra defaults.
+- Se subio la version persistida a `7` para ejecutar la limpieza en estados viejos.
+- Los snapshots historicos `availablePlayerIds` de partidos existentes no se mutan.
+
+Validacion:
+
+- `npm test`: 12 archivos, 126 tests pasaron.
+- `npx tsc --noEmit`: paso.
+
+QA manual recomendado:
+
+- Abrir Home.
+- Tocar `Gestionar planteles`.
+- Confirmar que el cierre `✕` es visible y tappable.
+- Confirmar que `Cerrar` aparece al pie del modal.
+- Crear un plantel y usar `Cancelar`.
+- Editar un plantel y usar `Cancelar`.
+- Editar un plantel y guardar.
+- Confirmar que `Mayores` no muestra jugadores `plus40-*`.
+- Confirmar que `+40` muestra jugadores `plus40-*`.
+- Confirmar que `Errazquin` y `Fede` aparecen donde corresponde sin duplicar registros.
+- Crear partido con `Mayores` y confirmar que solo aparecen jugadores mayores.
+- Crear partido con `+40` y confirmar que aparecen jugadores +40.
+- Confirmar que partidos viejos finalizados siguen abriendo su resumen final.
+
+## 2026-06-14 - Home Uruguay identity redesign
+
+Se rediseño la pantalla principal para darle mayor identidad visual de Uruguay/Tchoukball, sin cambiar reglas de partido, scoring, mapas, resumenes, planteles ni persistencia.
+
+- Home integra el logo desde `assets/association-logo.png`.
+- El hero usa titulo `Tchoukball Uruguay` y subtitulo `Estadísticas, planteles y análisis en tiempo real`.
+- Se aplica una paleta celeste, blanco y azul profundo.
+- `Crear partido` queda como accion primaria y abre el modal de setup existente en `Partidos`.
+- `Partidos` y `Gestionar planteles` quedan como acciones claras de segundo nivel.
+- Se agregan cards sutiles de contexto: `Partidos`, `Planteles` y `Próximos`.
+- `Gestionar planteles` sigue abriendo el mismo `TeamPoolManagerModal`.
+- `Retomar en vivo` aparece como accion destacada solo cuando hay partido activo.
+
+Validacion:
+
+- `npm test`: 12 archivos, 125 tests pasaron.
+- `npx tsc --noEmit`: paso.
+
+QA manual recomendado:
+
+- Abrir Home en telefono.
+- Confirmar que el logo aparece proporcionado y sin deformarse.
+- Confirmar que la pantalla se ve balanceada y con identidad celeste/blanco/azul.
+- Tocar `Crear partido` y confirmar que abre el setup existente.
+- Tocar `Partidos` y confirmar que abre la lista.
+- Tocar `Gestionar planteles` y confirmar que abre la gestion de planteles.
+- Probar telefono portrait.
+- Probar tablet landscape.
+- Confirmar que no cambio el tracking de partido.
+
+## 2026-06-14 - Move team pool management to home
+
+Se movio la entrada `Gestionar planteles` desde `Partidos` a la pantalla principal, sin cambiar modelo, persistencia ni reglas de creacion/edicion de planteles.
+
+- `HomeScreen` muestra `Gestionar planteles` como accion secundaria de nivel app.
+- `MatchesScreen` ya no muestra la entrada de gestion de planteles.
+- Se extrajo `TeamPoolManagerModal` para reutilizar la misma UI de `Planteles` desde Home.
+- Crear/editar planteles sigue usando las mismas acciones persistidas del store.
+- Crear partido sigue usando los planteles persistidos como en Stage 2C.
+
+Validacion:
+
+- `npm test`: 12 archivos, 125 tests pasaron.
+- `npx tsc --noEmit`: paso.
+
+QA manual recomendado:
+
+- Abrir la pantalla principal.
+- Confirmar que aparece `Gestionar planteles`.
+- Tocar `Gestionar planteles`.
+- Confirmar que abre la UI `Planteles`.
+- Crear un plantel de prueba.
+- Editar un plantel.
+- Confirmar que los datos persisten.
+- Ir a `Partidos`.
+- Confirmar que `Gestionar planteles` ya no aparece en esa pantalla.
+- Confirmar que la lista de partidos sigue funcionando.
+- Confirmar que `Crear partido` sigue funcionando.
+- Confirmar que los planteles existentes aparecen en `Crear partido`.
+
+## 2026-06-14 - Team pools Stage 2C match creation integration
+
+Se implemento Stage 2C para usar planteles persistidos en la creacion de partidos, sin cambiar scoring, eventos, mapas, sustituciones, timer, resumenes ni export.
+
+- `Crear partido` ahora lista los planteles guardados en el store.
+- Se puede elegir `Mayores`, `+40` o cualquier plantel creado por el usuario.
+- La seleccion de titulares se limita a los jugadores del plantel seleccionado.
+- Al cambiar de plantel se limpian titulares para no mezclar jugadores entre pools.
+- El partido guarda `teamPoolId`, `teamPoolName` y `availablePlayerIds` como snapshot historico.
+- Planteles con menos de 7 jugadores muestran `El plantel necesita al menos 7 jugadores.` y no permiten crear.
+- Si no hay exactamente 7 titulares, se muestra `Elegí 7 titulares para iniciar el partido.`.
+- Editar un plantel despues de crear un partido no cambia el roster historico de ese partido.
+- Reporte/PDF sigue usando `match.teamPoolName`, ahora tambien para `+40` o planteles custom.
+- Delete de planteles y player CRUD siguen diferidos.
+
+Validacion:
+
+- `npm test`: 12 archivos, 125 tests pasaron.
+- `npx tsc --noEmit`: paso.
+
+QA manual recomendado:
+
+- Abrir `Crear partido`.
+- Ingresar rival `Brasil`.
+- Seleccionar plantel `+40`.
+- Confirmar que la lista de titulares muestra solo jugadores de `+40`.
+- Seleccionar 7 titulares.
+- Crear partido.
+- Confirmar que la cancha live muestra esos 7 titulares.
+- Confirmar que el banco muestra los restantes del plantel `+40`.
+- Hacer una sustitucion y confirmar que solo aparece el roster del partido.
+- Finalizar partido y exportar PDF.
+- Confirmar `Plantel: +40` en el reporte.
+- Editar `+40` despues de crear el partido.
+- Reabrir el partido creado y confirmar que su roster no cambio.
+
+## 2026-06-14 - Fixed +40 default team pool
+
+Se separo el plantel `+40` del plantel `Mayores` en los datos mock/default sin cambiar la creacion de partidos ni el flujo live.
+
+- `Mayores` ya no se define con todos los jugadores globales.
+- `Mayores` usa una lista explicita de ids del roster mayor original.
+- `+40` se agrega como pool default separado con ids explicitos.
+- `errazquin` y `fede` aparecen en ambos planteles por el mismo `id`, sin duplicar registros de jugador.
+- La normalizacion de pools puede agregar defaults faltantes, como `+40`, sin sobrescribir pools persistidos existentes.
+- La migracion mergea jugadores default faltantes para que instalaciones con estado viejo puedan recibir los jugadores `+40`.
+- Los partidos demo siguen usando `Mayores`.
+- La creacion de partido sigue limitada a `Mayores`; elegir `+40` al crear partido queda para Stage 2C.
+
+Validacion:
+
+- `npm test`: 12 archivos, 121 tests pasaron.
+- `npx tsc --noEmit`: paso.
+
+QA manual recomendado:
+
+- Abrir `Partidos`.
+- Tocar `Gestionar planteles`.
+- Confirmar que aparecen `Mayores` y `+40`.
+- Confirmar que `Mayores` no incluye jugadores `plus40-*`.
+- Confirmar que `+40` incluye jugadores `plus40-*`.
+- Confirmar que `Errazquin` y `Fede` pueden estar en `+40` sin duplicarse como jugadores.
+- Confirmar que los partidos demo siguen usando `Mayores`.
+- Si una instalacion vieja ya tenia un `Mayores` persistido con todos los jugadores, editarlo manualmente o limpiar storage local para regenerar defaults.
+
 ## 2026-06-13 - Team pools Stage 2B management UI
 
 Se implemento Stage 2B de planteles/categorias con UI simple de gestion, sin integrar todavia planteles custom en la creacion de partidos.

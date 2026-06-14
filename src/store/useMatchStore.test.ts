@@ -10,6 +10,7 @@ import {
   getOpponentOwnPoints,
   getScoreByPeriod,
 } from '../domain/periodStats';
+import { mayoresPlayerIds, plus40PlayerIds, teamPools, uruguayPlayers } from '../domain/mockData';
 import { getCurrentLineup } from '../domain/stats';
 import { useMatchStore } from './useMatchStore';
 
@@ -76,6 +77,50 @@ describe('useMatchStore period stability', () => {
     expect(useMatchStore.getState().activeMatchId).toBe(matchId);
   });
 
+  it('creates matches from +40 with a historical roster snapshot', () => {
+    const plus40 = useMatchStore.getState().teamPools.find((pool) => pool.id === 'plus40');
+    const initialPlayerIds = plus40PlayerIds.slice(0, 7);
+
+    const matchId = useMatchStore.getState().createMatch({
+      opponent: 'Brasil',
+      teamPoolId: plus40?.id,
+      teamPoolName: plus40?.name,
+      initialPlayerIds,
+    });
+    const match = useMatchStore.getState().matches.find((item) => item.id === matchId);
+
+    expect(match).toMatchObject({
+      teamPoolId: 'plus40',
+      teamPoolName: '+40',
+      availablePlayerIds: plus40PlayerIds,
+    });
+    expect(match?.lineupSnapshots[0].playerIds).toEqual(initialPlayerIds);
+  });
+
+  it('creates matches from user-created pools and blocks pools with fewer than 7 players', () => {
+    const smallPoolId = useMatchStore.getState().createTeamPool('Corto', ['mauro', 'fede']);
+    const blockedMatchId = useMatchStore.getState().createMatch({
+      opponent: 'Brasil',
+      teamPoolId: smallPoolId,
+      initialPlayerIds: ['mauro', 'fede'],
+    });
+    const customPlayerIds = ['mauro', 'marcelo', 'nicolas', 'vladi', 'errazquin', 'leon', 'mathias', 'tadeo'];
+    const customPoolId = useMatchStore.getState().createTeamPool('Rotacion', customPlayerIds);
+    const matchId = useMatchStore.getState().createMatch({
+      opponent: 'Chile',
+      teamPoolId: customPoolId,
+      initialPlayerIds: customPlayerIds.slice(0, 7),
+    });
+    const match = useMatchStore.getState().matches.find((item) => item.id === matchId);
+
+    expect(blockedMatchId).toBe('');
+    expect(match).toMatchObject({
+      teamPoolId: customPoolId,
+      teamPoolName: 'Rotacion',
+      availablePlayerIds: customPlayerIds,
+    });
+  });
+
   it('falls back to Rival when creating a match without rival name', () => {
     const matchId = useMatchStore.getState().createMatch({
       opponent: '   ',
@@ -99,6 +144,39 @@ describe('useMatchStore period stability', () => {
 
     expect(matchId).toBe('');
     expect(useMatchStore.getState().matches).toHaveLength(previousMatchCount);
+  });
+
+  it('keeps match available players unchanged when the selected pool is edited later', () => {
+    const poolId = useMatchStore.getState().createTeamPool('Rotacion', mayoresPlayerIds.slice(0, 8));
+    const matchId = useMatchStore.getState().createMatch({
+      opponent: 'Brasil',
+      teamPoolId: poolId,
+      initialPlayerIds: mayoresPlayerIds.slice(0, 7),
+    });
+    const before = useMatchStore.getState().matches.find((item) => item.id === matchId)?.availablePlayerIds;
+
+    useMatchStore.getState().updateTeamPool(poolId, { playerIds: mayoresPlayerIds.slice(0, 7) });
+
+    expect(useMatchStore.getState().matches.find((item) => item.id === matchId)?.availablePlayerIds).toEqual(before);
+  });
+
+  it('normalizes polluted Mayores without mutating existing match roster snapshots', () => {
+    const pollutedSnapshot = [...mayoresPlayerIds, 'plus40-ana-canteras'];
+    const matchId = useMatchStore.getState().createMatch({
+      opponent: 'Brasil',
+      teamPoolId: 'mayores',
+      availablePlayerIds: pollutedSnapshot,
+      initialPlayerIds: mayoresPlayerIds.slice(0, 7),
+    });
+
+    useMatchStore.getState().updateTeamPool('mayores', { playerIds: pollutedSnapshot });
+
+    const mayores = useMatchStore.getState().teamPools.find((pool) => pool.id === 'mayores');
+    const match = useMatchStore.getState().matches.find((item) => item.id === matchId);
+
+    expect(mayores?.playerIds).toEqual(mayoresPlayerIds);
+    expect(mayores?.playerIds.some((playerId) => playerId.startsWith('plus40-'))).toBe(false);
+    expect(match?.availablePlayerIds).toEqual(pollutedSnapshot);
   });
 
   it('keeps demo match creation using Argentina', () => {
@@ -176,6 +254,9 @@ describe('useMatchStore period stability', () => {
 
     expect(useMatchStore.getState().teamPools.some((pool) => pool.id === poolId)).toBe(true);
     expect(useMatchStore.getState().teamPools.filter((pool) => pool.id === 'mayores')).toHaveLength(1);
+    expect(useMatchStore.getState().teamPools.find((pool) => pool.id === 'plus40')?.playerIds).toEqual(
+      teamPools.find((pool) => pool.id === 'plus40')?.playerIds,
+    );
   });
 
   it('does not restart finished matches', () => {
@@ -578,7 +659,91 @@ describe('useMatchStore period stability', () => {
     useMatchStore.getState().resetDemoData();
 
     expect(useMatchStore.getState().players.map((player) => player.id)).toContain('mauro');
-    expect(useMatchStore.getState().players).toHaveLength(14);
+    expect(useMatchStore.getState().players).toHaveLength(uruguayPlayers.length);
+    expect(useMatchStore.getState().players.map((player) => player.id)).toEqual(expect.arrayContaining(plus40PlayerIds));
+  });
+
+  it('creates local players with defaults and unique ids', () => {
+    const playerId = useMatchStore.getState().createPlayer({
+      firstName: 'Mauro',
+      lastName: '',
+      position: 'Wing',
+      usualPlayingZone: 'derecha',
+      dominantHand: 'Left',
+    });
+    const player = useMatchStore.getState().players.find((item) => item.id === playerId);
+
+    expect(playerId).toBe('mauro-2');
+    expect(player).toMatchObject({
+      id: 'mauro-2',
+      firstName: 'Mauro',
+      lastName: '',
+      number: 37,
+      position: 'Wing',
+      usualPlayingZone: 'derecha',
+      dominantHand: 'Left',
+      caps: 0,
+      goals: 0,
+      blocks: 0,
+    });
+    expect(useMatchStore.getState().teamPools.find((pool) => pool.id === 'mayores')?.playerIds).toEqual(mayoresPlayerIds);
+  });
+
+  it('rejects local players without required fields', () => {
+    const before = useMatchStore.getState().players;
+    const playerId = useMatchStore.getState().createPlayer({
+      firstName: '   ',
+      position: 'Wing',
+      usualPlayingZone: 'derecha',
+      dominantHand: 'Left',
+    });
+
+    expect(playerId).toBe('');
+    expect(useMatchStore.getState().players).toBe(before);
+  });
+
+  it('updates local players while preserving ids and match snapshots', () => {
+    const playerId = useMatchStore.getState().createPlayer({
+      firstName: 'Ana',
+      lastName: 'Nueva',
+      position: 'Wing',
+      usualPlayingZone: 'izquierda',
+      dominantHand: 'Right',
+    });
+    const matchId = useMatchStore.getState().createMatch({
+      opponent: 'Brasil',
+      teamPoolId: 'mayores',
+      availablePlayerIds: [...mayoresPlayerIds, playerId],
+      initialPlayerIds: mayoresPlayerIds.slice(0, 7),
+    });
+    const beforeSnapshot = useMatchStore.getState().matches.find((match) => match.id === matchId)?.availablePlayerIds;
+
+    expect(useMatchStore.getState().updatePlayer(playerId, { firstName: 'Ana editada', number: 77 })).toBe(true);
+    expect(useMatchStore.getState().players.find((player) => player.id === playerId)).toMatchObject({
+      id: playerId,
+      firstName: 'Ana editada',
+      number: 77,
+    });
+    expect(useMatchStore.getState().matches.find((match) => match.id === matchId)?.availablePlayerIds).toEqual(beforeSnapshot);
+  });
+
+  it('does not update unknown or invalid players', () => {
+    expect(useMatchStore.getState().updatePlayer('no-existe', { firstName: 'No' })).toBe(false);
+    expect(useMatchStore.getState().updatePlayer('mauro', { firstName: '   ' })).toBe(false);
+  });
+
+  it('reset demo data preserves locally created players', () => {
+    const playerId = useMatchStore.getState().createPlayer({
+      firstName: 'Jugador',
+      lastName: 'Local',
+      position: 'Center',
+      usualPlayingZone: 'central',
+      dominantHand: 'Right',
+    });
+
+    useMatchStore.getState().resetDemoData();
+
+    expect(useMatchStore.getState().players.map((player) => player.id)).toContain(playerId);
   });
 
   it('does not use player usual position as point landingLocation', () => {

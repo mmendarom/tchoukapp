@@ -162,13 +162,13 @@ describe('buildMatchReportData', () => {
     );
   });
 
-  it('includes team pool name when available', () => {
-    const report = buildMatchReportData({ ...match(), teamPoolName: 'Mayores' }, players);
+  it('includes stored team pool name when available', () => {
+    const report = buildMatchReportData({ ...match(), teamPoolName: '+40' }, players);
 
-    expect(report.teamPoolName).toBe('Mayores');
+    expect(report.teamPoolName).toBe('+40');
     expect(report.executiveSummary).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ label: 'Plantel', value: 'Mayores' }),
+        expect.objectContaining({ label: 'Plantel', value: '+40' }),
       ]),
     );
   });

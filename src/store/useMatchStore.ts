@@ -5,6 +5,7 @@ import { initialMatches, teamPools, upcomingFixtures, uruguayPlayers } from '../
 import { getTeamPoolById, resolveMatchAvailablePlayers, uniquePlayerIds, validateMatchSetup } from '../domain/matchSetup';
 import { normalizeOpponentName } from '../domain/opponent';
 import { PERIOD_DURATION_SECONDS } from '../domain/periodStats';
+import { applyPlayerUpdates, buildPlayer, CreatePlayerInput, UpdatePlayerInput } from '../domain/players';
 import { replaceLineupSlotPlayer, swapLineupSlotPlayers } from '../domain/lineupSlots';
 import { buildTeamPool, ensureDefaultTeamPool } from '../domain/teamPools';
 import {
@@ -33,6 +34,8 @@ type MatchState = {
   matches: Match[];
   fixtures: Fixture[];
   activeMatchId?: string;
+  createPlayer: (input: CreatePlayerInput) => string;
+  updatePlayer: (playerId: string, updates: UpdatePlayerInput) => boolean;
   startMatch: (matchId: string) => void;
   createTeamPool: (name: string, playerIds: string[]) => string;
   updateTeamPool: (poolId: string, updates: { name?: string; playerIds?: string[] }) => boolean;
@@ -77,6 +80,18 @@ const createId = () => `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
 
 const defaultZone: CourtZone = 'center';
 const defaultFrame: FrameSide = 'right-frame';
+
+const mergeDefaultPlayers = (players: Player[] | undefined) => {
+  const playersById = new Map((players ?? []).map((player) => [player.id, player]));
+
+  uruguayPlayers.forEach((player) => {
+    if (!playersById.has(player.id)) {
+      playersById.set(player.id, player);
+    }
+  });
+
+  return Array.from(playersById.values());
+};
 
 const createInitialPeriods = (): MatchPeriodState[] => [
   {
@@ -215,10 +230,48 @@ export const useMatchStore = create<MatchState>()(
   persist(
     (set, get) => ({
       players: uruguayPlayers,
-      teamPools: ensureDefaultTeamPool(teamPools, uruguayPlayers),
+      teamPools: ensureDefaultTeamPool(teamPools, uruguayPlayers, teamPools),
       matches: initialMatches.map(normalizeMatch),
       fixtures: upcomingFixtures,
       activeMatchId: undefined,
+      createPlayer: (input) => {
+        const player = buildPlayer(input, get().players);
+
+        if (!player) {
+          return '';
+        }
+
+        set((state) => ({
+          players: [...state.players, player],
+          teamPools: ensureDefaultTeamPool(state.teamPools, [...state.players, player], teamPools),
+        }));
+
+        return player.id;
+      },
+      updatePlayer: (playerId, updates) => {
+        const existingPlayer = get().players.find((player) => player.id === playerId);
+
+        if (!existingPlayer) {
+          return false;
+        }
+
+        const nextPlayer = applyPlayerUpdates(existingPlayer, updates);
+
+        if (!nextPlayer) {
+          return false;
+        }
+
+        set((state) => {
+          const players = state.players.map((player) => (player.id === playerId ? nextPlayer : player));
+
+          return {
+            players,
+            teamPools: ensureDefaultTeamPool(state.teamPools, players, teamPools),
+          };
+        });
+
+        return true;
+      },
       startMatch: (matchId) =>
         set((state) => ({
           activeMatchId: state.matches.some((match) => match.id === matchId && !['finished', 'cancelled'].includes(normalizeMatch(match).status))
@@ -251,7 +304,7 @@ export const useMatchStore = create<MatchState>()(
         }
 
         set((state) => ({
-          teamPools: ensureDefaultTeamPool([...state.teamPools, pool], state.players),
+          teamPools: ensureDefaultTeamPool([...state.teamPools, pool], state.players, teamPools),
         }));
 
         return pool.id;
@@ -278,6 +331,7 @@ export const useMatchStore = create<MatchState>()(
           teamPools: ensureDefaultTeamPool(
             state.teamPools.map((pool) => (pool.id === poolId ? nextPool : pool)),
             state.players,
+            teamPools,
           ),
         }));
 
@@ -312,7 +366,7 @@ export const useMatchStore = create<MatchState>()(
         return match.id;
       },
       createDemoMatch: () => {
-        const defaultPool = getTeamPoolById(ensureDefaultTeamPool(get().teamPools, get().players), 'mayores');
+        const defaultPool = getTeamPoolById(ensureDefaultTeamPool(get().teamPools, get().players, teamPools), 'mayores');
         const match = createDraftMatch({
           opponent: 'Argentina',
           venue: 'Partido demo',
@@ -947,23 +1001,29 @@ export const useMatchStore = create<MatchState>()(
           matches: state.matches.map((match) => (match.id === matchId ? { ...normalizeMatch(match), notes } : match)),
         })),
       resetDemoData: () =>
-        set((state) => ({
-          players: uruguayPlayers,
-          teamPools: ensureDefaultTeamPool(state.teamPools, uruguayPlayers),
-          matches: initialMatches.map(normalizeMatch),
-          fixtures: upcomingFixtures,
-          activeMatchId: undefined,
-        })),
+        set((state) => {
+          const players = mergeDefaultPlayers(state.players);
+
+          return {
+            players,
+            teamPools: ensureDefaultTeamPool(state.teamPools, players, teamPools),
+            matches: initialMatches.map(normalizeMatch),
+            fixtures: upcomingFixtures,
+            activeMatchId: undefined,
+          };
+        }),
     }),
     {
       name: STORAGE_KEYS.appState,
-      version: 5,
+      version: 8,
       migrate: (persistedState) => {
         const state = persistedState as MatchState;
+        const players = mergeDefaultPlayers(state.players);
+
         return {
           ...state,
-          players: state.players?.length ? state.players : uruguayPlayers,
-          teamPools: ensureDefaultTeamPool(state.teamPools, state.players?.length ? state.players : uruguayPlayers),
+          players,
+          teamPools: ensureDefaultTeamPool(state.teamPools, players, teamPools),
           fixtures: state.fixtures?.length ? state.fixtures : upcomingFixtures,
           matches: state.matches?.map(normalizeMatch) ?? initialMatches.map(normalizeMatch),
         };

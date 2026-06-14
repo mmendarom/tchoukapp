@@ -45,11 +45,60 @@ export const uruguayPlayers: Player[] = [
   { id: 'plus40-milena', firstName: 'Milena', lastName: '', number: 36, position: 'Wing', usualPlayingZone: 'izquierda', dominantHand: 'Right', caps: 0, goals: 0, blocks: 0 },
 ];
 
+export const mayoresPlayerIds = [
+  'mauro',
+  'marcelo',
+  'nicolas',
+  'vladi',
+  'errazquin',
+  'leon',
+  'mathias',
+  'tadeo',
+  'enano',
+  'juan',
+  'fede',
+  'leo',
+  'pablito',
+  'juanse',
+];
+
+export const plus40PlayerIds = [
+  'plus40-ana-canteras',
+  'plus40-andres-pela',
+  'plus40-hairo',
+  'plus40-canario',
+  'plus40-cecilia',
+  'plus40-cabeza',
+  'plus40-ileana',
+  'plus40-jose-fuentes',
+  'plus40-karny',
+  'plus40-maikel',
+  'plus40-mono',
+  'plus40-nestor',
+  'plus40-pablo',
+  'errazquin',
+  'plus40-rodolfo',
+  'plus40-alejandra',
+  'plus40-ana-helena',
+  'plus40-andrea',
+  'plus40-clau-correa',
+  'fede',
+  'plus40-florencia',
+  'plus40-gustavo',
+  'plus40-jonathan',
+  'plus40-milena',
+];
+
 export const teamPools: TeamPool[] = [
   {
     id: 'mayores',
     name: 'Mayores',
-    playerIds: uruguayPlayers.map((player) => player.id),
+    playerIds: mayoresPlayerIds,
+  },
+  {
+    id: 'plus40',
+    name: '+40',
+    playerIds: plus40PlayerIds,
   },
 ];
 

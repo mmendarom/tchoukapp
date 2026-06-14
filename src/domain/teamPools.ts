@@ -16,24 +16,34 @@ export function createDefaultTeamPool(players: Player[]): TeamPool {
   return {
     id: DEFAULT_TEAM_POOL_ID,
     name: 'Mayores',
-    playerIds: players.map((player) => player.id),
+    playerIds: players.filter((player) => !player.id.startsWith('plus40-')).map((player) => player.id),
   };
 }
 
-export function ensureDefaultTeamPool(pools: TeamPool[] | undefined, players: Player[]) {
+export function ensureDefaultTeamPool(
+  pools: TeamPool[] | undefined,
+  players: Player[],
+  defaultPools: TeamPool[] = [createDefaultTeamPool(players)],
+) {
+  const defaultPoolsById = new Map(defaultPools.map((pool) => [pool.id, pool]));
   const normalizedPools = (pools ?? [])
-    .map((pool) => ({
-      ...pool,
-      name: normalizeTeamPoolName(pool.name),
-      playerIds: filterExistingPlayerIds(pool.playerIds, players),
-    }))
+    .map((pool) => {
+      const defaultPool = defaultPoolsById.get(pool.id);
+
+      return {
+        ...pool,
+        name: normalizeTeamPoolName(defaultPool?.name ?? pool.name),
+        playerIds: filterExistingPlayerIds(defaultPool?.playerIds ?? pool.playerIds, players),
+      };
+    })
     .filter((pool) => pool.id && pool.name && pool.playerIds.length > 0);
+  const existingPoolIds = new Set(normalizedPools.map((pool) => pool.id));
+  const missingDefaultPools = defaultPools
+    .filter((pool) => !existingPoolIds.has(pool.id))
+    .map((pool) => buildTeamPool({ ...pool, players }))
+    .filter((pool): pool is TeamPool => Boolean(pool));
 
-  if (normalizedPools.some((pool) => pool.id === DEFAULT_TEAM_POOL_ID)) {
-    return normalizedPools;
-  }
-
-  return [createDefaultTeamPool(players), ...normalizedPools];
+  return [...normalizedPools, ...missingDefaultPools];
 }
 
 export function buildTeamPool(input: {

@@ -1,5 +1,5 @@
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Modal, Pressable, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { ActionButton } from '../components/ActionButton';
@@ -14,34 +14,44 @@ import { fontSize, spacing } from '../utils/responsive';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Matches'>;
 
-export function MatchesScreen({ navigation }: Props) {
+export function MatchesScreen({ navigation, route }: Props) {
   const [createModalVisible, setCreateModalVisible] = useState(false);
   const [opponentInput, setOpponentInput] = useState('');
   const [selectedTeamPoolId, setSelectedTeamPoolId] = useState('mayores');
   const [starterIds, setStarterIds] = useState<string[]>([]);
-  const [poolManagerVisible, setPoolManagerVisible] = useState(false);
-  const [editingPoolId, setEditingPoolId] = useState<string | undefined>();
-  const [poolNameInput, setPoolNameInput] = useState('');
-  const [selectedPoolPlayerIds, setSelectedPoolPlayerIds] = useState<string[]>([]);
-  const [poolError, setPoolError] = useState<string | undefined>();
   const players = useMatchStore((state) => state.players);
   const teamPools = useMatchStore((state) => state.teamPools);
   const matches = useMatchStore((state) => state.matches);
   const startMatch = useMatchStore((state) => state.startMatch);
   const createMatch = useMatchStore((state) => state.createMatch);
-  const createTeamPool = useMatchStore((state) => state.createTeamPool);
-  const updateTeamPool = useMatchStore((state) => state.updateTeamPool);
   const visibleMatches = matches.filter((match) => match.status !== 'cancelled');
-  const matchSetupPools = teamPools.filter((pool) => pool.id === 'mayores');
-  const selectedTeamPool = matchSetupPools.find((pool) => pool.id === selectedTeamPoolId) ?? matchSetupPools[0] ?? teamPools[0];
+  const selectedTeamPool = teamPools.find((pool) => pool.id === selectedTeamPoolId) ?? teamPools.find((pool) => pool.id === 'mayores') ?? teamPools[0];
   const poolPlayerIds = selectedTeamPool?.playerIds ?? [];
-  const poolPlayers = players.filter((player) => poolPlayerIds.includes(player.id));
+  const playersById = new Map(players.map((player) => [player.id, player]));
+  const poolPlayers = poolPlayerIds
+    .map((playerId) => playersById.get(playerId))
+    .filter((player): player is typeof players[number] => Boolean(player));
   const benchPlayers = poolPlayers.filter((player) => !starterIds.includes(player.id));
   const canCreateMatch = starterIds.length === 7 && poolPlayers.length >= 7;
+  const createMatchError = poolPlayers.length < 7
+    ? 'El plantel necesita al menos 7 jugadores.'
+    : 'Elegí 7 titulares para iniciar el partido.';
+  const openCreateModal = () => {
+    setOpponentInput('');
+    setSelectedTeamPoolId(teamPools.find((pool) => pool.id === 'mayores')?.id ?? teamPools[0]?.id ?? 'mayores');
+    setStarterIds([]);
+    setCreateModalVisible(true);
+  };
+  useEffect(() => {
+    if (route.params?.openCreate) {
+      openCreateModal();
+      navigation.setParams({ openCreate: false });
+    }
+  }, [route.params?.openCreate]);
   const closeCreateModal = () => {
     setCreateModalVisible(false);
     setOpponentInput('');
-    setSelectedTeamPoolId(teamPools[0]?.id ?? 'mayores');
+    setSelectedTeamPoolId(teamPools.find((pool) => pool.id === 'mayores')?.id ?? teamPools[0]?.id ?? 'mayores');
     setStarterIds([]);
   };
   const confirmCreateMatch = () => {
@@ -73,63 +83,6 @@ export function MatchesScreen({ navigation }: Props) {
       return [...current, playerId];
     });
   };
-  const resetPoolForm = () => {
-    setEditingPoolId(undefined);
-    setPoolNameInput('');
-    setSelectedPoolPlayerIds([]);
-    setPoolError(undefined);
-  };
-  const openNewPoolForm = () => {
-    setEditingPoolId(undefined);
-    setPoolNameInput('');
-    setSelectedPoolPlayerIds([]);
-    setPoolError(undefined);
-  };
-  const openEditPoolForm = (poolId: string) => {
-    const pool = teamPools.find((item) => item.id === poolId);
-
-    if (!pool) {
-      return;
-    }
-
-    setEditingPoolId(pool.id);
-    setPoolNameInput(pool.name);
-    setSelectedPoolPlayerIds(pool.playerIds);
-    setPoolError(undefined);
-  };
-  const closePoolManager = () => {
-    setPoolManagerVisible(false);
-    resetPoolForm();
-  };
-  const togglePoolPlayer = (playerId: string) => {
-    setSelectedPoolPlayerIds((current) =>
-      current.includes(playerId)
-        ? current.filter((id) => id !== playerId)
-        : [...current, playerId],
-    );
-  };
-  const savePool = () => {
-    if (!poolNameInput.trim()) {
-      setPoolError('El nombre del plantel es obligatorio.');
-      return;
-    }
-
-    if (selectedPoolPlayerIds.length === 0) {
-      setPoolError('Seleccioná al menos un jugador.');
-      return;
-    }
-
-    const saved = editingPoolId
-      ? updateTeamPool(editingPoolId, { name: poolNameInput, playerIds: selectedPoolPlayerIds })
-      : Boolean(createTeamPool(poolNameInput, selectedPoolPlayerIds));
-
-    if (!saved) {
-      setPoolError('No se pudo guardar el plantel.');
-      return;
-    }
-
-    resetPoolForm();
-  };
   const openMatch = (matchId: string, status: string) => {
     if (status === 'finished') {
       navigation.navigate('FinalSummary', { matchId });
@@ -153,15 +106,7 @@ export function MatchesScreen({ navigation }: Props) {
       <Text style={styles.title}>Partidos</Text>
       <ActionButton
         label="Crear partido"
-        onPress={() => setCreateModalVisible(true)}
-      />
-      <ActionButton
-        label="Gestionar planteles"
-        onPress={() => {
-          resetPoolForm();
-          setPoolManagerVisible(true);
-        }}
-        variant="secondary"
+        onPress={openCreateModal}
       />
       <Modal visible={createModalVisible} animationType="fade" transparent onRequestClose={closeCreateModal}>
         <SafeAreaView style={styles.modalBackdrop}>
@@ -187,7 +132,7 @@ export function MatchesScreen({ navigation }: Props) {
               <View style={styles.setupSection}>
                 <Text style={styles.inputLabel}>Plantel</Text>
                 <View style={styles.poolRow}>
-                  {matchSetupPools.map((pool) => {
+                  {teamPools.map((pool) => {
                     const selected = pool.id === selectedTeamPoolId;
 
                     return (
@@ -205,7 +150,7 @@ export function MatchesScreen({ navigation }: Props) {
                     );
                   })}
                 </View>
-                <Text style={styles.helperText}>Los planteles personalizados se preparan desde Gestionar planteles y se usarán en creación de partido en la próxima etapa.</Text>
+                <Text style={styles.helperText}>Elegí el plantel para este partido. La lista de titulares usa solo esos jugadores.</Text>
               </View>
 
               <View style={styles.setupSection}>
@@ -244,7 +189,7 @@ export function MatchesScreen({ navigation }: Props) {
               </View>
 
               {!canCreateMatch && (
-                <Text style={styles.errorText}>Elegí 7 titulares para iniciar el partido.</Text>
+                <Text style={styles.errorText}>{createMatchError}</Text>
               )}
 
               <View style={styles.modalActions}>
@@ -255,88 +200,6 @@ export function MatchesScreen({ navigation }: Props) {
                   style={({ pressed }) => [styles.createButton, !canCreateMatch && styles.createButtonDisabled, pressed && styles.pressed]}
                 >
                   <Text style={styles.createButtonText}>Crear partido</Text>
-                </Pressable>
-              </View>
-            </View>
-          </ScrollView>
-        </SafeAreaView>
-      </Modal>
-      <Modal visible={poolManagerVisible} animationType="fade" transparent onRequestClose={closePoolManager}>
-        <SafeAreaView style={styles.modalBackdrop}>
-          <ScrollView contentContainerStyle={styles.modalScroll} keyboardShouldPersistTaps="handled">
-            <View style={styles.modalCard}>
-              <View style={styles.sectionHeader}>
-                <Text style={styles.modalTitle}>Planteles</Text>
-                <ActionButton label="Cerrar" onPress={closePoolManager} variant="secondary" />
-              </View>
-
-              <View style={styles.poolList}>
-                {teamPools.map((pool) => (
-                  <View key={pool.id} style={styles.poolListItem}>
-                    <View style={styles.poolListText}>
-                      <Text style={styles.poolListName}>{pool.name}</Text>
-                      <Text style={styles.helperText}>{pool.playerIds.length} jugadores</Text>
-                    </View>
-                    <ActionButton label="Editar" onPress={() => openEditPoolForm(pool.id)} variant="secondary" />
-                  </View>
-                ))}
-              </View>
-
-              <View style={styles.divider} />
-
-              <View style={styles.setupSection}>
-                <Text style={styles.inputLabel}>{editingPoolId ? 'Editar plantel' : 'Nuevo plantel'}</Text>
-                <TextInput
-                  autoCapitalize="words"
-                  onChangeText={(value) => {
-                    setPoolNameInput(value);
-                    setPoolError(undefined);
-                  }}
-                  placeholder="Nombre del plantel"
-                  placeholderTextColor="#8a98a8"
-                  returnKeyType="done"
-                  style={styles.input}
-                  value={poolNameInput}
-                />
-              </View>
-
-              <View style={styles.setupSection}>
-                <View style={styles.sectionHeader}>
-                  <Text style={styles.inputLabel}>Jugadores</Text>
-                  <Text style={styles.countBadge}>{selectedPoolPlayerIds.length} seleccionados</Text>
-                </View>
-                <View style={styles.playerGrid}>
-                  {players.map((player) => {
-                    const selected = selectedPoolPlayerIds.includes(player.id);
-
-                    return (
-                      <Pressable
-                        key={player.id}
-                        onPress={() => {
-                          togglePoolPlayer(player.id);
-                          setPoolError(undefined);
-                        }}
-                        style={({ pressed }) => [styles.playerTile, selected && styles.playerTileSelected, pressed && styles.pressed]}
-                      >
-                        <Text style={[styles.playerNumber, selected && styles.playerTileSelectedText]}>#{player.number}</Text>
-                        <Text numberOfLines={1} style={[styles.playerName, selected && styles.playerTileSelectedText]}>
-                          {player.lastName || player.firstName}
-                        </Text>
-                      </Pressable>
-                    );
-                  })}
-                </View>
-              </View>
-
-              {poolError && <Text style={styles.errorText}>{poolError}</Text>}
-
-              <View style={styles.modalActions}>
-                <ActionButton label="Cancelar" onPress={resetPoolForm} variant="secondary" />
-                <Pressable
-                  onPress={savePool}
-                  style={({ pressed }) => [styles.createButton, (!poolNameInput.trim() || selectedPoolPlayerIds.length === 0) && styles.createButtonDisabled, pressed && styles.pressed]}
-                >
-                  <Text style={styles.createButtonText}>Guardar</Text>
                 </Pressable>
               </View>
             </View>
@@ -488,34 +351,6 @@ const styles = StyleSheet.create({
   },
   setupSection: {
     gap: spacing.xs,
-  },
-  poolList: {
-    gap: spacing.sm,
-  },
-  poolListItem: {
-    minHeight: 58,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#dbe4ef',
-    backgroundColor: '#f7fafc',
-    padding: spacing.sm,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: spacing.sm,
-  },
-  poolListText: {
-    flex: 1,
-  },
-  poolListName: {
-    color: '#0b1f33',
-    fontSize: fontSize.section,
-    fontWeight: '900',
-  },
-  divider: {
-    height: 1,
-    backgroundColor: '#dbe4ef',
-    marginVertical: spacing.xs,
   },
   inputLabel: {
     color: '#0b1f33',

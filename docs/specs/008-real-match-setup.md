@@ -2,7 +2,7 @@
 
 ## Estado
 
-Stage 1 implemented
+Stage 2C implemented
 
 ## Contexto
 
@@ -44,7 +44,7 @@ Hoy la app decide titulares de forma automatica desde el orden del roster, lo qu
 - No implementar CRUD de jugadores o edicion de roster en esta etapa.
 - No implementar CRUD de planteles/categorias en esta etapa.
 - No implementar lista de rivales recientes.
-- No inventar jugadores para `Sub 18` ni `+40`.
+- No inventar jugadores para `Sub 18`; `+40` puede existir solo con lista real cargada.
 - No agregar backend, autenticacion, cloud sync ni servicios pagos.
 - No agregar restricciones por posicion habitual.
 - No crear nombres tacticos para slots.
@@ -107,21 +107,55 @@ Hoy la app decide titulares de forma automatica desde el orden del roster, lo qu
   - No hay delete todavia.
   - Editar un plantel no muta partidos existentes porque los partidos guardan `availablePlayerIds` como snapshot historico.
 - `Mayores` se asegura por migracion/default sin duplicarse.
-- `Sub 18` y `+40` siguen diferidos hasta tener rosters reales y UI de gestion.
+- `Sub 18` sigue diferido hasta tener roster real y UI de gestion.
 - Stage 2B implementado:
-  - se agrega UI secundaria `Gestionar planteles`;
+  - se agrega UI secundaria `Gestionar planteles` como accion de nivel app;
   - se listan planteles existentes;
   - se pueden crear planteles usando jugadores globales existentes;
   - se pueden editar nombre y jugadores de planteles existentes;
   - no se implementa delete;
   - no se implementa creacion/edicion de jugadores;
   - la creacion de partido sigue usando `Mayores` hasta Stage 2C.
+- Stage 2C implementado:
+  - `Crear partido` permite elegir cualquier plantel persistido;
+  - `Mayores`, `+40` y planteles creados por el usuario son seleccionables;
+  - la lista de titulares se arma solo con jugadores del plantel seleccionado;
+  - el partido guarda `teamPoolId`, `teamPoolName` y `availablePlayerIds` como snapshot historico;
+  - editar un plantel despues de crear un partido no muta el roster historico de ese partido.
+- Refinamiento implementado:
+  - `Mayores` ya no usa automaticamente todos los jugadores globales;
+  - `Mayores` queda definido por una lista fija de ids del roster mayor original;
+  - `+40` queda sembrado como plantel default separado con ids explicitos;
+  - jugadores compartidos como `errazquin` y `fede` aparecen en ambos planteles por el mismo `id`, sin duplicar registros;
+  - la migracion/default agrega `+40` si falta, sin sobrescribir `Mayores` ni planteles editados por el usuario.
+- Refinamiento de persistencia implementado:
+  - estados persistidos donde `Mayores` quedo contaminado con jugadores `plus40-*` se normalizan contra el roster mayor fijo;
+  - `+40` tambien se normaliza contra su roster fijo;
+  - planteles creados por el usuario se preservan;
+  - snapshots historicos de partidos no se mutan.
 - Reusar la cancha visual 3 izquierda - 1 centro - 3 derecha.
 - Permitir tocar un jugador convocado y colocarlo en uno de los 7 slots neutrales.
 - Permitir reordenar titulares antes de crear el partido.
 
 ### Stage 3
 
+- Stage 3A implementado:
+  - `players` vive como estado local persistido en Zustand;
+  - los jugadores iniciales se siembran desde `uruguayPlayers`;
+  - estados viejos sin `players` se migran sembrando los jugadores default;
+  - `createPlayer` crea jugadores locales con ids unicos y estadisticas default;
+  - `updatePlayer` actualiza campos editables preservando `id`;
+  - crear/editar jugadores no agrega automaticamente jugadores a planteles;
+  - delete de jugadores y UI de gestion de jugadores quedan diferidos;
+  - los eventos y snapshots historicos siguen referenciando `playerId`;
+  - editar un nombre puede cambiar como se ve un jugador viejo en reportes, porque snapshots de nombre quedan diferidos.
+- Stage 3B implementado:
+  - Home agrega la accion `Gestionar jugadores`;
+  - se agrega UI `Jugadores` para listar, crear y editar jugadores;
+  - el formulario valida nombre, posicion, zona habitual y mano dominante;
+  - crear/editar jugadores usa `createPlayer` y `updatePlayer`;
+  - nuevos jugadores quedan disponibles para seleccion manual en `Gestionar planteles`;
+  - delete de jugadores sigue diferido.
 - Guardar/reusar presets locales de convocados si el flujo real lo justifica.
 
 ## Requisitos funcionales
@@ -130,7 +164,9 @@ Hoy la app decide titulares de forma automatica desde el orden del roster, lo qu
 - El rival debe seguir siendo texto libre con fallback `Rival`.
 - El usuario debe elegir un `Plantel` / categoria antes de crear el partido.
 - Stage 1 debe crear `Mayores` con el roster actual de Uruguay.
-- `Sub 18` y `+40` quedan documentados pero no seleccionables hasta tener jugadores cargados, salvo que se implemente un empty state claro.
+- `Sub 18` queda documentado pero no seleccionable hasta tener jugadores cargados, salvo que se implemente un empty state claro.
+- `+40` existe como plantel default separado en `Gestionar planteles` y puede seleccionarse al crear partido.
+- Planteles creados por el usuario pueden seleccionarse al crear partido si tienen al menos 7 jugadores.
 - El usuario debe elegir titulares desde los jugadores del plantel seleccionado.
 - Stage 1 puede usar todos los jugadores del plantel como convocados para mantener el flujo seguro.
 - Debe haber al menos 7 convocados para crear el partido.
@@ -191,7 +227,9 @@ Reglas:
 - Los planteles referencian jugadores globales por `id`.
 - Un jugador puede pertenecer a multiples planteles en el futuro.
 - Stage 1 siembra `Mayores` con el roster real actual.
-- `Sub 18` y `+40` quedan diferidos hasta tener listas reales de jugadores.
+- `Sub 18` queda diferido hasta tener lista real de jugadores.
+- `+40` queda disponible como plantel default separado cuando exista lista real cargada.
+- `Mayores` y `+40` pueden compartir jugadores por `id`; no se duplican registros de jugador.
 
 ### Snapshot historico del partido
 
@@ -249,7 +287,28 @@ No cambiar:
   - accion `Nuevo plantel`;
   - accion `Editar`;
   - formulario con `Nombre del plantel` y multi-select de `Jugadores`.
-- Stage 2B no cambia la UI de creacion de partido: los planteles custom se integran en Stage 2C.
+- Refinamiento de `Planteles`:
+  - el modal usa titulo `Planteles`;
+  - cierre compacto `✕` en el encabezado;
+  - accion `Cerrar` al pie;
+  - `Cancelar` queda como accion de formulario para descartar creacion/edicion.
+- Stage 2C cambia la UI de creacion de partido para elegir cualquier plantel persistido.
+- Refinamiento de ubicacion:
+  - `Gestionar planteles` se accede desde la pantalla principal;
+  - `Partidos` ya no muestra la entrada de gestion de planteles;
+  - la gestion de planteles queda como accion general offline de la app.
+- Rediseño de pantalla principal:
+  - Home integra el logo de la asociacion desde `assets/association-logo.png`;
+  - Home usa identidad visual celeste, blanco y azul profundo;
+  - `Crear partido` queda como accion primaria y abre el flujo existente de setup;
+  - `Partidos` y `Gestionar planteles` quedan como acciones principales/secundarias claras;
+  - se muestran cards sutiles de contexto para partidos, planteles y proximos fixtures.
+- Stage 3B agrega una UI simple de jugadores:
+  - entrada `Gestionar jugadores` en Home;
+  - lista `Jugadores`;
+  - accion `Nuevo jugador`;
+  - accion `Editar`;
+  - formulario con `Nombre`, `Apellido`, `Número`, `Posición`, `Zona habitual` y `Mano dominante`.
 - La pantalla live no debe mostrar jugadores no convocados en banco.
 - El setup debe ser legible en telefono y tablet.
 
@@ -267,6 +326,12 @@ No cambiar:
 - Stage 2A agrega acciones persistidas:
   - `createTeamPool(name, playerIds)`;
   - `updateTeamPool(poolId, updates)`.
+- Stage 3A agrega acciones persistidas:
+  - `createPlayer(input)`;
+  - `updatePlayer(playerId, updates)`.
+- Stage 3B no agrega nuevas acciones de estado; reutiliza `createPlayer` y `updatePlayer`.
+- `players` debe persistir localmente y mergear jugadores default faltantes en migraciones.
+- Crear/editar jugadores no debe mutar `Match.availablePlayerIds`, eventos ni snapshots historicos.
 - `createTeamPool` debe rechazar nombres vacios y pools sin jugadores validos.
 - `updateTeamPool` debe preservar `id` y rechazar updates invalidos.
 - Editar un pool no debe modificar `availablePlayerIds` de partidos ya creados.
@@ -295,6 +360,10 @@ No cambiar:
 - Verificar acciones `createTeamPool` y `updateTeamPool`.
 - Verificar que reset demo conserva pools creados por el usuario y mantiene `Mayores`.
 - Verificar que editar un pool no cambia snapshots de partidos existentes.
+- Verificar que `Crear partido` permite elegir `+40`.
+- Verificar que `Crear partido` permite elegir un plantel creado por el usuario.
+- Verificar que la lista de titulares cambia al cambiar de plantel.
+- Verificar que no se puede crear un partido con un plantel de menos de 7 jugadores.
 - Verificar UI de gestion de planteles:
   - crear plantel;
   - editar plantel;
@@ -302,6 +371,23 @@ No cambiar:
   - validar sin jugadores;
   - cancelar sin guardar;
   - confirmar que match creation sigue igual.
+- Verificar Stage 3A de jugadores:
+  - seed inicial desde `uruguayPlayers`;
+  - migracion de estado viejo sin `players`;
+  - `createPlayer` genera id unico y defaults;
+  - `createPlayer` rechaza `firstName` vacio;
+  - `updatePlayer` preserva `id`;
+  - `updatePlayer` rechaza jugador inexistente;
+  - planteles siguen referenciando ids validos;
+  - partidos viejos siguen resolviendo nombres por `playerId`.
+- Verificar Stage 3B de jugadores:
+  - abrir `Gestionar jugadores`;
+  - validar formulario vacio;
+  - crear jugador;
+  - editar jugador;
+  - confirmar que el jugador nuevo aparece en `Gestionar planteles`;
+  - agregar jugador nuevo a un plantel;
+  - crear partido con ese plantel.
 
 ## Riesgos
 
@@ -315,7 +401,7 @@ No cambiar:
 ## Preguntas abiertas
 
 - Nombre final del campo: `availablePlayerIds`, `rosterPlayerIds` o `calledUpPlayerIds`?
-- Los planteles `Sub 18` y `+40` deben aparecer deshabilitados como empty state o ocultarse hasta tener jugadores?
+- Los planteles futuros sin roster real, como `Sub 18`, deben aparecer deshabilitados como empty state o ocultarse hasta tener jugadores?
 - En Stage 1, el orden de titulares debe ser orden de seleccion o orden del roster?
 - Debe existir una accion `Seleccionar todos` para convocados?
 - Cual es el minimo de convocados real esperado en practica: exactamente 7 o 7+?
@@ -350,7 +436,20 @@ Resumen por etapas:
 - [x] Demo/reset sigue funcionando.
 - [x] Partidos viejos siguen abriendo con fallback seguro.
 - [x] No se agregan restricciones por posicion habitual.
-- [x] No se inventan jugadores para `Sub 18` ni `+40`.
+- [x] No se inventan jugadores para `Sub 18`; `+40` usa lista real cargada.
+- [x] `Mayores` usa ids explicitos y no incluye automaticamente jugadores `plus40-*`.
+- [x] `+40` existe como plantel default separado en `Gestionar planteles`.
+- [x] Jugadores compartidos entre `Mayores` y `+40` se referencian por el mismo `id`, sin duplicados.
+- [x] Estados persistidos con `Mayores` contaminado se normalizan sin mutar snapshots de partidos.
+- [x] Modal `Planteles` tiene cierre claro y accion `Cancelar` separada del cierre.
+- [x] `players` queda como estado local persistido.
+- [x] `createPlayer` crea jugadores locales con ids unicos y defaults.
+- [x] `updatePlayer` edita jugadores preservando `id`.
+- [x] Home permite abrir `Gestionar jugadores`.
+- [x] UI de jugadores permite crear y editar jugadores.
+- [x] Jugadores nuevos aparecen en seleccion de planteles.
+- [x] Player delete queda diferido.
+- [x] Snapshots historicos de nombres de jugador quedan diferidos.
 - [x] No se agregan backend/auth/cloud.
 - [x] `landingLocation` no cambia.
 - [x] `npm test` pasa.
@@ -365,6 +464,11 @@ Resumen por etapas:
 - [x] `updateTeamPool` no muta partidos existentes.
 - [x] Delete de pools queda diferido.
 - [x] UI de gestion de planteles permite crear/editar planteles con jugadores existentes.
-- [x] Match creation todavia no usa planteles custom; queda para Stage 2C.
+- [x] `Gestionar planteles` esta en la pantalla principal, no dentro de `Partidos`.
+- [x] Home integra logo de asociacion e identidad visual de Uruguay.
+- [x] `Crear partido` desde Home abre el flujo existente de setup.
+- [x] Match creation usa planteles persistidos, incluido `+40`.
+- [x] Match creation bloquea planteles con menos de 7 jugadores.
+- [x] Match creation guarda snapshot historico de `availablePlayerIds`.
 - [x] Delete de pools sigue diferido.
 - [x] Player CRUD sigue diferido.

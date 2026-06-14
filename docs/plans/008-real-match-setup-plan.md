@@ -2,7 +2,7 @@
 
 Spec relacionada: `docs/specs/008-real-match-setup.md`
 
-Estado: Stage 1 implemented
+Estado: Stage 2C implemented
 
 ## Objetivo
 
@@ -54,8 +54,9 @@ type TeamPool = {
 ### Decision Stage 1
 
 - Crear solo `Mayores` con el roster real actual.
-- No crear jugadores ficticios para `Sub 18` ni `+40`.
-- Documentar `Sub 18` y `+40` como categorias previstas para cuando existan listas reales.
+- No crear jugadores ficticios para `Sub 18`.
+- Sembrar `+40` solo con lista real cargada.
+- Documentar `Sub 18` como categoria prevista para cuando exista lista real.
 - Evitar pools vacios seleccionables en Stage 1 para no crear una UX confusa.
 - Los planteles referencian jugadores globales por `id`.
 - El match guarda snapshot historico con:
@@ -88,8 +89,8 @@ Estado: Implemented.
 ### Resultado implementado
 
 - `TeamPool` agregado al dominio.
-- `Mayores` sembrado con todos los jugadores actuales de Uruguay.
-- No se agregaron `Sub 18` ni `+40` como pools vacios para evitar UX confusa.
+- `Mayores` sembrado inicialmente con los jugadores mayores de Uruguay.
+- No se agregaron `Sub 18` ni otros pools vacios para evitar UX confusa.
 - `Match` ahora soporta `teamPoolId`, `teamPoolName` y `availablePlayerIds`.
 - `MatchesScreen` reemplaza el modal simple por setup con rival, plantel, 7 titulares y banco derivado.
 - `createMatch` valida 7 titulares y snapshot de disponibles.
@@ -204,7 +205,7 @@ Estado: Implemented.
 - UI de gestion de planteles.
 - Delete de planteles.
 - Creacion/edicion de jugadores.
-- Roster real de `Sub 18` y `+40`.
+- Roster real de `Sub 18`.
 
 ## Stage 2B - UI de gestion de planteles
 
@@ -212,7 +213,7 @@ Estado: Implemented.
 
 ### Cambios implementados
 
-1. Se agrego una entrada secundaria `Gestionar planteles` en `MatchesScreen`.
+1. Se agrego una entrada secundaria `Gestionar planteles` como accion de nivel app.
 2. Se agrego modal de `Planteles` con lista de pools existentes.
 3. Cada plantel muestra nombre y cantidad de jugadores.
 4. Se puede crear un nuevo plantel con `Nombre del plantel` y multi-select de jugadores globales.
@@ -224,23 +225,50 @@ Estado: Implemented.
 7. Se usan las acciones Stage 2A:
    - `createTeamPool`;
    - `updateTeamPool`.
+8. `Mayores` queda como pool default con ids explicitos del roster mayor original.
+9. `+40` queda como pool default separado con ids explicitos y visible en `Gestionar planteles`.
+10. `errazquin` y `fede` se comparten entre `Mayores` y `+40` por el mismo `id`, sin duplicar jugadores.
+11. La migracion agrega el pool default `+40` si falta y no sobrescribe planteles existentes.
+12. Refinamiento: la entrada `Gestionar planteles` se movio a la pantalla principal y se elimino de `Partidos`.
+13. Refinamiento visual: Home integra logo de asociacion, identidad celeste/blanco/azul profundo y acciones principales reorganizadas.
+14. Refinamiento: el modal `Planteles` tiene cierre `✕` en el encabezado, `Cerrar` al pie y `Cancelar` queda como accion de formulario.
+15. Refinamiento: defaults `Mayores` y `+40` se normalizan contra sus rosters fijos para limpiar estados persistidos viejos.
 
 ### Diferido
 
 - Delete de planteles.
 - Creacion/edicion de jugadores.
 - Fotos de jugadores.
-- Integrar planteles custom en creacion de partido.
 
 ## Stage 2C - Usar planteles custom en creacion de partido
 
+Estado: Implemented.
+
 ### Cambios propuestos
 
-1. Permitir elegir cualquier plantel local al crear partido.
+1. Permitir elegir cualquier plantel local, incluido `+40`, al crear partido.
 2. Mantener `Mayores` como default.
 3. Mostrar empty states si un plantel queda con pocos jugadores.
 4. Crear partido usando el pool elegido como `availablePlayerIds`.
 5. Mantener snapshot historico del partido.
+
+### Cambios implementados
+
+1. `Crear partido` lista los planteles persistidos del store.
+2. `Mayores`, `+40` y planteles creados por el usuario pueden seleccionarse.
+3. Al cambiar de plantel se limpian titulares para evitar mezclar jugadores de otro pool.
+4. La seleccion de titulares muestra solo jugadores del plantel elegido.
+5. El partido se crea con `teamPoolId`, `teamPoolName` y `availablePlayerIds` del pool seleccionado.
+6. Planteles con menos de 7 jugadores muestran `El plantel necesita al menos 7 jugadores.` y no permiten crear.
+7. Si faltan titulares, se muestra `Elegí 7 titulares para iniciar el partido.`.
+8. Editar un plantel despues de crear un partido no cambia el snapshot historico del partido.
+9. `Crear partido` desde Home navega a `Partidos` y abre el modal de setup existente.
+
+### Diferido
+
+- Delete de planteles.
+- Creacion/edicion de jugadores.
+- Fotos de jugadores.
 
 ## Stage 2 - Setup visual de alineacion inicial
 
@@ -265,6 +293,56 @@ Estado: Implemented.
 - No permite duplicar el mismo jugador en dos slots.
 - Slots mantienen longitud 7.
 - Jugadores con distintas zonas habituales pueden ir a cualquier slot.
+
+## Stage 3A - Estado local de jugadores
+
+Estado: Implemented.
+
+### Cambios implementados
+
+1. `players` queda como fuente local persistida en Zustand.
+2. Los jugadores iniciales se siembran desde `uruguayPlayers`.
+3. La migracion mergea jugadores default faltantes sin duplicar ids existentes.
+4. Se agrega `createPlayer(input)` al store.
+5. `createPlayer` valida campos requeridos, genera id unico estable, autoasigna numero si falta y usa stats default `0`.
+6. Se agrega `updatePlayer(playerId, updates)` al store.
+7. `updatePlayer` preserva `id`, valida campos y devuelve `true`/`false`.
+8. Crear/editar jugadores no agrega automaticamente jugadores a planteles.
+9. `resetDemoData` preserva jugadores locales y restaura partidos/fixtures demo.
+10. Partidos, eventos y `availablePlayerIds` existentes no se mutan.
+
+### Diferido
+
+- Delete de jugadores.
+- Snapshots historicos de nombres de jugador.
+- Alta automatica de jugadores en planteles.
+
+## Stage 3B - UI de gestion de jugadores
+
+Estado: Implemented.
+
+### Cambios implementados
+
+1. Home agrega la accion `Gestionar jugadores`.
+2. Se agrega `PlayerManagerModal` como UI local/offline de jugadores.
+3. El modal lista jugadores con numero, nombre, posicion, zona y mano.
+4. Se puede crear un `Nuevo jugador`.
+5. Se puede editar un jugador existente preservando `id`.
+6. El formulario valida:
+   - `El nombre es obligatorio.`;
+   - `Seleccioná una posición.`;
+   - `Seleccioná una zona habitual.`;
+   - `Seleccioná mano dominante.`;
+   - `No se pudo guardar el jugador.` cuando el store rechaza.
+7. Crear/editar usa `createPlayer` y `updatePlayer`.
+8. Nuevos jugadores quedan disponibles en `Gestionar planteles` porque ese modal lee `players` del store.
+9. No se agrega automaticamente ningun jugador nuevo a planteles existentes.
+
+### Diferido
+
+- Delete de jugadores.
+- Snapshots historicos de nombres de jugador.
+- Alta automatica de jugadores en planteles.
 
 ## Stage 3 - Presets locales de convocados
 
