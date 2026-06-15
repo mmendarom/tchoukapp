@@ -1,5 +1,5 @@
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, Animated, Modal, Pressable, SafeAreaView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 
 import { ActionButton } from '../components/ActionButton';
@@ -121,13 +121,19 @@ export function LiveMatchScreen({ navigation, route }: Props) {
 
   const currentLineup = match ? getCurrentLineup(match, 'uruguay') : undefined;
   const lineupSlots = useMemo(() => createLineupSlots(currentLineup, players), [currentLineup, players]);
-  const availablePlayers = useMemo(() => resolveMatchAvailablePlayers(match, players), [match, players]);
+  const availablePlayers = useMemo(() => resolveMatchAvailablePlayers(match, players), [match?.availablePlayerIds, players]);
   const onCourtPlayers = useMemo(
     () => availablePlayers.filter((player) => currentLineup?.playerIds.includes(player.id)),
     [availablePlayers, currentLineup?.playerIds],
   );
-  const benchPlayers = useMemo(() => getBenchPlayers(players, currentLineup, match), [currentLineup, match, players]);
-  const selectedOnCourtPlayer = onCourtPlayers.find((player) => player.id === selectedPlayerId);
+  const benchPlayers = useMemo(
+    () => getBenchPlayers(players, currentLineup, { availablePlayerIds: match?.availablePlayerIds }),
+    [currentLineup, match?.availablePlayerIds, players],
+  );
+  const selectedOnCourtPlayer = useMemo(
+    () => onCourtPlayers.find((player) => player.id === selectedPlayerId),
+    [onCourtPlayers, selectedPlayerId],
+  );
 
   useEffect(() => {
     if (selectedPlayerId && !currentLineup?.playerIds.includes(selectedPlayerId)) {
@@ -207,18 +213,19 @@ export function LiveMatchScreen({ navigation, route }: Props) {
     );
   }
 
-  const score = calculateTotalScore(match.events);
+  const score = useMemo(() => calculateTotalScore(match.events), [match.events]);
   const canRecord = match.status === 'live' && currentPeriodState?.status === 'live';
-  const lastFiveEvents = match.events.slice(0, 5);
+  const lastFiveEvents = useMemo(() => match.events.slice(0, 5), [match.events]);
   const opponentName = normalizeOpponentName(match.opponent);
   const timerText = currentPeriodState?.remainingSeconds === 0 ? 'Tiempo cumplido' : formatTimer(currentPeriodState?.remainingSeconds ?? 0);
   const shouldShowLiveMaps = match.status === 'live';
+  const toggleLiveMapsExpanded = useCallback(() => setLiveMapsExpanded((current) => !current), []);
   const liveMapPanel = shouldShowLiveMaps ? (
     <LiveMapPanel
       collapsible={!isTabletLandscape}
       events={match.events}
       expanded={isTabletLandscape || liveMapsExpanded}
-      onToggleExpanded={() => setLiveMapsExpanded((current) => !current)}
+      onToggleExpanded={toggleLiveMapsExpanded}
       periodNumber={match.currentPeriod}
     />
   ) : undefined;

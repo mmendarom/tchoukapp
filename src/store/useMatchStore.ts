@@ -32,11 +32,13 @@ type TrackableErrorType = 'falta' | 'punto_en_contra';
 export const STORE_DATA_VERSION = 8;
 
 type MatchState = {
+  hasHydrated: boolean;
   players: Player[];
   teamPools: TeamPool[];
   matches: Match[];
   fixtures: Fixture[];
   activeMatchId?: string;
+  setHasHydrated: (hasHydrated: boolean) => void;
   createPlayer: (input: CreatePlayerInput) => string;
   updatePlayer: (playerId: string, updates: UpdatePlayerInput) => boolean;
   restoreBackupData: (backup: AppBackupData) => boolean;
@@ -169,22 +171,28 @@ const createDraftMatch = (input: {
   };
 };
 
-const normalizeMatch = (match: Match): Match => ({
-  ...match,
-  opponent: normalizeOpponentName(match.opponent),
-  availablePlayerIds: match.availablePlayerIds ? uniquePlayerIds(match.availablePlayerIds) : undefined,
-  status: match.status === ('scheduled' as Match['status']) ? 'draft' : match.status,
-  currentPeriod: match.currentPeriod ?? match.clock.period ?? 1,
-  periods: (match.periods ?? createInitialPeriods()).map((period) => ({
-    ...period,
-    timerStatus: period.timerStatus ?? (period.timerRunning ? 'running' : period.status === 'live' ? 'paused' : 'stopped'),
-    totalPausedMs: period.totalPausedMs ?? 0,
-  })),
-  events: match.events.map((event) => ({
-    ...event,
-    periodNumber: event.periodNumber ?? event.clock.period,
-  })),
-});
+const normalizeMatch = (match: Match): Match => {
+  const eventsNeedNormalization = match.events.some((event) => !event.periodNumber);
+
+  return {
+    ...match,
+    opponent: normalizeOpponentName(match.opponent),
+    availablePlayerIds: match.availablePlayerIds ? uniquePlayerIds(match.availablePlayerIds) : undefined,
+    status: match.status === ('scheduled' as Match['status']) ? 'draft' : match.status,
+    currentPeriod: match.currentPeriod ?? match.clock.period ?? 1,
+    periods: (match.periods ?? createInitialPeriods()).map((period) => ({
+      ...period,
+      timerStatus: period.timerStatus ?? (period.timerRunning ? 'running' : period.status === 'live' ? 'paused' : 'stopped'),
+      totalPausedMs: period.totalPausedMs ?? 0,
+    })),
+    events: eventsNeedNormalization
+      ? match.events.map((event) => ({
+        ...event,
+        periodNumber: event.periodNumber ?? event.clock.period,
+      }))
+      : match.events,
+  };
+};
 
 const getCurrentPeriod = (match: Match) =>
   match.periods.find((period) => period.number === match.currentPeriod);
@@ -233,11 +241,13 @@ const getErrorType = (type: LiveEventAction): ErrorType => {
 export const useMatchStore = create<MatchState>()(
   persist(
     (set, get) => ({
+      hasHydrated: false,
       players: uruguayPlayers,
       teamPools: ensureDefaultTeamPool(teamPools, uruguayPlayers, teamPools),
       matches: initialMatches.map(normalizeMatch),
       fixtures: upcomingFixtures,
       activeMatchId: undefined,
+      setHasHydrated: (hasHydrated) => set({ hasHydrated }),
       createPlayer: (input) => {
         const player = buildPlayer(input, get().players);
 
@@ -570,16 +580,20 @@ export const useMatchStore = create<MatchState>()(
 
             return {
               ...normalized,
-              periods: normalized.periods.map((period) =>
-                period.number === normalized.currentPeriod && period.status === 'live' && period.timerStatus === 'running'
-                  ? {
-                      ...period,
-                      remainingSeconds: getPeriodRemainingSeconds(period, nowMs),
-                      timerRunning: getPeriodRemainingSeconds(period, nowMs) > 0,
-                      timerStatus: getPeriodRemainingSeconds(period, nowMs) > 0 ? 'running' : 'stopped',
-                    }
-                  : period,
-              ),
+              periods: normalized.periods.map((period) => {
+                if (period.number !== normalized.currentPeriod || period.status !== 'live' || period.timerStatus !== 'running') {
+                  return period;
+                }
+
+                const remainingSeconds = getPeriodRemainingSeconds(period, nowMs);
+
+                return {
+                  ...period,
+                  remainingSeconds,
+                  timerRunning: remainingSeconds > 0,
+                  timerStatus: remainingSeconds > 0 ? 'running' : 'stopped',
+                };
+              }),
             };
           }),
         }));
@@ -1045,6 +1059,9 @@ export const useMatchStore = create<MatchState>()(
     {
       name: STORAGE_KEYS.appState,
       version: STORE_DATA_VERSION,
+      onRehydrateStorage: () => (state) => {
+        state?.setHasHydrated(true);
+      },
       migrate: (persistedState) => {
         const state = persistedState as MatchState;
         const players = mergeDefaultPlayers(state.players);

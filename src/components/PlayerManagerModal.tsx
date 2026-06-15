@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Modal, Pressable, SafeAreaView, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { CreatePlayerInput } from '../domain/players';
@@ -20,8 +20,14 @@ export function PlayerManagerModal({ visible, onClose }: PlayerManagerModalProps
   const updatePlayer = useMatchStore((state) => state.updatePlayer);
   const [formVisible, setFormVisible] = useState(false);
   const [editingPlayerId, setEditingPlayerId] = useState<string | undefined>();
-  const sortedPlayers = [...players].sort((a, b) => a.number - b.number || a.firstName.localeCompare(b.firstName));
-  const editingPlayer = editingPlayerId ? players.find((player) => player.id === editingPlayerId) : undefined;
+  const sortedPlayers = useMemo(
+    () => [...players].sort((a, b) => a.number - b.number || a.firstName.localeCompare(b.firstName)),
+    [players],
+  );
+  const editingPlayer = useMemo(
+    () => (editingPlayerId ? players.find((player) => player.id === editingPlayerId) : undefined),
+    [editingPlayerId, players],
+  );
   const resetForm = () => {
     setFormVisible(false);
     setEditingPlayerId(undefined);

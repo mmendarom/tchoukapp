@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { memo, useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 
 import {
@@ -33,7 +33,7 @@ const tabs: Array<{ id: LiveMapTab; label: string; markerVariant?: MarkerVariant
   { id: 'rivalDefenses', label: 'Defensas rivales', markerVariant: 'opponentDefense' },
 ];
 
-export function LiveMapPanel({
+export const LiveMapPanel = memo(function LiveMapPanel({
   collapsible = false,
   events,
   expanded = true,
@@ -43,18 +43,28 @@ export function LiveMapPanel({
   const { height, width } = useWindowDimensions();
   const [selectedTab, setSelectedTab] = useState<LiveMapTab>('combined');
   const isTabletLandscape = width >= 900 && width > height;
-  const selectedTabConfig = tabs.find((tab) => tab.id === selectedTab) ?? tabs[0];
-  const selectedData = getLiveMapLocationData(events, periodNumber, selectedTab);
-  const combinedMarkers = selectedTab === 'combined'
-    ? getCombinedLiveMapMarkers(events, periodNumber).map((marker) => ({
-      location: marker.location,
-      markerVariant: markerVariantByKind[marker.kind],
-    }))
-    : undefined;
   const mapHeight = isTabletLandscape ? 240 : width >= 768 ? 260 : 220;
-  const ourPointsCount = getLiveMapLocationCount(events, periodNumber, 'ourPoints');
-  const rivalPointsCount = getLiveMapLocationCount(events, periodNumber, 'rivalPoints');
-  const rivalDefensesCount = getLiveMapLocationCount(events, periodNumber, 'rivalDefenses');
+  const selectedTabConfig = useMemo(() => tabs.find((tab) => tab.id === selectedTab) ?? tabs[0], [selectedTab]);
+  const selectedData = useMemo(() => getLiveMapLocationData(events, periodNumber, selectedTab), [events, periodNumber, selectedTab]);
+  const combinedMarkers = useMemo(
+    () =>
+      selectedTab === 'combined'
+        ? getCombinedLiveMapMarkers(events, periodNumber).map((marker) => ({
+          location: marker.location,
+          markerVariant: markerVariantByKind[marker.kind],
+        }))
+        : undefined,
+    [events, periodNumber, selectedTab],
+  );
+  const locationCounts = useMemo(
+    () => ({
+      combined: getLiveMapLocationCount(events, periodNumber, 'combined'),
+      ourPoints: getLiveMapLocationCount(events, periodNumber, 'ourPoints'),
+      rivalPoints: getLiveMapLocationCount(events, periodNumber, 'rivalPoints'),
+      rivalDefenses: getLiveMapLocationCount(events, periodNumber, 'rivalDefenses'),
+    }),
+    [events, periodNumber],
+  );
 
   return (
     <View style={styles.panel}>
@@ -82,7 +92,7 @@ export function LiveMapPanel({
 
           <View style={styles.tabs}>
             {tabs.map((tab) => {
-              const count = getLiveMapLocationCount(events, periodNumber, tab.id);
+              const count = locationCounts[tab.id];
               const selected = tab.id === selectedTab;
 
               return (
@@ -129,7 +139,7 @@ export function LiveMapPanel({
             <Text style={styles.meta}>Sin ubicaciones registradas.</Text>
           ) : selectedTab === 'combined' ? (
             <Text style={styles.meta}>
-              {ourPointsCount} puntos nuestros / {rivalPointsCount} puntos rivales / {rivalDefensesCount} defensas rivales.
+              {locationCounts.ourPoints} puntos nuestros / {locationCounts.rivalPoints} puntos rivales / {locationCounts.rivalDefenses} defensas rivales.
             </Text>
           ) : (
             <Text style={styles.meta}>{selectedData.locations.length} ubicaciones registradas.</Text>
@@ -138,7 +148,7 @@ export function LiveMapPanel({
       )}
     </View>
   );
-}
+});
 
 const styles = StyleSheet.create({
   panel: {

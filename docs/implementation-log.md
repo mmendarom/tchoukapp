@@ -1,5 +1,44 @@
 # Implementation Log
 
+## 2026-06-15 - Performance and responsiveness hardening
+
+Se hizo una pasada enfocada de performance/responsividad sin cambiar reglas de score, modelos de eventos, tracking, mapas, backups, reportes, sustituciones ni timer.
+
+Hallazgos:
+
+- La app montaba la navegacion antes de que Zustand terminara de hidratar AsyncStorage, permitiendo render/interaccion prematura.
+- `normalizeMatch` recreaba el array de `events` en cada normalizacion aunque los eventos ya estuvieran normalizados. En vivo, cada tick del timer podia invalidar memoizaciones de score/mapas y disparar recalculos innecesarios.
+- `tickTimer` calculaba el tiempo restante varias veces para el mismo periodo.
+- `LiveMapPanel` recalculaba datasets y conteos de mapas por cada render.
+- `CourtLocationMap` recalculaba densidad de marcadores durante render.
+- `MatchesScreen`, `PlayerManagerModal` y `TeamPoolManagerModal` hacian derivaciones de listas dentro del render.
+- Acciones de backup/import, crear partido y guardar jugador/plantel necesitaban feedback/disabled mas claro contra doble toque.
+
+Cambios:
+
+- Se agrego `hasHydrated` / `setHasHydrated` en el store persistido y `App.tsx` muestra `Cargando datos...` hasta terminar hidratacion.
+- `normalizeMatch` conserva la referencia de `events` cuando no hay eventos legacy que normalizar.
+- `tickTimer` calcula `remainingSeconds` una sola vez por periodo activo.
+- `LiveMapPanel` usa `React.memo` y `useMemo` para datasets, conteos y marcadores combinados.
+- `CourtLocationMap` usa `React.memo` y memoiza marcadores/densidades.
+- `LiveMatchScreen` memoiza score, ultimas acciones, jugadores disponibles/banco y usa callback estable para expandir mapas.
+- `MatchesScreen` memoiza partidos visibles, plantel seleccionado, mapa de jugadores, titulares y banco.
+- `PlayerManagerModal` memoiza jugadores ordenados y jugador en edicion.
+- `TeamPoolManagerModal` memoiza el set de jugadores seleccionados.
+- `Exportar backup`, `Importar backup`, `Restaurar backup`, `Crear partido`, `Guardar jugador` y `Guardar plantel` muestran estados como `Generando...`, `Seleccionando...`, `Restaurando...`, `Creando...` o `Guardando...` y bloquean doble toque.
+
+QA manual recomendado:
+
+- Abrir la app desde cold start y confirmar que `Cargando datos...` aparece solo mientras carga.
+- Abrir un partido con muchos eventos, iniciar tiempo y observar que timer/acciones siguen fluidos.
+- Registrar puntos, defensas y errores rapidamente.
+- Cambiar pestañas de mapas en vivo y confirmar que no hay congelamientos perceptibles.
+- Abrir `Gestionar jugadores` con muchos jugadores y verificar scroll/edicion.
+- Abrir `Gestionar planteles` y verificar seleccion/guardado.
+- Exportar backup e importar backup y confirmar feedback/disabled.
+- Exportar PDF y confirmar que el feedback existente sigue funcionando.
+- Probar telefono real y tablet landscape.
+
 ## 2026-06-15 - Home action hierarchy refinement
 
 Se reorganizo Home en tres secciones funcionales sin cambiar comportamiento de negocio, navegacion ni logica de backup.

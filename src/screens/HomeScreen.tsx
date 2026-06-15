@@ -21,7 +21,7 @@ export function HomeScreen({ navigation }: Props) {
   const [poolManagerVisible, setPoolManagerVisible] = useState(false);
   const [playerManagerVisible, setPlayerManagerVisible] = useState(false);
   const [backupStatus, setBackupStatus] = useState<'idle' | 'loading' | 'success' | 'unavailable' | 'error'>('idle');
-  const [importStatus, setImportStatus] = useState<'idle' | 'loading' | 'valid' | 'success' | 'error'>('idle');
+  const [importStatus, setImportStatus] = useState<'idle' | 'loading' | 'valid' | 'restoring' | 'success' | 'error'>('idle');
   const [importError, setImportError] = useState('');
   const [pendingBackup, setPendingBackup] = useState<AppBackupData | undefined>();
   const [pendingBackupWarnings, setPendingBackupWarnings] = useState<string[]>([]);
@@ -119,6 +119,8 @@ export function HomeScreen({ navigation }: Props) {
       return;
     }
 
+    setImportStatus('restoring');
+
     const restored = restoreBackupData(pendingBackup);
 
     if (!restored) {
@@ -135,6 +137,8 @@ export function HomeScreen({ navigation }: Props) {
   const importStatusLabel =
     importStatus === 'loading'
       ? 'Seleccionando archivo...'
+      : importStatus === 'restoring'
+        ? 'Restaurando backup...'
       : importStatus === 'success'
         ? 'Backup restaurado correctamente.'
         : importStatus === 'error'
@@ -218,13 +222,15 @@ export function HomeScreen({ navigation }: Props) {
         <HomeActionSection title="Datos">
           <View style={styles.actionRow}>
             <HomeActionCard
-              label="Exportar backup"
+              disabled={backupStatus === 'loading'}
+              label={backupStatus === 'loading' ? 'Generando...' : 'Exportar backup'}
               description="Guardar jugadores, planteles y partidos"
               onPress={handleExportBackup}
               tone="data"
             />
             <HomeActionCard
-              label="Importar backup"
+              disabled={importStatus === 'loading' || importStatus === 'restoring'}
+              label={importStatus === 'loading' ? 'Seleccionando...' : importStatus === 'restoring' ? 'Restaurando...' : 'Importar backup'}
               description="Seleccionar archivo JSON"
               onPress={handleImportBackup}
               tone="caution"
@@ -262,7 +268,11 @@ export function HomeScreen({ navigation }: Props) {
               ))}
               <View style={styles.restoreActions}>
                 <ActionButton label="Cancelar" onPress={handleCancelRestore} variant="secondary" />
-                <ActionButton label="Restaurar backup" onPress={handleConfirmRestore} />
+                <ActionButton
+                  disabled={importStatus === 'restoring'}
+                  label={importStatus === 'restoring' ? 'Restaurando...' : 'Restaurar backup'}
+                  onPress={handleConfirmRestore}
+                />
               </View>
             </ScrollView>
           </View>
@@ -277,20 +287,23 @@ export function HomeScreen({ navigation }: Props) {
 type HomeActionCardProps = {
   label: string;
   description: string;
+  disabled?: boolean;
   onPress: () => void;
   tone: 'primary' | 'secondary' | 'management' | 'quiet' | 'live' | 'data' | 'caution';
 };
 
-function HomeActionCard({ label, description, onPress, tone }: HomeActionCardProps) {
+function HomeActionCard({ label, description, disabled = false, onPress, tone }: HomeActionCardProps) {
   const darkText = tone === 'quiet' || tone === 'management' || tone === 'data' || tone === 'caution';
 
   return (
     <Pressable
       accessibilityRole="button"
+      disabled={disabled}
       onPress={onPress}
       style={({ pressed }) => [
         styles.actionCard,
         styles[`${tone}Action`],
+        disabled && styles.disabledAction,
         pressed && styles.pressed,
       ]}
     >
@@ -450,6 +463,9 @@ const styles = StyleSheet.create({
   cautionAction: {
     backgroundColor: '#fff7ed',
     borderColor: '#f5b46b',
+  },
+  disabledAction: {
+    opacity: 0.58,
   },
   actionLabel: {
     color: '#ffffff',

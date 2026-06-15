@@ -1,3 +1,4 @@
+import { memo, useMemo } from 'react';
 import { StyleProp, StyleSheet, useWindowDimensions, View, ViewStyle } from 'react-native';
 
 import { CourtLocation } from '../domain/types';
@@ -21,23 +22,33 @@ type CourtLocationMapProps = {
 const getDensity = (location: CourtLocation, locations: CourtLocation[]) =>
   locations.filter((item) => Math.abs(item.x - location.x) <= 0.07 && Math.abs(item.y - location.y) <= 0.07).length;
 
-export function CourtLocationMap({ height, locations = [], markerVariant = 'uruguay', markers, style }: CourtLocationMapProps) {
+export const CourtLocationMap = memo(function CourtLocationMap({ height, locations = [], markerVariant = 'uruguay', markers, style }: CourtLocationMapProps) {
   const { height: windowHeight, width: windowWidth } = useWindowDimensions();
   const isTablet = windowWidth >= 768;
   const isLandscape = windowWidth > windowHeight;
   const mapHeight = height ?? (isTablet ? (isLandscape ? 380 : 340) : isLandscape ? 250 : 280);
-  const mapMarkers = markers ?? locations.map((location) => ({ location, markerVariant }));
-  const densityLocations = mapMarkers.map((marker) => marker.location);
+  const mapMarkers = useMemo(() => markers ?? locations.map((location) => ({ location, markerVariant })), [locations, markerVariant, markers]);
+  const renderedMarkers = useMemo(() => {
+    const densityLocations = mapMarkers.map((marker) => marker.location);
+
+    return mapMarkers.map((marker, index) => {
+      const density = getDensity(marker.location, densityLocations);
+      const size = Math.min(12 + density * 3, 24);
+
+      return {
+        ...marker,
+        key: `${marker.markerVariant}-${marker.location.x}-${marker.location.y}-${index}`,
+        opacity: Math.min(0.5 + density * 0.12, 0.95),
+        size,
+      };
+    });
+  }, [mapMarkers]);
 
   return (
     <CourtField style={[styles.court, { height: mapHeight }, style]}>
-      {mapMarkers.map((marker, index) => {
-        const density = getDensity(marker.location, densityLocations);
-        const size = Math.min(12 + density * 3, 24);
-
-        return (
+      {renderedMarkers.map((marker) => (
           <View
-            key={`${marker.markerVariant}-${marker.location.x}-${marker.location.y}-${index}`}
+            key={marker.key}
             style={[
               styles.dot,
               marker.markerVariant === 'opponentDefense'
@@ -46,22 +57,21 @@ export function CourtLocationMap({ height, locations = [], markerVariant = 'urug
                   ? styles.uruguayDot
                   : styles.opponentDot,
               {
-                borderRadius: size / 2,
-                height: size,
+                borderRadius: marker.size / 2,
+                height: marker.size,
                 left: `${marker.location.x * 100}%`,
-                marginLeft: -size / 2,
-                marginTop: -size / 2,
-                opacity: Math.min(0.5 + density * 0.12, 0.95),
+                marginLeft: -marker.size / 2,
+                marginTop: -marker.size / 2,
+                opacity: marker.opacity,
                 top: `${marker.location.y * 100}%`,
-                width: size,
+                width: marker.size,
               },
             ]}
           />
-        );
-      })}
+      ))}
     </CourtField>
   );
-}
+});
 
 const styles = StyleSheet.create({
   court: {

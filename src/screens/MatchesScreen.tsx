@@ -1,5 +1,5 @@
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Modal, Pressable, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { ActionButton } from '../components/ActionButton';
@@ -19,19 +19,28 @@ export function MatchesScreen({ navigation, route }: Props) {
   const [opponentInput, setOpponentInput] = useState('');
   const [selectedTeamPoolId, setSelectedTeamPoolId] = useState('mayores');
   const [starterIds, setStarterIds] = useState<string[]>([]);
+  const [isCreatingMatch, setIsCreatingMatch] = useState(false);
   const players = useMatchStore((state) => state.players);
   const teamPools = useMatchStore((state) => state.teamPools);
   const matches = useMatchStore((state) => state.matches);
   const startMatch = useMatchStore((state) => state.startMatch);
   const createMatch = useMatchStore((state) => state.createMatch);
-  const visibleMatches = matches.filter((match) => match.status !== 'cancelled');
-  const selectedTeamPool = teamPools.find((pool) => pool.id === selectedTeamPoolId) ?? teamPools.find((pool) => pool.id === 'mayores') ?? teamPools[0];
+  const visibleMatches = useMemo(() => matches.filter((match) => match.status !== 'cancelled'), [matches]);
+  const selectedTeamPool = useMemo(
+    () => teamPools.find((pool) => pool.id === selectedTeamPoolId) ?? teamPools.find((pool) => pool.id === 'mayores') ?? teamPools[0],
+    [selectedTeamPoolId, teamPools],
+  );
   const poolPlayerIds = selectedTeamPool?.playerIds ?? [];
-  const playersById = new Map(players.map((player) => [player.id, player]));
-  const poolPlayers = poolPlayerIds
-    .map((playerId) => playersById.get(playerId))
-    .filter((player): player is typeof players[number] => Boolean(player));
-  const benchPlayers = poolPlayers.filter((player) => !starterIds.includes(player.id));
+  const playersById = useMemo(() => new Map(players.map((player) => [player.id, player])), [players]);
+  const poolPlayers = useMemo(
+    () =>
+      poolPlayerIds
+        .map((playerId) => playersById.get(playerId))
+        .filter((player): player is typeof players[number] => Boolean(player)),
+    [playersById, poolPlayerIds],
+  );
+  const starterIdSet = useMemo(() => new Set(starterIds), [starterIds]);
+  const benchPlayers = useMemo(() => poolPlayers.filter((player) => !starterIdSet.has(player.id)), [poolPlayers, starterIdSet]);
   const canCreateMatch = starterIds.length === 7 && poolPlayers.length >= 7;
   const createMatchError = poolPlayers.length < 7
     ? 'El plantel necesita al menos 7 jugadores.'
@@ -53,8 +62,15 @@ export function MatchesScreen({ navigation, route }: Props) {
     setOpponentInput('');
     setSelectedTeamPoolId(teamPools.find((pool) => pool.id === 'mayores')?.id ?? teamPools[0]?.id ?? 'mayores');
     setStarterIds([]);
+    setIsCreatingMatch(false);
   };
   const confirmCreateMatch = () => {
+    if (isCreatingMatch || !canCreateMatch) {
+      return;
+    }
+
+    setIsCreatingMatch(true);
+
     const matchId = createMatch({
       opponent: opponentInput,
       teamPoolId: selectedTeamPool?.id,
@@ -64,6 +80,7 @@ export function MatchesScreen({ navigation, route }: Props) {
     });
 
     if (!matchId) {
+      setIsCreatingMatch(false);
       return;
     }
 
@@ -195,11 +212,15 @@ export function MatchesScreen({ navigation, route }: Props) {
               <View style={styles.modalActions}>
                 <ActionButton label="Cancelar" onPress={closeCreateModal} variant="secondary" />
                 <Pressable
-                  disabled={!canCreateMatch}
+                  disabled={!canCreateMatch || isCreatingMatch}
                   onPress={confirmCreateMatch}
-                  style={({ pressed }) => [styles.createButton, !canCreateMatch && styles.createButtonDisabled, pressed && styles.pressed]}
+                  style={({ pressed }) => [
+                    styles.createButton,
+                    (!canCreateMatch || isCreatingMatch) && styles.createButtonDisabled,
+                    pressed && styles.pressed,
+                  ]}
                 >
-                  <Text style={styles.createButtonText}>Crear partido</Text>
+                  <Text style={styles.createButtonText}>{isCreatingMatch ? 'Creando...' : 'Crear partido'}</Text>
                 </Pressable>
               </View>
             </View>

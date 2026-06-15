@@ -28,6 +28,7 @@ export function PlayerForm({ title, initialPlayer, onCancel, onSave }: PlayerFor
   const [usualPlayingZone, setUsualPlayingZone] = useState<PlayerUsualZone | undefined>(initialPlayer?.usualPlayingZone);
   const [dominantHand, setDominantHand] = useState<DominantHand | undefined>(initialPlayer?.dominantHand);
   const [error, setError] = useState<string | undefined>();
+  const [isSaving, setIsSaving] = useState(false);
 
   const validateForm = () => {
     if (!firstName.trim()) {
@@ -49,12 +50,18 @@ export function PlayerForm({ title, initialPlayer, onCancel, onSave }: PlayerFor
     return undefined;
   };
   const savePlayer = () => {
+    if (isSaving) {
+      return;
+    }
+
     const validationError = validateForm();
 
     if (validationError) {
       setError(validationError);
       return;
     }
+
+    setIsSaving(true);
 
     const parsedNumber = number.trim() ? Number(number) : undefined;
     const saved = onSave({
@@ -68,6 +75,7 @@ export function PlayerForm({ title, initialPlayer, onCancel, onSave }: PlayerFor
 
     if (!saved) {
       setError('No se pudo guardar el jugador.');
+      setIsSaving(false);
     }
   };
 
@@ -144,12 +152,13 @@ export function PlayerForm({ title, initialPlayer, onCancel, onSave }: PlayerFor
       {error && <Text style={styles.errorText}>{error}</Text>}
 
       <View style={styles.formActions}>
-        <ActionButton label="Cancelar" onPress={onCancel} variant="secondary" />
+        <ActionButton disabled={isSaving} label="Cancelar" onPress={onCancel} variant="secondary" />
         <Pressable
+          disabled={isSaving}
           onPress={savePlayer}
-          style={({ pressed }) => [styles.createButton, pressed && styles.pressed]}
+          style={({ pressed }) => [styles.createButton, isSaving && styles.createButtonDisabled, pressed && styles.pressed]}
         >
-          <Text style={styles.createButtonText}>Guardar</Text>
+          <Text style={styles.createButtonText}>{isSaving ? 'Guardando...' : 'Guardar'}</Text>
         </Pressable>
       </View>
     </View>
@@ -264,6 +273,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
+  },
+  createButtonDisabled: {
+    backgroundColor: '#8a98a8',
   },
   createButtonText: {
     color: '#ffffff',

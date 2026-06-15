@@ -56,6 +56,14 @@ describe('useMatchStore period stability', () => {
     expect(calculatePeriodScore(match.events, 1)).toEqual({ uruguay: 1, opponent: 0 });
   });
 
+  it('tracks store hydration state for the app loading gate', () => {
+    useMatchStore.getState().setHasHydrated(false);
+    expect(useMatchStore.getState().hasHydrated).toBe(false);
+
+    useMatchStore.getState().setHasHydrated(true);
+    expect(useMatchStore.getState().hasHydrated).toBe(true);
+  });
+
   it('creates a draft match with a custom rival name', () => {
     const matchId = useMatchStore.getState().createMatch({
       opponent: 'Brasil',
@@ -817,6 +825,25 @@ describe('useMatchStore period stability', () => {
 
     useMatchStore.getState().tickTimer();
     expect(getActiveMatch().periods[0].remainingSeconds).toBe(890);
+  });
+
+  it('timer ticks preserve event array identity when no events change', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-01-01T00:00:00.000Z'));
+    createLivePeriodMatch();
+    useMatchStore.getState().recordEvent({
+      type: 'goal',
+      side: 'uruguay',
+      playerId: 'mauro',
+      landingLocation,
+    });
+
+    const eventsBeforeTick = getActiveMatch().events;
+
+    vi.setSystemTime(new Date('2026-01-01T00:00:03.000Z'));
+    useMatchStore.getState().tickTimer();
+
+    expect(getActiveMatch().events).toBe(eventsBeforeTick);
   });
 
   it('pause and resume preserve remaining time correctly', () => {

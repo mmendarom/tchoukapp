@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Modal, Pressable, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { CreatePlayerInput } from '../domain/players';
@@ -18,17 +18,20 @@ export function TeamPoolManagerModal({ visible, onClose }: TeamPoolManagerModalP
   const [selectedPoolPlayerIds, setSelectedPoolPlayerIds] = useState<string[]>([]);
   const [poolError, setPoolError] = useState<string | undefined>();
   const [creatingPlayer, setCreatingPlayer] = useState(false);
+  const [isSavingPool, setIsSavingPool] = useState(false);
   const players = useMatchStore((state) => state.players);
   const teamPools = useMatchStore((state) => state.teamPools);
   const createPlayer = useMatchStore((state) => state.createPlayer);
   const createTeamPool = useMatchStore((state) => state.createTeamPool);
   const updateTeamPool = useMatchStore((state) => state.updateTeamPool);
+  const selectedPoolPlayerIdSet = useMemo(() => new Set(selectedPoolPlayerIds), [selectedPoolPlayerIds]);
   const resetPoolForm = () => {
     setEditingPoolId(undefined);
     setPoolNameInput('');
     setSelectedPoolPlayerIds([]);
     setPoolError(undefined);
     setCreatingPlayer(false);
+    setIsSavingPool(false);
   };
   const openEditPoolForm = (poolId: string) => {
     const pool = teamPools.find((item) => item.id === poolId);
@@ -42,6 +45,7 @@ export function TeamPoolManagerModal({ visible, onClose }: TeamPoolManagerModalP
     setSelectedPoolPlayerIds(pool.playerIds);
     setPoolError(undefined);
     setCreatingPlayer(false);
+    setIsSavingPool(false);
   };
   const closeModal = () => {
     onClose();
@@ -67,6 +71,10 @@ export function TeamPoolManagerModal({ visible, onClose }: TeamPoolManagerModalP
     return true;
   };
   const savePool = () => {
+    if (isSavingPool) {
+      return;
+    }
+
     if (!poolNameInput.trim()) {
       setPoolError('El nombre del plantel es obligatorio.');
       return;
@@ -77,12 +85,15 @@ export function TeamPoolManagerModal({ visible, onClose }: TeamPoolManagerModalP
       return;
     }
 
+    setIsSavingPool(true);
+
     const saved = editingPoolId
       ? updateTeamPool(editingPoolId, { name: poolNameInput, playerIds: selectedPoolPlayerIds })
       : Boolean(createTeamPool(poolNameInput, selectedPoolPlayerIds));
 
     if (!saved) {
       setPoolError('No se pudo guardar el plantel.');
+      setIsSavingPool(false);
       return;
     }
 
@@ -155,7 +166,7 @@ export function TeamPoolManagerModal({ visible, onClose }: TeamPoolManagerModalP
                   </View>
                   <View style={styles.playerGrid}>
                     {players.map((player) => {
-                      const selected = selectedPoolPlayerIds.includes(player.id);
+                      const selected = selectedPoolPlayerIdSet.has(player.id);
 
                       return (
                         <Pressable
@@ -181,10 +192,15 @@ export function TeamPoolManagerModal({ visible, onClose }: TeamPoolManagerModalP
                 <View style={styles.modalActions}>
                   <ActionButton label="Cancelar" onPress={resetPoolForm} variant="secondary" />
                   <Pressable
+                    disabled={isSavingPool || !poolNameInput.trim() || selectedPoolPlayerIds.length === 0}
                     onPress={savePool}
-                    style={({ pressed }) => [styles.createButton, (!poolNameInput.trim() || selectedPoolPlayerIds.length === 0) && styles.createButtonDisabled, pressed && styles.pressed]}
+                    style={({ pressed }) => [
+                      styles.createButton,
+                      (isSavingPool || !poolNameInput.trim() || selectedPoolPlayerIds.length === 0) && styles.createButtonDisabled,
+                      pressed && styles.pressed,
+                    ]}
                   >
-                    <Text style={styles.createButtonText}>Guardar</Text>
+                    <Text style={styles.createButtonText}>{isSavingPool ? 'Guardando...' : 'Guardar'}</Text>
                   </Pressable>
                 </View>
               </>
