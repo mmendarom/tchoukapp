@@ -148,6 +148,27 @@ Convertir el export post-partido en un reporte de coaching mas util, con resumen
   - incluye cantidad esperada de puntos.
   - no incluye eventos sin ubicacion.
 
+#### Refinamiento - mapas PDF grandes
+
+Estado: Implemented.
+
+- [x] Reemplazar el layout de mapas de 3 columnas por una pila vertical `map-stack`.
+- [x] Renderizar cada mapa como tarjeta full-width.
+- [x] Usar viewBox SVG grande `640x360`.
+- [x] Fijar altura visual de cancha en PDF cerca de `260px`.
+- [x] Envolver `Mapas del tiempo` y `Mapas totales` con `report-map-section`.
+- [x] Usar `break-inside` y `page-break-inside` para reducir titulos huerfanos y cortes de tarjetas.
+- [x] Agrandar levemente marcadores y diferenciarlos por color:
+  - puntos nuestros azul;
+  - puntos rivales rojo;
+  - defensas rivales violeta.
+- [x] Mantener intactos `landingLocation`, `defenseLocation` y el modelo de coordenadas normalizadas.
+- [x] Tests de HTML:
+  - contiene `map-stack` y `report-map-section`;
+  - usa viewBox `640x360`;
+  - no usa la clase vieja `map-grid`;
+  - no genera `NaN` ni `undefined` en coordenadas.
+
 ### Stage 4 - Fallback textual v2
 
 - [x] Evolucionar `buildMatchReportText`.

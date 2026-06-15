@@ -10,6 +10,7 @@ import {
   getOpponentOwnPoints,
   getScoreByPeriod,
 } from '../domain/periodStats';
+import { buildBackupData } from '../domain/backup';
 import { mayoresPlayerIds, plus40PlayerIds, teamPools, uruguayPlayers } from '../domain/mockData';
 import { getCurrentLineup } from '../domain/stats';
 import { useMatchStore } from './useMatchStore';
@@ -744,6 +745,47 @@ describe('useMatchStore period stability', () => {
     useMatchStore.getState().resetDemoData();
 
     expect(useMatchStore.getState().players.map((player) => player.id)).toContain(playerId);
+  });
+
+  it('restores backup data atomically and clears active match state', () => {
+    const backup = buildBackupData(
+      {
+        players: uruguayPlayers.slice(0, 8),
+        teamPools: [
+          {
+            id: 'backup-pool',
+            name: 'Backup',
+            playerIds: uruguayPlayers.slice(0, 8).map((player) => player.id),
+          },
+        ],
+        matches: [],
+        fixtures: [],
+      },
+      { dataVersion: 8 },
+    );
+
+    createLivePeriodMatch();
+    expect(useMatchStore.getState().activeMatchId).toBeTruthy();
+
+    expect(useMatchStore.getState().restoreBackupData(backup)).toBe(true);
+
+    const state = useMatchStore.getState();
+    expect(state.activeMatchId).toBeUndefined();
+    expect(state.matches).toEqual([]);
+    expect(state.fixtures).toEqual([]);
+    expect(state.players.map((player) => player.id)).toEqual(expect.arrayContaining(uruguayPlayers.map((player) => player.id)));
+    expect(state.teamPools.some((pool) => pool.id === 'backup-pool')).toBe(true);
+  });
+
+  it('does not mutate state when restore backup data is invalid', () => {
+    const before = useMatchStore.getState();
+
+    expect(useMatchStore.getState().restoreBackupData(undefined as unknown as ReturnType<typeof buildBackupData>)).toBe(false);
+    expect(
+      useMatchStore.getState().restoreBackupData({ data: { players: [] } } as unknown as ReturnType<typeof buildBackupData>),
+    ).toBe(false);
+    expect(useMatchStore.getState().matches).toBe(before.matches);
+    expect(useMatchStore.getState().players).toBe(before.players);
   });
 
   it('does not use player usual position as point landingLocation', () => {

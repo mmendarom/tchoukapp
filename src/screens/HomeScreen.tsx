@@ -1,12 +1,15 @@
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { useState } from 'react';
-import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
+import { type ReactNode, useState } from 'react';
+import { Image, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { ActionButton } from '../components/ActionButton';
 import { PlayerManagerModal } from '../components/PlayerManagerModal';
 import { Screen } from '../components/Screen';
 import { TeamPoolManagerModal } from '../components/TeamPoolManagerModal';
-import { useMatchStore } from '../store/useMatchStore';
+import { AppBackupData, buildBackupData } from '../domain/backup';
+import { exportBackupJson } from '../export/exportBackup';
+import { pickAndParseBackupJson } from '../export/importBackup';
+import { STORE_DATA_VERSION, useMatchStore } from '../store/useMatchStore';
 import { RootStackParamList } from '../utils/navigation';
 import { fontSize, spacing } from '../utils/responsive';
 
@@ -17,13 +20,126 @@ const associationLogo = require('../../assets/association-logo.png');
 export function HomeScreen({ navigation }: Props) {
   const [poolManagerVisible, setPoolManagerVisible] = useState(false);
   const [playerManagerVisible, setPlayerManagerVisible] = useState(false);
+  const [backupStatus, setBackupStatus] = useState<'idle' | 'loading' | 'success' | 'unavailable' | 'error'>('idle');
+  const [importStatus, setImportStatus] = useState<'idle' | 'loading' | 'valid' | 'success' | 'error'>('idle');
+  const [importError, setImportError] = useState('');
+  const [pendingBackup, setPendingBackup] = useState<AppBackupData | undefined>();
+  const [pendingBackupWarnings, setPendingBackupWarnings] = useState<string[]>([]);
   const players = useMatchStore((state) => state.players);
   const matches = useMatchStore((state) => state.matches);
   const fixtures = useMatchStore((state) => state.fixtures);
   const teamPools = useMatchStore((state) => state.teamPools);
   const resetDemoData = useMatchStore((state) => state.resetDemoData);
+  const restoreBackupData = useMatchStore((state) => state.restoreBackupData);
   const activeMatch = matches.find((match) => match.status === 'live' || match.status === 'period_break');
   const visibleMatchCount = matches.filter((match) => match.status !== 'cancelled').length;
+  const backupStatusLabel =
+    backupStatus === 'loading'
+      ? 'Generando backup...'
+      : backupStatus === 'success'
+        ? 'Backup generado'
+        : backupStatus === 'unavailable'
+          ? 'Backup generado, pero no se pudo compartir.'
+          : backupStatus === 'error'
+            ? 'No se pudo exportar el backup.'
+            : '';
+
+  const handleExportBackup = async () => {
+    if (backupStatus === 'loading') {
+      return;
+    }
+
+    setBackupStatus('loading');
+
+    try {
+      const backup = buildBackupData(
+        {
+          players,
+          teamPools,
+          matches,
+          fixtures,
+        },
+        { dataVersion: STORE_DATA_VERSION },
+      );
+
+      const result = await exportBackupJson(backup);
+      setBackupStatus(result.shared ? 'success' : 'unavailable');
+    } catch {
+      setBackupStatus('error');
+    }
+  };
+
+  const handleImportBackup = async () => {
+    if (importStatus === 'loading') {
+      return;
+    }
+
+    setImportStatus('loading');
+    setImportError('');
+    setPendingBackup(undefined);
+    setPendingBackupWarnings([]);
+
+    try {
+      const result = await pickAndParseBackupJson();
+
+      if (result.canceled) {
+        setImportStatus('idle');
+        return;
+      }
+
+      if (!result.validation.valid) {
+        setImportError(result.validation.error);
+        setImportStatus('error');
+        return;
+      }
+
+      if (!result.backup) {
+        setImportError('No se pudo importar el backup.');
+        setImportStatus('error');
+        return;
+      }
+
+      setPendingBackup(result.backup);
+      setPendingBackupWarnings(result.validation.warnings);
+      setImportStatus('valid');
+    } catch {
+      setImportError('No se pudo importar el backup.');
+      setImportStatus('error');
+    }
+  };
+
+  const handleCancelRestore = () => {
+    setPendingBackup(undefined);
+    setPendingBackupWarnings([]);
+    setImportStatus('idle');
+  };
+
+  const handleConfirmRestore = () => {
+    if (!pendingBackup) {
+      return;
+    }
+
+    const restored = restoreBackupData(pendingBackup);
+
+    if (!restored) {
+      setImportError('No se pudo importar el backup.');
+      setImportStatus('error');
+      return;
+    }
+
+    setPendingBackup(undefined);
+    setPendingBackupWarnings([]);
+    setImportStatus('success');
+  };
+
+  const importStatusLabel =
+    importStatus === 'loading'
+      ? 'Seleccionando archivo...'
+      : importStatus === 'success'
+        ? 'Backup restaurado correctamente.'
+        : importStatus === 'error'
+          ? importError || 'No se pudo importar el backup.'
+          : '';
 
   return (
     <Screen>
@@ -45,54 +161,76 @@ export function HomeScreen({ navigation }: Props) {
       </View>
 
       <View style={styles.actionsPanel}>
-        {activeMatch && (
+        <HomeActionSection title="Partido">
+          {activeMatch && (
+            <HomeActionCard
+              label="Retomar en vivo"
+              description="Volver al partido activo"
+              onPress={() => navigation.navigate('LiveMatch', { matchId: activeMatch.id })}
+              tone="live"
+            />
+          )}
           <HomeActionCard
-            label="Retomar en vivo"
-            description="Volver al partido activo"
-            onPress={() => navigation.navigate('LiveMatch', { matchId: activeMatch.id })}
-            tone="live"
+            label="Crear partido"
+            description="Configurar rival, plantel y titulares"
+            onPress={() => navigation.navigate('Matches', { openCreate: true })}
+            tone="primary"
           />
-        )}
-        <HomeActionCard
-          label="Crear partido"
-          description="Configurar rival, plantel y titulares"
-          onPress={() => navigation.navigate('Matches', { openCreate: true })}
-          tone="primary"
-        />
-        <View style={styles.actionRow}>
-          <HomeActionCard
-            label="Partidos"
-            description="Ver historial y continuar"
-            onPress={() => navigation.navigate('Matches')}
-            tone="secondary"
-          />
-          <HomeActionCard
-            label="Gestionar planteles"
-            description="Mayores, +40 y planteles propios"
-            onPress={() => setPoolManagerVisible(true)}
-            tone="management"
-          />
-        </View>
-        <View style={styles.actionRow}>
-          <HomeActionCard
-            label="Gestionar jugadores"
-            description="Crear y editar roster local"
-            onPress={() => setPlayerManagerVisible(true)}
-            tone="management"
-          />
-          <HomeActionCard
-            label="Jugadores"
-            description={`${players.length} jugadores cargados`}
-            onPress={() => navigation.navigate('Players')}
-            tone="quiet"
-          />
-          <HomeActionCard
-            label="Fixture"
-            description={`${fixtures.length} próximos`}
-            onPress={() => navigation.navigate('Fixtures')}
-            tone="quiet"
-          />
-        </View>
+          <View style={styles.actionRow}>
+            <HomeActionCard
+              label="Partidos"
+              description="Ver historial y continuar"
+              onPress={() => navigation.navigate('Matches')}
+              tone="secondary"
+            />
+            <HomeActionCard
+              label="Fixture"
+              description={`${fixtures.length} próximos`}
+              onPress={() => navigation.navigate('Fixtures')}
+              tone="quiet"
+            />
+          </View>
+        </HomeActionSection>
+
+        <HomeActionSection title="Gestión">
+          <View style={styles.actionRow}>
+            <HomeActionCard
+              label="Gestionar planteles"
+              description="Mayores, +40 y planteles propios"
+              onPress={() => setPoolManagerVisible(true)}
+              tone="management"
+            />
+            <HomeActionCard
+              label="Gestionar jugadores"
+              description="Crear y editar roster local"
+              onPress={() => setPlayerManagerVisible(true)}
+              tone="management"
+            />
+            <HomeActionCard
+              label="Jugadores"
+              description={`${players.length} jugadores cargados`}
+              onPress={() => navigation.navigate('Players')}
+              tone="quiet"
+            />
+          </View>
+        </HomeActionSection>
+
+        <HomeActionSection title="Datos">
+          <View style={styles.actionRow}>
+            <HomeActionCard
+              label="Exportar backup"
+              description="Guardar jugadores, planteles y partidos"
+              onPress={handleExportBackup}
+              tone="data"
+            />
+            <HomeActionCard
+              label="Importar backup"
+              description="Seleccionar archivo JSON"
+              onPress={handleImportBackup}
+              tone="caution"
+            />
+          </View>
+        </HomeActionSection>
       </View>
 
       <View style={styles.utilityRow}>
@@ -101,7 +239,35 @@ export function HomeScreen({ navigation }: Props) {
           onPress={resetDemoData}
           variant="secondary"
         />
+        {backupStatusLabel ? <Text style={styles.backupStatus}>{backupStatusLabel}</Text> : null}
+        {importStatusLabel ? <Text style={styles.backupStatus}>{importStatusLabel}</Text> : null}
       </View>
+      <Modal visible={Boolean(pendingBackup)} transparent animationType="fade" onRequestClose={handleCancelRestore}>
+        <View style={styles.modalBackdrop}>
+          <View style={styles.restoreModal}>
+            <ScrollView contentContainerStyle={styles.restoreModalContent}>
+              <Text style={styles.restoreTitle}>Backup válido</Text>
+              <Text style={styles.restoreWarning}>Esta acción reemplazará tus datos actuales.</Text>
+              <View style={styles.restoreSummary}>
+                <Text style={styles.restoreSummaryItem}>Jugadores: {pendingBackup?.data.players.length ?? 0}</Text>
+                <Text style={styles.restoreSummaryItem}>Planteles: {pendingBackup?.data.teamPools.length ?? 0}</Text>
+                <Text style={styles.restoreSummaryItem}>Partidos: {pendingBackup?.data.matches.length ?? 0}</Text>
+                <Text style={styles.restoreSummaryItem}>Fixtures: {pendingBackup?.data.fixtures.length ?? 0}</Text>
+                <Text style={styles.restoreSummaryItem}>Exportado: {pendingBackup?.exportedAt || 'Sin fecha'}</Text>
+              </View>
+              {pendingBackupWarnings.map((warning) => (
+                <Text key={warning} style={styles.restoreWarningNote}>
+                  {warning}
+                </Text>
+              ))}
+              <View style={styles.restoreActions}>
+                <ActionButton label="Cancelar" onPress={handleCancelRestore} variant="secondary" />
+                <ActionButton label="Restaurar backup" onPress={handleConfirmRestore} />
+              </View>
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
       <TeamPoolManagerModal visible={poolManagerVisible} onClose={() => setPoolManagerVisible(false)} />
       <PlayerManagerModal visible={playerManagerVisible} onClose={() => setPlayerManagerVisible(false)} />
     </Screen>
@@ -112,11 +278,11 @@ type HomeActionCardProps = {
   label: string;
   description: string;
   onPress: () => void;
-  tone: 'primary' | 'secondary' | 'management' | 'quiet' | 'live';
+  tone: 'primary' | 'secondary' | 'management' | 'quiet' | 'live' | 'data' | 'caution';
 };
 
 function HomeActionCard({ label, description, onPress, tone }: HomeActionCardProps) {
-  const darkText = tone === 'quiet' || tone === 'management';
+  const darkText = tone === 'quiet' || tone === 'management' || tone === 'data' || tone === 'caution';
 
   return (
     <Pressable
@@ -131,6 +297,15 @@ function HomeActionCard({ label, description, onPress, tone }: HomeActionCardPro
       <Text style={[styles.actionLabel, darkText && styles.actionLabelDark]}>{label}</Text>
       <Text style={[styles.actionDescription, darkText && styles.actionDescriptionDark]}>{description}</Text>
     </Pressable>
+  );
+}
+
+function HomeActionSection({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <View style={styles.actionSection}>
+      <Text style={styles.sectionTitle}>{title}</Text>
+      <View style={styles.sectionContent}>{children}</View>
+    </View>
   );
 }
 
@@ -218,6 +393,17 @@ const styles = StyleSheet.create({
     fontWeight: '900',
   },
   actionsPanel: {
+    gap: spacing.md,
+  },
+  actionSection: {
+    gap: spacing.sm,
+  },
+  sectionTitle: {
+    color: '#0b1f33',
+    fontSize: fontSize.section,
+    fontWeight: '900',
+  },
+  sectionContent: {
     gap: spacing.sm,
   },
   actionRow: {
@@ -257,6 +443,14 @@ const styles = StyleSheet.create({
     backgroundColor: '#ffffff',
     borderColor: '#dbe4ef',
   },
+  dataAction: {
+    backgroundColor: '#f7fafc',
+    borderColor: '#b7c5d3',
+  },
+  cautionAction: {
+    backgroundColor: '#fff7ed',
+    borderColor: '#f5b46b',
+  },
   actionLabel: {
     color: '#ffffff',
     fontSize: fontSize.section,
@@ -276,6 +470,68 @@ const styles = StyleSheet.create({
   },
   utilityRow: {
     alignItems: 'flex-start',
+    gap: spacing.xs,
+  },
+  backupStatus: {
+    color: '#36546f',
+    fontSize: fontSize.small,
+    fontWeight: '800',
+  },
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(11, 31, 51, 0.62)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: spacing.md,
+  },
+  restoreModal: {
+    width: '100%',
+    maxWidth: 520,
+    maxHeight: '86%',
+    borderRadius: 8,
+    backgroundColor: '#ffffff',
+    borderWidth: 1,
+    borderColor: '#dbe4ef',
+  },
+  restoreModalContent: {
+    padding: spacing.md,
+    gap: spacing.sm,
+  },
+  restoreTitle: {
+    color: '#0b1f33',
+    fontSize: fontSize.section,
+    fontWeight: '900',
+    textAlign: 'center',
+  },
+  restoreWarning: {
+    color: '#7a1f14',
+    fontSize: fontSize.body,
+    fontWeight: '900',
+    textAlign: 'center',
+  },
+  restoreSummary: {
+    borderRadius: 8,
+    backgroundColor: '#f7fafc',
+    borderWidth: 1,
+    borderColor: '#dbe4ef',
+    padding: spacing.sm,
+    gap: spacing.xs,
+  },
+  restoreSummaryItem: {
+    color: '#36546f',
+    fontSize: fontSize.body,
+    fontWeight: '800',
+  },
+  restoreWarningNote: {
+    color: '#7a1f14',
+    fontSize: fontSize.small,
+    fontWeight: '800',
+  },
+  restoreActions: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
+    justifyContent: 'flex-end',
   },
   pressed: {
     opacity: 0.86,

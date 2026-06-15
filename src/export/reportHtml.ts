@@ -57,22 +57,33 @@ const insightsHtml = (items: Array<{ title: string; description: string; suggest
 const densityForLocation = (location: CourtLocation, locations: CourtLocation[]) =>
   locations.filter((other) => Math.hypot(location.x - other.x, location.y - other.y) <= 0.08).length;
 
-export const renderReportCourtMap = (title: string, locations: CourtLocation[]) => {
-  const width = 320;
-  const height = 190;
-  const margin = 16;
+const markerStyles = {
+  uruguay: { fill: '#0b6bcb', stroke: '#073f78' },
+  opponent: { fill: '#e84f3d', stroke: '#7a1f14' },
+  opponentDefense: { fill: '#7c3aed', stroke: '#4c1d95' },
+};
+
+export const renderReportCourtMap = (
+  title: string,
+  locations: CourtLocation[],
+  markerVariant: keyof typeof markerStyles = 'uruguay',
+) => {
+  const width = 640;
+  const height = 360;
+  const margin = 24;
   const innerWidth = width - margin * 2;
   const innerHeight = height - margin * 2;
+  const markerStyle = markerStyles[markerVariant];
 
   const markers = locations
     .map((location, index) => {
       const x = margin + Math.min(Math.max(location.x, 0), 1) * innerWidth;
       const y = margin + Math.min(Math.max(location.y, 0), 1) * innerHeight;
       const density = densityForLocation(location, locations);
-      const radius = Math.min(4 + density * 1.3, 10);
-      const opacity = Math.min(0.45 + density * 0.12, 0.92);
+      const radius = Math.min(5.5 + density * 1.6, 13);
+      const opacity = Math.min(0.52 + density * 0.11, 0.94);
 
-      return `<circle data-map-point="${index}" cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${radius.toFixed(1)}" fill="#e84f3d" fill-opacity="${opacity.toFixed(2)}" stroke="#7a1f14" stroke-width="0.8" />`;
+      return `<circle data-map-point="${index}" cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${radius.toFixed(1)}" fill="${markerStyle.fill}" fill-opacity="${opacity.toFixed(2)}" stroke="${markerStyle.stroke}" stroke-width="1.2" />`;
     })
     .join('');
 
@@ -85,8 +96,8 @@ export const renderReportCourtMap = (title: string, locations: CourtLocation[]) 
           : `<svg class="court-map" viewBox="0 0 ${width} ${height}" role="img" aria-label="${escapeHtml(title)}">
               <rect x="${margin}" y="${margin}" width="${innerWidth}" height="${innerHeight}" rx="8" fill="#fbfdf8" stroke="#1f6b4d" stroke-width="2" />
               <line x1="${width / 2}" y1="${margin}" x2="${width / 2}" y2="${height - margin}" stroke="#9cb7aa" stroke-width="1.5" stroke-dasharray="5 5" />
-              <path d="M ${margin} ${height / 2 - 46} A 48 48 0 0 1 ${margin} ${height / 2 + 46}" fill="none" stroke="#9cb7aa" stroke-width="1.5" />
-              <path d="M ${width - margin} ${height / 2 - 46} A 48 48 0 0 0 ${width - margin} ${height / 2 + 46}" fill="none" stroke="#9cb7aa" stroke-width="1.5" />
+              <path d="M ${margin} ${height / 2 - 88} A 92 92 0 0 1 ${margin} ${height / 2 + 88}" fill="none" stroke="#9cb7aa" stroke-width="1.5" />
+              <path d="M ${width - margin} ${height / 2 - 88} A 92 92 0 0 0 ${width - margin} ${height / 2 + 88}" fill="none" stroke="#9cb7aa" stroke-width="1.5" />
               ${markers}
             </svg>`
       }
@@ -94,11 +105,11 @@ export const renderReportCourtMap = (title: string, locations: CourtLocation[]) 
   `;
 };
 
-const renderMapGrid = (maps: ReportLocationMaps) => `
-  <div class="map-grid">
-    ${renderReportCourtMap('Donde hicimos los puntos', maps.uruguayPoints)}
-    ${renderReportCourtMap('Donde nos hicieron puntos', maps.opponentPoints)}
-    ${renderReportCourtMap('Donde nos defendieron', maps.opponentDefenses)}
+const renderMapStack = (maps: ReportLocationMaps) => `
+  <div class="map-stack">
+    ${renderReportCourtMap('Donde hicimos los puntos', maps.uruguayPoints, 'uruguay')}
+    ${renderReportCourtMap('Donde nos hicieron puntos', maps.opponentPoints, 'opponent')}
+    ${renderReportCourtMap('Donde nos defendieron', maps.opponentDefenses, 'opponentDefense')}
   </div>
 `;
 
@@ -146,8 +157,10 @@ const periodHtml = (period: PeriodReportData, opponentName: string) => `
     ${substitutionsHtml(period.substitutions)}
     <h3>Alertas tácticas</h3>
     ${insightsHtml(period.insights)}
-    <h3>Mapas del tiempo</h3>
-    ${renderMapGrid(period.maps)}
+    <div class="report-map-section">
+      <h3>Mapas del tiempo</h3>
+      ${renderMapStack(period.maps)}
+    </div>
   </section>
 `;
 
@@ -179,10 +192,13 @@ export function buildMatchReportHtml(report: MatchReportData) {
     .grid span, .summary-grid span { display: block; font-size: 17px; font-weight: 900; margin-top: 3px; }
     .summary-grid span { font-size: 13px; }
     .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
-    .map-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 8px; }
-    .map-card { border: 1px solid #dbe4ef; border-radius: 8px; padding: 8px; background: #f7fafc; break-inside: avoid; }
-    .court-map { width: 100%; height: auto; display: block; }
-    .empty-map { height: 118px; border: 1px dashed #b7c5d3; border-radius: 8px; display: flex; align-items: center; justify-content: center; color: #5d6b7a; font-size: 12px; text-align: center; padding: 8px; }
+    .report-map-section { break-inside: avoid; page-break-inside: avoid; margin-top: 14px; }
+    .report-map-section h3 { break-after: avoid; page-break-after: avoid; margin-top: 18px; }
+    .map-stack { display: block; margin-top: 8px; }
+    .map-card { border: 1px solid #dbe4ef; border-radius: 8px; padding: 14px; background: #f7fafc; break-inside: avoid; page-break-inside: avoid; margin: 0 0 16px; }
+    .map-card h4 { font-size: 15px; margin-bottom: 10px; }
+    .court-map { width: 100%; height: 260px; display: block; }
+    .empty-map { height: 220px; border: 1px dashed #b7c5d3; border-radius: 8px; display: flex; align-items: center; justify-content: center; color: #5d6b7a; font-size: 13px; text-align: center; padding: 12px; }
     .muted { color: #5d6b7a; }
     section { break-inside: avoid; margin-bottom: 14px; }
     .period-section { break-inside: auto; }
@@ -237,8 +253,10 @@ export function buildMatchReportHtml(report: MatchReportData) {
     ${substitutionsHtml(report.totals.substitutions)}
     <h3>Intercambios en cancha</h3>
     ${substitutionsHtml(report.totals.substitutions.filter((item) => item.kind === 'lineup_swap'))}
-    <h3>Mapas totales</h3>
-    ${renderMapGrid(report.totalMaps)}
+    <div class="report-map-section">
+      <h3>Mapas totales</h3>
+      ${renderMapStack(report.totalMaps)}
+    </div>
   </section>
 
   <section>

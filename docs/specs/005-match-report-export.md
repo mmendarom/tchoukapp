@@ -397,6 +397,18 @@ Implementado en `src/export/reportHtml.ts` con SVG inline:
 - Sin dependencias nuevas.
 - El HTML declara `UTF-8` y el fallback textual usa strings UTF-8 normales para evitar mojibake en acentos.
 
+Refinamiento de legibilidad PDF:
+
+- Los mapas del PDF se renderizan como bloques grandes de ancho completo, uno por fila.
+- Se reemplazo el layout anterior de tres mapas pequenos en una fila.
+- Cada cancha SVG usa un viewBox mas grande y una altura de render cercana a 260px.
+- Los marcadores son mas visibles, mantienen forma circular y usan colores por tipo:
+  - azul para puntos de Uruguay;
+  - rojo para puntos del rival;
+  - violeta para defensas del rival.
+- Las secciones `Mapas del tiempo` y `Mapas totales` usan reglas CSS para evitar titulos huerfanos y cortes internos de tarjetas.
+- El modelo de coordenadas normalizadas no cambia.
+
 Limitaciones:
 
 - No es un heatmap continuo real.
@@ -458,6 +470,9 @@ El resumen para WhatsApp debe ser mas corto que el PDF:
 - [x] Formacion inicial/final, sustituciones e intercambios aparecen.
 - [x] Defensas, faltas y puntos en contra aparecen.
 - [x] HTML incluye secciones de mapas.
+- [x] Mapas PDF usan bloques grandes de ancho completo.
+- [x] Mapas PDF ya no usan el viejo layout de tres columnas.
+- [x] Coordenadas normalizadas siguen renderizando marcadores sin `NaN` ni `undefined`.
 - [x] Texto fallback incluye stats clave.
 - [x] HTML/texto no muestran enums crudos.
 - [x] HTML/texto no contienen mojibake como `Ã`, `Â` o `�`.
@@ -470,7 +485,9 @@ El resumen para WhatsApp debe ser mas corto que el PDF:
 - Exportar PDF.
 - Verificar datos por tiempo y totales.
 - Verificar mapas por tiempo y totales.
+- Verificar que cada mapa del PDF ocupa una fila grande y no aparece como mini tarjeta de tres columnas.
 - Verificar que los puntos del mapa coinciden razonablemente con las ubicaciones registradas.
+- Verificar que los titulos de mapas no quedan huerfanos al final de una pagina.
 - Verificar goleadores y defensas.
 - Verificar que no hay enums crudos.
 - Verificar que el PDF se lee bien en telefono.

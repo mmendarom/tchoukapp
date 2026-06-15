@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
 
 import { initialMatches, teamPools, upcomingFixtures, uruguayPlayers } from '../domain/mockData';
+import { AppBackupData } from '../domain/backup';
 import { getTeamPoolById, resolveMatchAvailablePlayers, uniquePlayerIds, validateMatchSetup } from '../domain/matchSetup';
 import { normalizeOpponentName } from '../domain/opponent';
 import { PERIOD_DURATION_SECONDS } from '../domain/periodStats';
@@ -28,6 +29,8 @@ import { appStorage, STORAGE_KEYS } from '../storage/asyncStorage';
 type LiveEventAction = 'goal' | 'miss' | 'block' | 'fault' | 'turnover';
 type TrackableErrorType = 'falta' | 'punto_en_contra';
 
+export const STORE_DATA_VERSION = 8;
+
 type MatchState = {
   players: Player[];
   teamPools: TeamPool[];
@@ -36,6 +39,7 @@ type MatchState = {
   activeMatchId?: string;
   createPlayer: (input: CreatePlayerInput) => string;
   updatePlayer: (playerId: string, updates: UpdatePlayerInput) => boolean;
+  restoreBackupData: (backup: AppBackupData) => boolean;
   startMatch: (matchId: string) => void;
   createTeamPool: (name: string, playerIds: string[]) => string;
   updateTeamPool: (poolId: string, updates: { name?: string; playerIds?: string[] }) => boolean;
@@ -267,6 +271,31 @@ export const useMatchStore = create<MatchState>()(
           return {
             players,
             teamPools: ensureDefaultTeamPool(state.teamPools, players, teamPools),
+          };
+        });
+
+        return true;
+      },
+      restoreBackupData: (backup) => {
+        if (
+          !backup?.data ||
+          !Array.isArray(backup.data.players) ||
+          !Array.isArray(backup.data.teamPools) ||
+          !Array.isArray(backup.data.matches) ||
+          !Array.isArray(backup.data.fixtures)
+        ) {
+          return false;
+        }
+
+        set(() => {
+          const players = mergeDefaultPlayers(backup.data.players);
+
+          return {
+            players,
+            teamPools: ensureDefaultTeamPool(backup.data.teamPools, players, teamPools),
+            matches: backup.data.matches.map(normalizeMatch),
+            fixtures: backup.data.fixtures ?? [],
+            activeMatchId: undefined,
           };
         });
 
@@ -1015,7 +1044,7 @@ export const useMatchStore = create<MatchState>()(
     }),
     {
       name: STORAGE_KEYS.appState,
-      version: 8,
+      version: STORE_DATA_VERSION,
       migrate: (persistedState) => {
         const state = persistedState as MatchState;
         const players = mergeDefaultPlayers(state.players);

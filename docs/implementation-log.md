@@ -1,5 +1,120 @@
 # Implementation Log
 
+## 2026-06-15 - Home action hierarchy refinement
+
+Se reorganizo Home en tres secciones funcionales sin cambiar comportamiento de negocio, navegacion ni logica de backup.
+
+- `Partido` agrupa `Crear partido`, `Partidos` y `Fixture`.
+- `Gestión` agrupa `Gestionar planteles`, `Gestionar jugadores` y `Jugadores`.
+- `Datos` agrupa `Exportar backup` e `Importar backup`.
+- `Crear partido` sigue siendo la accion primaria.
+- `Importar backup` queda visualmente separado de acciones de partido y gestion para reducir toques accidentales.
+- `Fixture` sigue navegando a la pantalla `Fixtures`.
+- `Jugadores` sigue navegando a la pantalla `Players`.
+- No se cambio match setup, planteles, jugadores, backup, scoring, mapas, reportes, sustituciones ni timer.
+
+QA manual recomendado:
+
+- Abrir Home y confirmar que logo/hero siguen visibles.
+- Confirmar seccion `Partido`: `Crear partido`, `Partidos`, `Fixture`.
+- Confirmar seccion `Gestión`: `Gestionar planteles`, `Gestionar jugadores`, `Jugadores`.
+- Confirmar seccion `Datos`: `Exportar backup`, `Importar backup`.
+- Tocar cada accion y confirmar que mantiene su flujo existente.
+- Probar telefono portrait y tablet landscape.
+
+## 2026-06-15 - Stage 4B local backup import and restore
+
+Se implemento importacion/restauracion local de backups JSON con validacion y confirmacion antes de reemplazar datos.
+
+- Home agrega la accion `Importar backup` junto a `Exportar backup`.
+- Se agrego `expo-document-picker` con `npx expo install` para seleccionar archivos locales.
+- `src/export/importBackup.ts` abre el picker, lee el archivo y devuelve validacion controlada.
+- `src/domain/backup.ts` ahora valida y parsea backups:
+  - JSON valido;
+  - `backupVersion` soportado;
+  - `data` presente;
+  - arrays requeridos: `players`, `teamPools`, `matches`, `fixtures`;
+  - campos minimos de jugadores, planteles, partidos y fixtures.
+- Version incompatible muestra `Este backup no es compatible con esta versión de la app.`
+- Archivos invalidos muestran `No se pudo importar el backup.`
+- Antes de restaurar se muestra resumen con conteos y fecha exportada.
+- El usuario debe confirmar `Restaurar backup`.
+- `restoreBackupData` reemplaza `players`, `teamPools`, `matches` y `fixtures` como bloque.
+- `activeMatchId` se limpia despues de restaurar para evitar estados live stale.
+- Si la validacion falla, no se muta el estado actual.
+- No se cambia tracking, scoring, mapas, sustituciones, timer, resumenes ni PDF.
+
+QA manual recomendado:
+
+- Exportar un backup.
+- Crear un jugador de prueba.
+- Crear o editar un plantel de prueba.
+- Importar el backup anterior.
+- Confirmar que aparece resumen de validacion.
+- Tocar `Cancelar` y confirmar que los datos actuales siguen igual.
+- Importar de nuevo y tocar `Restaurar backup`.
+- Confirmar `Backup restaurado correctamente.`
+- Confirmar que jugadores, planteles y partidos corresponden al backup.
+- Intentar importar un archivo no JSON.
+- Intentar importar JSON malformado.
+- Intentar importar backup con `backupVersion` incompatible.
+
+## 2026-06-15 - Stage 4A local backup export
+
+Se implemento export-only de backup local JSON para proteger datos offline sin agregar import/restore todavia.
+
+- Se agrego `src/domain/backup.ts` con builder puro de backup.
+- Se agrego `src/export/exportBackup.ts` para escribir el JSON local y abrir la hoja nativa de compartir.
+- Home agrega la accion `Exportar backup`.
+- Si no hay share sheet disponible, la UI muestra `Backup generado, pero no se pudo compartir.`
+- El backup incluye `players`, `teamPools`, `matches` y `fixtures`.
+- El backup incluye metadata: `backupVersion`, `exportedAt`, `appName` y `dataVersion`.
+- Se excluye estado transitorio como `activeMatchId`, modales, formularios e intervalos runtime.
+- Se agrego `expo-file-system` con `npx expo install` para escribir archivos locales compatible con Expo SDK 54.
+- Import/restore queda diferido para una etapa futura.
+- No se modifica tracking, scoring, mapas, sustituciones, timer, resumenes ni PDF de partido.
+
+QA manual recomendado:
+
+- Abrir Home.
+- Tocar `Exportar backup`.
+- Confirmar `Generando backup...`.
+- Confirmar que se abre la hoja nativa de compartir.
+- Guardar o compartir el JSON.
+- Abrir el JSON y confirmar metadata, jugadores, planteles, partidos y fixtures.
+- Confirmar que los datos de la app no se modifican.
+- Crear un jugador y editar/crear un plantel.
+- Exportar de nuevo y confirmar que los datos nuevos aparecen.
+- Probar Android e iOS/iPad si esta disponible.
+
+## 2026-06-15 - PDF report map readability
+
+Se mejoro la legibilidad de mapas tacticos en el PDF sin cambiar tracking, score, coordenadas, mapas live ni resumenes in-app.
+
+- Los mapas PDF ya no se muestran como tres tarjetas pequenas en una fila.
+- `Mapas del tiempo` y `Mapas totales` ahora renderizan un mapa grande por fila.
+- Cada SVG de cancha usa viewBox `640x360` y altura visual aproximada de `260px`.
+- Las tarjetas de mapa tienen mas padding, titulos mas legibles y reglas anti-corte (`break-inside` / `page-break-inside`).
+- Los marcadores se agrandaron levemente y siguen siendo circulares.
+- Se usan colores diferenciados en PDF: azul para puntos Uruguay, rojo para puntos rivales y violeta para defensas rivales.
+- El modelo de coordenadas normalizadas no cambio.
+
+Validacion:
+
+- `npm test`: 13 archivos, 136 tests pasaron.
+- `npx tsc --noEmit`: paso.
+
+QA manual recomendado:
+
+- Generar PDF desde un partido con muchas ubicaciones.
+- Revisar mapas de cada tiempo: `Donde hicimos los puntos`, `Donde nos hicieron puntos` y `Donde nos defendieron`.
+- Confirmar que cada mapa ocupa una fila grande y es mas facil de leer.
+- Confirmar que puntos y clusters cerca del marco/area prohibida son visibles.
+- Confirmar que los marcadores son circulares.
+- Confirmar que los titulos de mapas no quedan huerfanos al final de una pagina.
+- Revisar `Mapas totales`.
+- Confirmar que el PDF puede ser mas largo, pero mantiene mejor lectura tactica.
+
 ## 2026-06-14 - Player roster Stage 3C plantel inline creation
 
 Se implemento Stage 3C para crear jugadores desde `Gestionar planteles`, sin agregar delete, sin cambiar match creation, scoring, mapas, sustituciones, timer, resumenes ni export.
