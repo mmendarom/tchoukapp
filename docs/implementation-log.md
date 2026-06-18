@@ -1,5 +1,148 @@
 # Implementation Log
 
+## 2026-06-18 - Tactical effectiveness Stage 4 live recommendations
+
+Se agrego un bloque compacto de lectura tactica en vivo sin cambiar modelos de eventos, scoring, registro de acciones, mapas ni PDF.
+
+- Se creo `src/domain/liveRecommendations.ts` con reglas puras de recomendaciones del periodo actual.
+- Se creo `src/components/LiveRecommendationsPanel.tsx`.
+- `LiveMatchScreen` muestra `Lectura en vivo` debajo de mapas/rendimiento y antes de controles del partido.
+- El bloque muestra hasta 4 recomendaciones ordenadas por prioridad.
+- Reglas implementadas:
+  - puntos en contra repetidos;
+  - errores repetidos por jugador;
+  - jugador anulado por defensas rivales;
+  - baja efectividad ofensiva;
+  - zona vulnerable de puntos rivales;
+  - zona bloqueada por defensas rivales;
+  - baja participacion solo si no hay tiros ni defensas tras suficiente actividad;
+  - aporte defensivo fuerte.
+- Las alertas no mencionan asistencias.
+- Jugadores con defensas Uruguay no se marcan como baja participacion.
+- Defensas rivales legacy sin `playerId` siguen pudiendo alimentar alerta de zona bloqueada si tienen ubicacion.
+
+QA manual recomendado:
+
+- Iniciar partido y tiempo.
+- Registrar varias `Defensa rival` contra el mismo jugador y confirmar `Lo están anulando`.
+- Registrar tres intentos con baja conversion y confirmar `Baja efectividad`.
+- Registrar errores repetidos por un jugador y confirmar `Errores repetidos`.
+- Registrar dos puntos en contra y confirmar `Puntos regalados`.
+- Registrar puntos rivales en una misma zona y confirmar `Zona vulnerable`.
+- Registrar defensas Uruguay de un jugador y confirmar que no aparece como baja participacion.
+- Confirmar que ninguna alerta menciona asistencias.
+- Probar telefono y tablet landscape.
+
+## 2026-06-18 - Tactical effectiveness Stage 3 report export
+
+Se agrego efectividad ofensiva al reporte/PDF y al resumen de texto compartible sin cambiar modelos de eventos, scoring, mapas ni comportamiento live.
+
+- `reportData` ahora incluye efectividad ofensiva por periodo y total.
+- Cada fila muestra jugador, goles, tiros atajados por el rival, tiros intentados y porcentaje.
+- El PDF renderiza `Efectividad ofensiva` por tiempo y `Efectividad ofensiva total`.
+- El texto compartible agrega una linea compacta de efectividad con hasta tres jugadores.
+- Defensas rivales legacy sin `playerId` siguen excluidas de efectividad individual.
+- Si existen defensas rivales antiguas sin jugador, el PDF/texto muestra una nota de compatibilidad.
+- Recomendaciones live siguen diferidas.
+
+QA manual recomendado:
+
+- Crear partido.
+- Seleccionar jugador y registrar `Punto Uruguay`.
+- Registrar `Defensa rival` contra el mismo jugador.
+- Registrar otro punto con otro jugador.
+- Registrar `En contra rival` y confirmar que no afecta efectividad individual.
+- Finalizar partido y exportar PDF.
+- Confirmar secciones `Efectividad ofensiva` y `Efectividad ofensiva total`.
+- Confirmar columnas `Jugador`, `Goles`, `Atajados`, `Tiros`, `Efectividad`.
+- Confirmar que partidos viejos con defensas rivales sin jugador no crashean y muestran nota si corresponde.
+
+## 2026-06-18 - Tactical effectiveness Stage 1 and 2
+
+Se implemento el primer corte de efectividad tactica sin cambiar reglas de score, mapas, PDF ni recomendaciones live.
+
+- `Defensa rival` ahora requiere un jugador uruguayo seleccionado en cancha antes de abrir el mapa.
+- Las nuevas defensas rivales guardan `playerId` del tirador y `defenseLocation`.
+- Eventos viejos `opponent_defense` sin `playerId` siguen siendo compatibles y siguen apareciendo en mapas.
+- Las barras de rendimiento ahora muestran en ataque puntos, tiros atajados por el rival y efectividad.
+- La formula usada es `efectividad = puntos / (puntos + tiros atajados por el rival)`.
+- `punto en contra rival`, puntos rivales, puntos en contra y defensas rivales legacy sin jugador quedan excluidos de efectividad individual.
+- Se actualizaron tests de store y dominio.
+- Se actualizo la spec 010 y el plan 010.
+
+QA manual recomendado:
+
+- Iniciar partido y tiempo.
+- Tocar `Defensa rival` sin jugador seleccionado y confirmar `Seleccioná primero quién tiró.`
+- Seleccionar jugador en cancha, tocar `Defensa rival`, marcar ubicacion y confirmar que se registra.
+- Confirmar que el mapa `Dónde nos defendieron` se actualiza.
+- Confirmar que el jugador suma un tiro atajado y la efectividad cambia.
+- Registrar `Punto Uruguay` del mismo jugador y confirmar que la efectividad cambia.
+- Registrar `En contra rival` y confirmar que no afecta la efectividad individual.
+- Finalizar tiempo y confirmar barras/efectividad en resumen.
+- Finalizar partido y confirmar barras/efectividad total.
+- Abrir datos viejos con defensas rivales sin jugador y confirmar que no crashea.
+
+## 2026-06-18 - Player performance bars Stage 0
+
+Se implemento una primera version de barras de rendimiento por jugador sin cambiar modelo de eventos, scoring, registro de puntos/defensas/errores, mapas, PDF ni recomendaciones live.
+
+- Se actualizo la spec 010 y el plan 010 con `Barras de rendimiento por jugador`.
+- Se agrego `src/domain/playerPerformance.ts` con helpers puros.
+- Se agrego `src/domain/playerPerformance.test.ts`.
+- Se agrego `src/components/PlayerPerformanceBars.tsx` con barras horizontales usando Views de React Native.
+- `LiveMatchScreen` muestra `Rendimiento en vivo` usando datos del tiempo actual y jugadores en cancha.
+- `PeriodSummaryScreen` muestra `Rendimiento del tiempo`.
+- `FinalSummaryScreen` muestra `Rendimiento total`.
+- Ataque usa solo puntos normales de Uruguay con `playerId`.
+- Defensa usa solo defensas Uruguay con `playerId`.
+- `punto en contra rival` no afecta las barras de ataque.
+- `Defensa rival` no afecta todavia las barras de defensa.
+- No se agregaron dependencias.
+
+Validacion:
+
+- `npm test`: 15 archivos, 162 tests pasaron.
+- `npx tsc --noEmit`: paso.
+- `git diff --check`: paso.
+
+QA manual recomendado:
+
+- Iniciar un partido.
+- Iniciar tiempo.
+- Confirmar que aparece `Rendimiento en vivo`.
+- Confirmar que los jugadores en cancha aparecen aunque tengan cero puntos/defensas.
+- Registrar `Punto Uruguay` con un jugador.
+- Confirmar que la barra de `Ataque` se actualiza.
+- Registrar `Defensa` con otro jugador.
+- Confirmar que la barra de `Defensa` se actualiza.
+- Registrar `En contra rival`.
+- Confirmar que no cambia la barra de ataque por jugador.
+- Registrar `Defensa rival`.
+- Confirmar que no cambia la columna de defensa Uruguay.
+- Finalizar tiempo y confirmar `Rendimiento del tiempo`.
+- Finalizar partido y confirmar `Rendimiento total`.
+- Probar telefono portrait y tablet landscape.
+
+## 2026-06-18 - Spec 010 tactical effectiveness planning
+
+Se planifico la siguiente mejora tactica/estadistica sin cambiar codigo de produccion ni comportamiento de la app.
+
+- Se inspecciono el modelo actual de eventos, store, estadisticas, insights, mapas live, resumenes y PDF.
+- Hallazgo principal: `opponent_defense` hoy registra `defenseLocation` pero no `playerId`.
+- Se creo `docs/specs/010-tactical-effectiveness-and-live-recommendations.md` con estado `Draft`.
+- Se creo `docs/plans/010-tactical-effectiveness-and-live-recommendations-plan.md`.
+- La propuesta define que nuevas `Defensa rival` deben asociarse al jugador uruguayo que tiro.
+- Se definio la formula MVP de efectividad:
+  - goles = puntos Uruguay normales con `playerId`;
+  - tiros defendidos = `opponent_defense` con `playerId`;
+  - tiros intentados = goles + tiros defendidos;
+  - efectividad = goles / tiros intentados.
+- Se documento que defensas rivales viejas sin `playerId` siguen en mapas pero no entran en efectividad por jugador.
+- Se planifico un bloque live compacto de `Alertas tácticas`.
+- Se planifico remover referencias a asistencias en insights y respetar roles defensivos.
+- No se implementaron cambios de codigo.
+
 ## 2026-06-15 - Performance and responsiveness hardening
 
 Se hizo una pasada enfocada de performance/responsividad sin cambiar reglas de score, modelos de eventos, tracking, mapas, backups, reportes, sustituciones ni timer.

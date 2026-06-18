@@ -1,6 +1,7 @@
 import {
   MatchReportData,
   PeriodReportData,
+  ReportEffectivenessRow,
   ReportLocationMaps,
   ReportStat,
   ReportSubstitution,
@@ -20,6 +21,7 @@ const scoreText = (uruguay: number, opponent: number, opponentName = 'Rival') =>
   `Uruguay ${uruguay} - ${opponent} ${opponentName}`;
 
 const topItems = (items: ReportStat[], limit = 3) => items.slice(0, limit);
+const formatPercent = (value: number) => `${Math.round(value * 100)}%`;
 
 const statListHtml = (items: ReportStat[], emptyText = reportEmptyLabel) =>
   items.length === 0
@@ -32,6 +34,41 @@ const stringListHtml = (items: string[]) =>
   items.length === 0
     ? `<p class="muted">${escapeHtml(reportEmptyLabel)}</p>`
     : `<ol>${items.map((item) => `<li>${escapeHtml(item)}</li>`).join('')}</ol>`;
+
+const legacyEffectivenessNoteHtml = (count: number) =>
+  count > 0
+    ? '<p class="note">Algunas defensas rivales antiguas no tienen jugador asociado y no cuentan para la efectividad individual.</p>'
+    : '';
+
+const effectivenessHtml = (items: ReportEffectivenessRow[], legacyOpponentDefensesWithoutPlayer = 0) => `
+  ${
+    items.length === 0
+      ? '<p class="muted">Sin tiros registrados.</p>'
+      : `<table class="effectiveness-table">
+          <thead>
+            <tr>
+              <th>Jugador</th>
+              <th>Goles</th>
+              <th>Atajados</th>
+              <th>Tiros</th>
+              <th>Efectividad</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${items
+              .map((item) => `<tr>
+                <td>${escapeHtml(item.playerName)}</td>
+                <td class="number">${item.goals}</td>
+                <td class="number">${item.rivalDefendedShots}</td>
+                <td class="number">${item.shotAttempts}</td>
+                <td class="number">${escapeHtml(formatPercent(item.effectiveness))}</td>
+              </tr>`)
+              .join('')}
+          </tbody>
+        </table>`
+  }
+  ${legacyEffectivenessNoteHtml(legacyOpponentDefensesWithoutPlayer)}
+`;
 
 const substitutionsHtml = (items: ReportSubstitution[]) =>
   items.length === 0
@@ -143,6 +180,8 @@ const periodHtml = (period: PeriodReportData, opponentName: string) => `
         ${statListHtml(period.defenses, 'Sin defensas registradas.')}
         <h3>Defensas del rival</h3>
         ${statListHtml(period.opponentDefenseZones, 'Sin ubicaciones registradas.')}
+        <h3>Efectividad ofensiva</h3>
+        ${effectivenessHtml(period.effectiveness, period.legacyOpponentDefensesWithoutPlayer)}
       </div>
       <div>
         <h3>Faltas</h3>
@@ -181,6 +220,7 @@ export function buildMatchReportHtml(report: MatchReportData) {
     li { margin: 2px 0; }
     table { border-collapse: collapse; width: 100%; margin: 4px 0 10px; }
     td { border-bottom: 1px solid #e3ebf4; padding: 5px 3px; font-size: 12px; }
+    th { border-bottom: 2px solid #dbe4ef; color: #5d6b7a; font-size: 10px; padding: 5px 3px; text-align: left; text-transform: uppercase; }
     .number { font-weight: 900; text-align: right; }
     .hero { background: #102033; color: white; padding: 18px; border-radius: 8px; margin-bottom: 16px; }
     .hero p { color: #d9e6f2; }
@@ -203,6 +243,7 @@ export function buildMatchReportHtml(report: MatchReportData) {
     section { break-inside: avoid; margin-bottom: 14px; }
     .period-section { break-inside: auto; }
     .note { background: #f4f7fb; border-left: 4px solid #0b6bcb; padding: 8px; border-radius: 6px; }
+    .effectiveness-table { margin-top: 4px; }
   </style>
 </head>
 <body>
@@ -236,6 +277,8 @@ export function buildMatchReportHtml(report: MatchReportData) {
         <h3>Defensas</h3>
         ${statListHtml(report.totals.defenses, 'Sin defensas registradas.')}
         <p><strong>Defensas del rival:</strong> ${report.totals.opponentDefenses}</p>
+        <h3>Efectividad ofensiva total</h3>
+        ${effectivenessHtml(report.totals.effectiveness, report.totals.legacyOpponentDefensesWithoutPlayer)}
         <h3>Faltas</h3>
         ${statListHtml(report.totals.faltas, 'Sin faltas registradas.')}
       </div>
@@ -294,6 +337,14 @@ const statLines = (title: string, items: ReportStat[], emptyText: string, limit 
 
 const topZoneLine = (title: string, items: ReportStat[]) => `${title}: ${items[0] ? `${items[0].label} (${items[0].total})` : 'Sin ubicaciones registradas.'}`;
 
+const effectivenessTextLine = (items: ReportEffectivenessRow[]) =>
+  items.length === 0
+    ? 'Efectividad: Sin tiros registrados.'
+    : `Efectividad: ${items
+        .slice(0, 3)
+        .map((item) => `${item.playerName} ${item.goals}/${item.shotAttempts} (${formatPercent(item.effectiveness)})`)
+        .join(', ')}.`;
+
 export function buildMatchReportText(report: MatchReportData) {
   const lines = [
     report.title,
@@ -308,6 +359,11 @@ export function buildMatchReportText(report: MatchReportData) {
     ...statLines('Top 3 goleadores', report.totals.topScorers, 'Sin puntos de Uruguay.'),
     '',
     ...statLines('Top defensas', report.totals.defenses, 'Sin defensas registradas.'),
+    '',
+    effectivenessTextLine(report.totals.effectiveness),
+    ...(report.totals.legacyOpponentDefensesWithoutPlayer > 0
+      ? ['Nota: algunas defensas rivales antiguas no tienen jugador asociado y no cuentan para la efectividad individual.']
+      : []),
     '',
     ...statLines('Faltas', report.totals.faltas, 'Sin faltas registradas.'),
     '',

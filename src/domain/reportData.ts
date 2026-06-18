@@ -8,6 +8,7 @@ import {
 } from './court';
 import { createTacticalInsights, InsightCard } from './insights';
 import { normalizeOpponentName } from './opponent';
+import { buildPlayerPerformance, PlayerPerformanceRow } from './playerPerformance';
 import {
   calculatePeriodScore,
   calculateTotalScore,
@@ -61,6 +62,15 @@ export type ReportSubstitution = {
   playerB?: string;
 };
 
+export type ReportEffectivenessRow = {
+  playerId: string;
+  playerName: string;
+  goals: number;
+  rivalDefendedShots: number;
+  shotAttempts: number;
+  effectiveness: number;
+};
+
 export type PeriodReportData = {
   periodNumber: MatchPeriod;
   periodLabel: string;
@@ -76,6 +86,8 @@ export type PeriodReportData = {
   faltas: ReportStat[];
   ownPointsByPlayer: ReportStat[];
   totalErrors: ReportStat[];
+  effectiveness: ReportEffectivenessRow[];
+  legacyOpponentDefensesWithoutPlayer: number;
   substitutions: ReportSubstitution[];
   insights: PeriodInsight[];
   maps: ReportLocationMaps;
@@ -103,6 +115,8 @@ export type MatchReportData = {
     faltas: ReportStat[];
     ownPointsByPlayer: ReportStat[];
     totalErrors: ReportStat[];
+    effectiveness: ReportEffectivenessRow[];
+    legacyOpponentDefensesWithoutPlayer: number;
     opponentOwnPoints: number;
     substitutions: ReportSubstitution[];
     insights: InsightCard[];
@@ -232,6 +246,30 @@ const buildReportLocationMaps = (events: MatchEvent[]): ReportLocationMaps => ({
   opponentDefenses: getOpponentDefenseEventsWithLocation(events).map((event) => event.defenseLocation),
 });
 
+const isLegacyOpponentDefenseWithoutPlayer = (event: MatchEvent) =>
+  event.kind === 'opponent_defense' && !event.playerId;
+
+const mapEffectivenessRows = (rows: PlayerPerformanceRow[]): ReportEffectivenessRow[] =>
+  rows
+    .filter((row) => row.shotAttempts > 0)
+    .map((row) => ({
+      playerId: row.playerId,
+      playerName: row.playerName,
+      goals: row.points,
+      rivalDefendedShots: row.rivalDefensesAgainst,
+      shotAttempts: row.shotAttempts,
+      effectiveness: row.effectiveness ?? 0,
+    }))
+    .sort((a, b) =>
+      b.shotAttempts - a.shotAttempts ||
+      b.goals - a.goals ||
+      b.effectiveness - a.effectiveness ||
+      a.playerName.localeCompare(b.playerName),
+    );
+
+const buildEffectivenessRows = (events: MatchEvent[], players: Player[]) =>
+  mapEffectivenessRows(buildPlayerPerformance(events, players).rows);
+
 export function buildMatchReportData(match: Match, players: Player[]): MatchReportData {
   const opponentName = normalizeOpponentName(match.opponent);
   const teamPoolName = match.teamPoolName?.trim() || undefined;
@@ -264,6 +302,8 @@ export function buildMatchReportData(match: Match, players: Player[]): MatchRepo
       faltas: mapFaltas(errorBreakdown, getPlayerLabel),
       ownPointsByPlayer: mapOwnPointsByPlayer(errorBreakdown, getPlayerLabel),
       totalErrors: mapPlayerStats(getErrorsByPlayerByPeriod(match.events, periodNumber), getPlayerLabel),
+      effectiveness: buildEffectivenessRows(periodEvents, players),
+      legacyOpponentDefensesWithoutPlayer: periodEvents.filter(isLegacyOpponentDefenseWithoutPlayer).length,
       substitutions: mapLineupActions(
         [...getSubstitutionsByPeriod(match.events, periodNumber), ...getLineupSwapsByPeriod(match.events, periodNumber)],
         getPlayerLabel,
@@ -279,6 +319,8 @@ export function buildMatchReportData(match: Match, players: Player[]): MatchRepo
   const totalErrors = mapPlayerStats(getErrorsByPlayer(match.events), getPlayerLabel);
   const opponentOwnPoints = getOpponentOwnPoints(match.events);
   const opponentDefenses = getOpponentDefenses(match.events).length;
+  const effectiveness = buildEffectivenessRows(match.events, players);
+  const legacyOpponentDefensesWithoutPlayer = match.events.filter(isLegacyOpponentDefenseWithoutPlayer).length;
   const totalErrorCount = totalErrors.reduce((sum, stat) => sum + stat.total, 0);
 
   return {
@@ -314,6 +356,8 @@ export function buildMatchReportData(match: Match, players: Player[]): MatchRepo
       faltas,
       ownPointsByPlayer,
       totalErrors,
+      effectiveness,
+      legacyOpponentDefensesWithoutPlayer,
       opponentOwnPoints,
       substitutions: mapLineupActions(getLineupActions(match.events), getPlayerLabel),
       insights: createTacticalInsights({

@@ -3,6 +3,7 @@ import { StyleSheet, Text, View } from 'react-native';
 
 import { ActionButton } from '../components/ActionButton';
 import { CourtMapSummary } from '../components/CourtMapSummary';
+import { PlayerPerformanceBars } from '../components/PlayerPerformanceBars';
 import { Screen } from '../components/Screen';
 import {
   groupOpponentPointsByZone,
@@ -25,6 +26,7 @@ import {
   getOpponentOwnPointsByPeriod,
   getOpponentDefensesByPeriod,
 } from '../domain/periodStats';
+import { buildPlayerPerformanceForPeriod } from '../domain/playerPerformance';
 import { useMatchStore } from '../store/useMatchStore';
 import { RootStackParamList } from '../utils/navigation';
 import { fontSize, spacing } from '../utils/responsive';
@@ -64,6 +66,12 @@ export function PeriodSummaryScreen({ navigation, route }: Props) {
   const opponentOwnPoints = getOpponentOwnPointsByPeriod(match.events, periodNumber);
   const opponentDefenses = getOpponentDefensesByPeriod(match.events, periodNumber);
   const periodEvents = getEventsByPeriod(match.events, periodNumber);
+  const periodLineupPlayerIds = Array.from(new Set(
+    match.lineupSnapshots
+      .filter((lineup) => lineup.team === 'uruguay' && lineup.clock.period === periodNumber)
+      .flatMap((lineup) => lineup.playerIds),
+  ));
+  const playerPerformance = buildPlayerPerformanceForPeriod(match.events, players, periodLineupPlayerIds, periodNumber);
   const effectiveZones = groupPointsByZone(periodEvents);
   const vulnerableZones = groupOpponentPointsByZone(periodEvents);
   const defendedZones = groupOpponentDefensesByZone(periodEvents);
@@ -99,6 +107,8 @@ export function PeriodSummaryScreen({ navigation, route }: Props) {
       <CourtMapSummary title="Dónde hicimos los puntos" events={periodEvents} team="uruguay" />
       <CourtMapSummary title="Dónde nos hicieron puntos" events={periodEvents} team="opponent" />
       <CourtMapSummary title="Dónde nos defendieron" events={periodEvents} source="opponent_defenses" />
+
+      <PlayerPerformanceBars data={playerPerformance} title="Rendimiento del tiempo" />
 
       <View style={styles.card}>
         <Text style={styles.sectionTitle}>Goleadores del tiempo</Text>

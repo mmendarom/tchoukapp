@@ -341,31 +341,40 @@ describe('useMatchStore period stability', () => {
     expect(getDefensesByPlayerByPeriod(getActiveMatch().events, 1)).toEqual([]);
   });
 
-  it('records rival defense with location without requiring a player or changing score', () => {
+  it('records rival defense with shooter and location without changing score', () => {
     createLivePeriodMatch();
-    useMatchStore.getState().recordOpponentDefense({ x: 0.42, y: 0.36 });
+    useMatchStore.getState().recordOpponentDefense({ playerId: 'mauro', defenseLocation: { x: 0.42, y: 0.36 } });
 
     const match = getActiveMatch();
     expect(match.events[0]).toMatchObject({
       kind: 'opponent_defense',
       team: 'opponent',
+      playerId: 'mauro',
       defenseLocation: { x: 0.42, y: 0.36 },
     });
-    expect('playerId' in match.events[0]).toBe(false);
     expect(calculateTotalScore(match.events)).toEqual({ uruguay: 0, opponent: 0 });
     expect(getOpponentDefenses(match.events)).toHaveLength(1);
   });
 
+  it('does not record rival defense without shooter or with an off-court shooter', () => {
+    createLivePeriodMatch();
+
+    useMatchStore.getState().recordOpponentDefense({ defenseLocation: { x: 0.42, y: 0.36 } });
+    useMatchStore.getState().recordOpponentDefense({ playerId: 'juan', defenseLocation: { x: 0.42, y: 0.36 } });
+
+    expect(getActiveMatch().events).toHaveLength(0);
+  });
+
   it('does not record rival defense without location', () => {
     createLivePeriodMatch();
-    useMatchStore.getState().recordOpponentDefense();
+    useMatchStore.getState().recordOpponentDefense({ playerId: 'mauro' });
 
     expect(getActiveMatch().events).toHaveLength(0);
   });
 
   it('undo after rival defense removes the event', () => {
     createLivePeriodMatch();
-    useMatchStore.getState().recordOpponentDefense({ x: 0.42, y: 0.36 });
+    useMatchStore.getState().recordOpponentDefense({ playerId: 'mauro', defenseLocation: { x: 0.42, y: 0.36 } });
     useMatchStore.getState().undoLastEvent();
 
     expect(getOpponentDefenses(getActiveMatch().events)).toHaveLength(0);
@@ -588,7 +597,7 @@ describe('useMatchStore period stability', () => {
     state.startMatch(matchId);
 
     useMatchStore.getState().recordDefense('mauro');
-    useMatchStore.getState().recordOpponentDefense({ x: 0.2, y: 0.2 });
+    useMatchStore.getState().recordOpponentDefense({ playerId: 'mauro', defenseLocation: { x: 0.2, y: 0.2 } });
     useMatchStore.getState().recordError('mauro', 'falta');
 
     expect(getActiveMatch().events).toHaveLength(0);

@@ -1,0 +1,419 @@
+# Plan 010 - Tactical Effectiveness And Live Recommendations
+
+Spec relacionada: `docs/specs/010-tactical-effectiveness-and-live-recommendations.md`
+
+Estado: Draft
+
+## Objetivo
+
+Implementar, en etapas seguras, una mejora tactica que:
+
+- modele `Defensa rival` como tiro uruguayo defendido por el rival;
+- asocie nuevas defensas rivales a un jugador uruguayo;
+- derive efectividad ofensiva por jugador;
+- muestre barras visuales de rendimiento con datos existentes;
+- muestre esa efectividad en resumenes y PDF;
+- agregue alertas tacticas live compactas;
+- corrija insights para no depender de asistencias ni castigar roles defensivos.
+
+## Estado Actual Inspeccionado
+
+Archivos revisados:
+
+- `src/domain/types.ts`
+- `src/store/useMatchStore.ts`
+- `src/domain/stats.ts`
+- `src/domain/periodStats.ts`
+- `src/domain/insights.ts`
+- `src/domain/reportData.ts`
+- `src/components/LiveMapPanel.tsx`
+- `src/screens/LiveMatchScreen.tsx`
+- `src/screens/PeriodSummaryScreen.tsx`
+- `src/screens/FinalSummaryScreen.tsx`
+- `src/export/reportHtml.ts`
+
+Hallazgos:
+
+- `OpponentDefenseEvent` no tiene `playerId`.
+- `recordOpponentDefense(defenseLocation)` guarda solo `defenseLocation`.
+- `LiveMatchScreen` abre mapa de `Defensa rival` sin requerir jugador.
+- Mapas live, resumenes y PDF ya muestran `Dónde nos defendieron` usando `defenseLocation`.
+- `getOpponentDefenses` y funciones relacionadas cuentan defensas rivales totales.
+- No existe efectividad ofensiva por jugador.
+- No existian barras visuales de rendimiento por jugador antes de esta etapa.
+- `createLowInvolvementInsights` usa puntos y `assistPlayerId`; el texto menciona asistencias.
+- PDF/report tiene secciones de goleadores, defensas, errores, zonas y defensas rivales, pero no efectividad.
+
+## Principios De Implementacion
+
+- Cambios pequenos por etapa.
+- Mantener eventos como fuente de verdad.
+- No guardar estadisticas derivadas en Zustand.
+- Mantener compatibilidad con eventos viejos sin `playerId`.
+- No inferir `playerId` ni ubicacion historica.
+- No tocar scoring salvo tests de no-regresion.
+- No agregar dependencias.
+
+## Stage 0 - Barras De Rendimiento Con Datos Existentes
+
+Estado: Implemented.
+
+### Cambios implementados
+
+1. Se agrego helper puro `src/domain/playerPerformance.ts`.
+2. Se agrego test `src/domain/playerPerformance.test.ts`.
+3. Se agrego componente reusable `src/components/PlayerPerformanceBars.tsx`.
+4. `LiveMatchScreen` muestra `Rendimiento en vivo`.
+5. `PeriodSummaryScreen` muestra `Rendimiento del tiempo`.
+6. `FinalSummaryScreen` muestra `Rendimiento total`.
+
+### Formulas implementadas
+
+Ataque:
+
+- `pointsByPlayer`: puntos normales de Uruguay con `playerId`.
+- `totalTeamPoints`: suma de esos puntos.
+- `playerAttackShare = playerPoints / totalTeamPoints`.
+
+Defensa:
+
+- `defensesByPlayer`: defensas Uruguay con `playerId`.
+- `totalTeamDefenses`: suma de esas defensas.
+- `playerDefenseShare = playerDefenses / totalTeamDefenses`.
+
+### Exclusiones
+
+- `opponent_own_point` no cuenta en ataque.
+- Puntos rivales no cuentan en ataque.
+- Eventos sin `playerId` no cuentan.
+- `opponent_defense` no cuenta como defensa Uruguay.
+
+### UI
+
+- Dos columnas:
+  - `Ataque`;
+  - `Defensa`.
+- Cada fila muestra:
+  - jugador;
+  - cantidad;
+  - porcentaje;
+  - barra horizontal.
+- Empty states:
+  - `Sin puntos registrados.`;
+  - `Sin defensas registradas.`
+- Sin dependencias nuevas ni libreria de charts.
+
+### Datos por pantalla
+
+- Live:
+  - tiempo actual;
+  - jugadores actualmente en cancha aunque tengan cero stats;
+  - orden de cancha.
+- Resumen por tiempo:
+  - eventos del periodo;
+  - jugadores de snapshots del periodo si estan disponibles;
+  - columnas ordenadas por contribucion.
+- Resumen final:
+  - totales del partido;
+  - jugadores con stats.
+
+### Tests implementados
+
+- Share de ataque.
+- Share de defensa.
+- Exclusion de `punto en contra rival`.
+- Exclusion de puntos rivales y eventos sin jugador.
+- Exclusion de defensas rivales.
+- Jugadores en cancha con cero stats en live.
+- No division por cero.
+- Filtrado por periodo.
+- Totales de partido.
+
+### Diferido
+
+- Efectividad ofensiva con tiros defendidos.
+- Integracion con PDF.
+- Recomendaciones live.
+- Cambio de modelo para `Defensa rival`.
+
+## Stage 1 - Modelo Y Flujo De Defensa Rival
+
+Estado: implementado el 2026-06-18.
+
+### Cambios
+
+1. Actualizar `src/domain/types.ts`:
+   - agregar `playerId?: string` a `OpponentDefenseEvent`.
+2. Actualizar `src/store/useMatchStore.ts`:
+   - cambiar accion a firma tipo objeto:
+     - `recordOpponentDefense(input: { playerId: string; defenseLocation: CourtLocation })`;
+   - validar match activo/live;
+   - validar `defenseLocation`;
+   - validar que `playerId` este en cancha;
+   - guardar `playerId`.
+3. Actualizar `src/screens/LiveMatchScreen.tsx`:
+   - `Defensa rival` debe usar jugador seleccionado;
+   - si no hay jugador: `Seleccioná primero quién tiró.`;
+   - si no esta en cancha: `Seleccioná un jugador en cancha.`;
+   - al confirmar mapa llamar store con `playerId` y `defenseLocation`;
+   - latest action puede seguir `Defensa rival registrada` o mejorar a `Defensa rival a tiro de {player}`.
+4. Mantener `CourtMapInput` sin cambios salvo labels si hace falta:
+   - `¿Dónde nos defendieron?`;
+   - `Marcá dónde el rival defendió el tiro.`
+
+### Tests
+
+- `recordOpponentDefense` guarda `playerId` y `defenseLocation`.
+- No registra sin `playerId`.
+- No registra si jugador no esta en cancha.
+- No registra sin ubicacion.
+- No cambia score.
+- Undo remueve el evento.
+- Eventos viejos sin `playerId` siguen seguros en mapas/stats.
+
+### Riesgo Principal
+
+- Agregar requisito de jugador puede frenar registro. Mitigar con feedback claro y mantener seleccion de jugador persistente.
+
+## Stage 2 - Efectividad Ofensiva
+
+Estado: implementado el 2026-06-18 dentro de `src/domain/playerPerformance.ts` y `PlayerPerformanceBars`.
+
+### Cambios
+
+1. Dominio extendido:
+   - `src/domain/playerPerformance.ts` agrega tiros atajados por el rival, intentos y efectividad.
+   - Se mantuvo un helper unico para alimentar live, resumen por tiempo y resumen final.
+2. Tipos sugeridos:
+
+```ts
+type PlayerEffectivenessStat = {
+  playerId: string;
+  goals: number;
+  rivalDefensesAgainst: number;
+  shotAttempts: number;
+  effectiveness: number | undefined;
+};
+```
+
+3. Funciones implementadas:
+   - `buildPlayerPerformance(events, players, includedPlayerIds?)`;
+   - `buildPlayerPerformanceForPeriod(events, players, lineupPlayerIds, periodNumber)`;
+   - `buildLivePlayerPerformance(events, players, currentLineupPlayerIds, currentPeriod)`.
+4. Integrar en:
+   - `PeriodSummaryScreen`;
+   - `FinalSummaryScreen`.
+5. Labels:
+   - `Efectividad ofensiva`;
+   - `Goles`;
+   - `Tiros defendidos`;
+   - `Tiros`;
+   - `Efectividad`;
+   - `Sin tiros`.
+
+### Formula
+
+- `goals = puntos Uruguay normales con playerId`.
+- `rivalDefensesAgainst = opponent_defense con playerId`.
+- `shotAttempts = goals + rivalDefensesAgainst`.
+- `effectiveness = goals / shotAttempts`.
+- Excluir `opponent_own_point`, `punto_en_contra` y eventos legacy sin `playerId`.
+
+### Tests
+
+- Goles e intentos correctos.
+- Tiros defendidos por jugador correctos.
+- `opponent_own_point` excluido.
+- `punto_en_contra` excluido.
+- Legacy `opponent_defense` sin `playerId` excluido.
+- `shotAttempts === 0` produce `effectiveness: undefined`.
+- Period filtering correcto.
+
+### Notas De Implementacion
+
+- Live usa el tiempo actual y muestra jugadores en cancha aunque no tengan tiros.
+- Resumen por tiempo usa eventos del tiempo y snapshots disponibles del periodo.
+- Resumen final usa totales del partido.
+- PDF/reporte queda diferido a Stage 3.
+- Recomendaciones live quedan diferidas a Stage 4.
+
+## Stage 3 - PDF/Reporte
+
+Estado: implementado el 2026-06-18.
+
+### Cambios
+
+1. Extender `src/domain/reportData.ts`:
+   - `PeriodReportData.effectiveness`;
+   - `MatchReportData.totals.effectiveness`;
+   - conteo de defensas rivales legacy sin jugador.
+2. Actualizar `src/export/reportHtml.ts`:
+   - tabla `Efectividad ofensiva`;
+   - columnas `Jugador`, `Goles`, `Tiros defendidos`, `Tiros`, `Efectividad`;
+   - nota legacy si corresponde.
+3. Actualizar texto fallback:
+   - incluir resumen compacto de efectividad;
+   - incluir nota si hay legacy.
+
+### Notas De Implementacion
+
+- El reporte usa `src/domain/playerPerformance.ts` como fuente de calculo.
+- Se muestran solo jugadores con al menos un tiro intentado.
+- Orden: tiros intentados, goles, efectividad y nombre.
+- La nota legacy aparece solo si existen `opponent_defense` sin `playerId`.
+- Recomendaciones live siguen diferidas a Stage 4.
+
+### Tests
+
+- Report data incluye efectividad.
+- Report HTML muestra labels en español.
+- No aparecen raw enum values.
+- Report genera con eventos legacy sin crashear.
+- Nota legacy aparece solo cuando corresponde.
+
+## Stage 4 - Bloque Live De Recomendaciones
+
+Estado: implementado el 2026-06-18.
+
+### Cambios
+
+1. Crear helper puro:
+   - `src/domain/liveRecommendations.ts`;
+   - entrada: match/events/currentLineup/players/opponentName;
+   - salida: cards con `severity`, `title`, `description`, `suggestedAction`.
+2. Reglas iniciales:
+   - jugador defendido repetidamente;
+   - baja efectividad con intentos minimos;
+   - errores repetidos;
+   - zona rival repetida;
+   - zona de defensas rivales repetida;
+   - jugador sin participacion despues de suficiente actividad;
+   - aporte defensivo fuerte.
+3. Integrar en `LiveMatchScreen`:
+   - componente `LiveRecommendationsPanel`;
+   - titulo `Lectura en vivo`;
+   - 4 items maximo;
+   - compacto y full-width.
+
+### Notas De Implementacion
+
+- Usa solo eventos del periodo actual.
+- Orden de prioridad implementado:
+  - puntos regalados;
+  - errores repetidos;
+  - jugador anulado;
+  - baja efectividad;
+  - zona vulnerable;
+  - zona bloqueada;
+  - baja participacion;
+  - aporte defensivo.
+- No usa ni menciona asistencias.
+- Baja participacion requiere suficiente actividad y cero tiros/defensas.
+- Defensas rivales legacy sin `playerId` no cuentan como intentos de jugador pero si pueden activar zona bloqueada.
+
+### Ubicacion UI Sugerida
+
+- Phone portrait: despues de `liveMapPanel`, antes de `Controles del partido` si no desplaza acciones esenciales.
+- Tablet landscape: debajo de columna derecha o debajo del grid principal.
+- Si no hay alertas, mostrar texto muy compacto o ocultar segun QA.
+
+### Tests
+
+- Sin eventos no crashea.
+- Maximo 5 recomendaciones.
+- Prioriza critical/warning/info.
+- Jugador bloqueado repetidamente aparece.
+- Baja efectividad aparece con umbral.
+- Jugador con defensas no aparece como sin participacion.
+- Texto no menciona asistencias.
+
+## Stage 5 - Mejora De Insights Existentes
+
+### Cambios
+
+1. Actualizar `src/domain/insights.ts`.
+2. Reemplazar `createLowInvolvementInsights`:
+   - no usar `assistPlayerId`;
+   - no mencionar asistencias;
+   - usar intentos de tiro + defensas Uruguay;
+   - requerir suficientes eventos/puntos/tiempo.
+3. Agregar o reutilizar efectividad:
+   - alerta de baja efectividad;
+   - alerta de jugador anulado por defensas rivales.
+4. Mantener alertas existentes utiles:
+   - errores recientes;
+   - zonas rivales;
+   - defensores clave;
+   - puntos regalados.
+
+### Tests
+
+- No hay texto `asistencia`/`asistencias`.
+- Defensor con varias defensas no se marca como bajo involucramiento.
+- Jugador sin tiros ni defensas puede aparecer si pasa umbral.
+- Jugador con muchos tiros defendidos aparece como baja efectividad/anulado.
+
+## Orden Recomendado
+
+1. Stage 1: porque captura el dato faltante para todo lo demas.
+2. Stage 2: porque define la metrica central.
+3. Stage 3: porque export depende de la metrica.
+4. Stage 5: puede hacerse antes de Stage 4 si se quiere limpiar insights finales primero.
+5. Stage 4: requiere umbrales mas finos y QA visual en telefono real.
+
+Orden alternativo seguro:
+
+- Stage 1 -> Stage 2 -> Stage 5 -> Stage 3 -> Stage 4.
+
+## Manual QA Global
+
+- Iniciar partido.
+- Seleccionar jugador en cancha.
+- Tocar `Defensa rival`.
+- Confirmar que abre mapa.
+- Registrar ubicacion.
+- Confirmar ultima accion.
+- Confirmar score no cambia.
+- Deshacer y confirmar que se elimina.
+- Intentar `Defensa rival` sin jugador y confirmar feedback.
+- Finalizar tiempo y revisar efectividad.
+- Finalizar partido y revisar efectividad total.
+- Exportar PDF y revisar tabla.
+- Crear partido con datos legacy o backup viejo y confirmar que mapas siguen funcionando.
+- Revisar alertas live con varios eventos.
+- Confirmar que ninguna alerta menciona asistencias.
+
+## Archivos Probables A Tocar En Implementacion
+
+- `src/domain/types.ts`
+- `src/store/useMatchStore.ts`
+- `src/store/useMatchStore.test.ts`
+- `src/domain/effectiveness.ts` (nuevo, recomendado)
+- `src/domain/effectiveness.test.ts` (nuevo)
+- `src/domain/periodStats.ts`
+- `src/domain/periodStats.test.ts`
+- `src/domain/insights.ts`
+- `src/domain/insights.test.ts`
+- `src/domain/reportData.ts`
+- `src/domain/reportData.test.ts`
+- `src/export/reportHtml.ts`
+- `src/screens/LiveMatchScreen.tsx`
+- `src/screens/PeriodSummaryScreen.tsx`
+- `src/screens/FinalSummaryScreen.tsx`
+- posible `src/components/LiveRecommendationPanel.tsx`
+
+## Criterios Para Detenerse
+
+- Si el flujo de `Defensa rival` se vuelve demasiado lento en telefono.
+- Si las alertas live ocupan demasiado espacio o distraen de acciones principales.
+- Si el reporte PDF queda demasiado largo para compartir.
+- Si hay ambiguedad tactica sobre umbrales de efectividad.
+
+## Validacion Por Etapa
+
+Cada etapa de implementacion debe correr:
+
+- `npm test`
+- `npx tsc --noEmit`
+
+Para etapas con UI, agregar QA manual en `docs/implementation-log.md`.

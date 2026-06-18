@@ -57,7 +57,7 @@ export function CourtMapInput({ selectedLocation, onSelectLocation, onConfirm, o
   const kicker = mode === 'opponent_defense' ? 'Marcá dónde nos defendieron' : 'Marcá dónde cayó la pelota';
   const tip =
     mode === 'opponent_defense'
-      ? 'Marcá dónde el rival defendió nuestro ataque.'
+      ? 'Marcá dónde el rival defendió el tiro.'
       : 'Tip: girá el celular para marcar con más precisión.';
   const mapHeight = useMemo(() => {
     const verticalInsets = insets.top + insets.bottom;

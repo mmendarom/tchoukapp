@@ -43,6 +43,11 @@ const report: MatchReportData = {
       faltas: [{ label: '#3 Nicolas', total: 1 }],
       ownPointsByPlayer: [{ label: '#3 Nicolas', total: 1 }],
       totalErrors: [{ label: '#3 Nicolas', total: 2 }],
+      effectiveness: [
+        { playerId: 'p1', playerName: '#1 Mauro', goals: 3, rivalDefendedShots: 1, shotAttempts: 4, effectiveness: 0.75 },
+        { playerId: 'p2', playerName: '#2 Marcelo', goals: 0, rivalDefendedShots: 1, shotAttempts: 1, effectiveness: 0 },
+      ],
+      legacyOpponentDefensesWithoutPlayer: 1,
       substitutions: [{ periodLabel: '1er tiempo', clockLabel: '3:20', kind: 'substitution', playerOut: '#2 Marcelo', playerIn: '#4 Vladi' }],
       insights: [{ severity: 'info', title: 'Tiempo positivo', description: 'Uruguay gano este tiempo por 1 puntos.', suggestedAction: 'Mantener decisiones.' }],
       maps: {
@@ -69,6 +74,8 @@ const report: MatchReportData = {
       faltas: [],
       ownPointsByPlayer: [],
       totalErrors: [],
+      effectiveness: [],
+      legacyOpponentDefensesWithoutPlayer: 0,
       substitutions: [],
       insights: [],
       maps: {
@@ -92,6 +99,8 @@ const report: MatchReportData = {
       faltas: [],
       ownPointsByPlayer: [],
       totalErrors: [],
+      effectiveness: [],
+      legacyOpponentDefensesWithoutPlayer: 0,
       substitutions: [],
       insights: [],
       maps: {
@@ -108,6 +117,11 @@ const report: MatchReportData = {
     faltas: [{ label: '#3 Nicolas', total: 1 }],
     ownPointsByPlayer: [{ label: '#3 Nicolas', total: 1 }],
     totalErrors: [{ label: '#3 Nicolas', total: 2 }],
+    effectiveness: [
+      { playerId: 'p1', playerName: '#1 Mauro', goals: 3, rivalDefendedShots: 1, shotAttempts: 4, effectiveness: 0.75 },
+      { playerId: 'p2', playerName: '#2 Marcelo', goals: 0, rivalDefendedShots: 1, shotAttempts: 1, effectiveness: 0 },
+    ],
+    legacyOpponentDefensesWithoutPlayer: 1,
     opponentOwnPoints: 1,
     substitutions: [
       { periodLabel: '1er tiempo', clockLabel: '3:20', kind: 'substitution', playerOut: '#2 Marcelo', playerIn: '#4 Vladi' },
@@ -153,6 +167,11 @@ describe('reportHtml', () => {
     expect(html).toContain('Goleadores');
     expect(html).toContain('Puntos en contra del rival');
     expect(html).toContain('Defensas del rival');
+    expect(html).toContain('Efectividad ofensiva');
+    expect(html).toContain('Efectividad ofensiva total');
+    expect(html).toContain('Atajados');
+    expect(html).toContain('75%');
+    expect(html).toContain('Algunas defensas rivales antiguas no tienen jugador asociado');
     expect(html).toContain('Donde nos defendieron');
     expect(html).toContain('<meta charset="UTF-8"');
     expect(html).toContain('Formación inicial');
@@ -178,6 +197,7 @@ describe('reportHtml', () => {
     expect(html).not.toContain('opponent_own_point');
     expect(html).not.toContain('punto_en_contra');
     expect(html).not.toContain('lineup_swap');
+    expect(html).not.toContain('opponent_defense');
     expect(html).not.toContain('Ã');
     expect(html).not.toContain('Â');
     expect(html).not.toContain('�');
@@ -190,6 +210,8 @@ describe('reportHtml', () => {
     expect(text).toContain('Uruguay 2 - 1 Argentina');
     expect(text).toContain('Puntos en contra del rival: 1');
     expect(text).toContain('Defensas del rival: 3');
+    expect(text).toContain('Efectividad: #1 Mauro 3/4 (75%), #2 Marcelo 0/1 (0%).');
+    expect(text).toContain('Nota: algunas defensas rivales antiguas no tienen jugador asociado');
     expect(text).toContain('Top 3 goleadores');
     expect(text).toContain('Zonas principales');
     expect(text).toContain('Donde hicimos puntos: Zona derecha (1)');
@@ -200,5 +222,16 @@ describe('reportHtml', () => {
     expect(text).not.toContain('Ã');
     expect(text).not.toContain('Â');
     expect(text).not.toContain('�');
+  });
+
+  it('omits legacy effectiveness note when every rival defense has a player', () => {
+    const cleanReport: MatchReportData = {
+      ...report,
+      periods: report.periods.map((period) => ({ ...period, legacyOpponentDefensesWithoutPlayer: 0 })),
+      totals: { ...report.totals, legacyOpponentDefensesWithoutPlayer: 0 },
+    };
+
+    expect(buildMatchReportHtml(cleanReport)).not.toContain('Algunas defensas rivales antiguas no tienen jugador asociado');
+    expect(buildMatchReportText(cleanReport)).not.toContain('Nota: algunas defensas rivales antiguas');
   });
 });

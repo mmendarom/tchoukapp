@@ -7,11 +7,15 @@ import { BenchList } from '../components/BenchList';
 import { CourtMapInput } from '../components/CourtMapInput';
 import { LineupCourt } from '../components/LineupCourt';
 import { LiveMapPanel } from '../components/LiveMapPanel';
+import { LiveRecommendationsPanel } from '../components/LiveRecommendationsPanel';
+import { PlayerPerformanceBars } from '../components/PlayerPerformanceBars';
 import { Screen } from '../components/Screen';
+import { buildLiveRecommendations } from '../domain/liveRecommendations';
 import { createLineupSlots, getBenchPlayers } from '../domain/lineupSlots';
 import { resolveMatchAvailablePlayers } from '../domain/matchSetup';
 import { normalizeOpponentName } from '../domain/opponent';
-import { calculateTotalScore, formatPeriodName, formatTimer } from '../domain/periodStats';
+import { buildLivePlayerPerformance } from '../domain/playerPerformance';
+import { calculateTotalScore, formatPeriodName, formatTimer, getEventsByPeriod } from '../domain/periodStats';
 import { getCurrentLineup } from '../domain/stats';
 import { CourtLocation, MatchEvent, Player } from '../domain/types';
 import { useMatchStore } from '../store/useMatchStore';
@@ -47,7 +51,7 @@ const describeEvent = (event: MatchEvent, players: Player[]) => {
     case 'defense':
       return `Defensa de ${getPlayerName(players, event.playerId)}`;
     case 'opponent_defense':
-      return 'Defensa rival registrada';
+      return event.playerId ? `Defensa rival a tiro de ${getPlayerName(players, event.playerId)}` : 'Defensa rival registrada';
     case 'substitution':
       return event.playerOutId
         ? `Cambio - sale ${getPlayerName(players, event.playerOutId)}, entra ${getPlayerName(players, event.playerInId)}`
@@ -74,6 +78,7 @@ export function LiveMatchScreen({ navigation, route }: Props) {
   const [feedbackMessage, setFeedbackMessage] = useState<string | undefined>();
   const [liveMapsExpanded, setLiveMapsExpanded] = useState(false);
   const [selectedLandingLocation, setSelectedLandingLocation] = useState<CourtLocation | undefined>();
+  const [selectedOpponentDefenseShooterId, setSelectedOpponentDefenseShooterId] = useState<string | undefined>();
   const feedbackOpacity = useRef(new Animated.Value(0)).current;
   const feedbackTranslateY = useRef(new Animated.Value(-8)).current;
   const players = useMatchStore((state) => state.players);
@@ -220,6 +225,10 @@ export function LiveMatchScreen({ navigation, route }: Props) {
   const timerText = currentPeriodState?.remainingSeconds === 0 ? 'Tiempo cumplido' : formatTimer(currentPeriodState?.remainingSeconds ?? 0);
   const shouldShowLiveMaps = match.status === 'live';
   const toggleLiveMapsExpanded = useCallback(() => setLiveMapsExpanded((current) => !current), []);
+  const currentPeriodEvents = useMemo(
+    () => getEventsByPeriod(match.events, match.currentPeriod),
+    [match.currentPeriod, match.events],
+  );
   const liveMapPanel = shouldShowLiveMaps ? (
     <LiveMapPanel
       collapsible={!isTabletLandscape}
@@ -228,6 +237,25 @@ export function LiveMatchScreen({ navigation, route }: Props) {
       onToggleExpanded={toggleLiveMapsExpanded}
       periodNumber={match.currentPeriod}
     />
+  ) : undefined;
+  const livePerformance = useMemo(
+    () => buildLivePlayerPerformance(match.events, players, currentLineup?.playerIds ?? [], match.currentPeriod),
+    [currentLineup?.playerIds, match.currentPeriod, match.events, players],
+  );
+  const livePerformanceBars = match.status === 'live' ? (
+    <PlayerPerformanceBars data={livePerformance} showRowsWhenEmpty sortMode="input" title="Rendimiento en vivo" />
+  ) : undefined;
+  const liveRecommendations = useMemo(
+    () =>
+      buildLiveRecommendations({
+        currentLineupPlayerIds: currentLineup?.playerIds ?? [],
+        events: currentPeriodEvents,
+        players,
+      }),
+    [currentLineup?.playerIds, currentPeriodEvents, players],
+  );
+  const liveRecommendationsPanel = match.status === 'live' ? (
+    <LiveRecommendationsPanel recommendations={liveRecommendations} />
   ) : undefined;
 
   const confirmCancel = () => {
@@ -282,6 +310,7 @@ export function LiveMatchScreen({ navigation, route }: Props) {
 
     setPointMode('uruguay_point');
     setSelectedLandingLocation(undefined);
+    setSelectedOpponentDefenseShooterId(undefined);
   };
 
   const confirmPointLocation = () => {
@@ -294,9 +323,15 @@ export function LiveMatchScreen({ navigation, route }: Props) {
     }
 
     if (pointMode === 'opponent_defense') {
-      recordOpponentDefense(selectedLandingLocation);
+      if (!selectedOpponentDefenseShooterId) {
+        setFeedbackMessage('Seleccioná primero quién tiró.');
+        return;
+      }
+
+      recordOpponentDefense({ playerId: selectedOpponentDefenseShooterId, defenseLocation: selectedLandingLocation });
       setPointMode(undefined);
       setSelectedLandingLocation(undefined);
+      setSelectedOpponentDefenseShooterId(undefined);
       setFeedbackMessage('Defensa rival registrada');
       return;
     }
@@ -309,6 +344,7 @@ export function LiveMatchScreen({ navigation, route }: Props) {
     });
     setPointMode(undefined);
     setSelectedLandingLocation(undefined);
+    setSelectedOpponentDefenseShooterId(undefined);
   };
 
   const resetErrorModal = () => {
@@ -339,6 +375,7 @@ export function LiveMatchScreen({ navigation, route }: Props) {
 
     setPointMode(undefined);
     setSelectedLandingLocation(undefined);
+    setSelectedOpponentDefenseShooterId(undefined);
     setSelectedErrorPlayerId(player.id);
     setErrorModalVisible(true);
   };
@@ -360,8 +397,19 @@ export function LiveMatchScreen({ navigation, route }: Props) {
       return;
     }
 
+    if (!selectedPlayerId) {
+      setFeedbackMessage('Seleccioná primero quién tiró.');
+      return;
+    }
+
+    if (!selectedOnCourtPlayer) {
+      setFeedbackMessage('Seleccioná un jugador en cancha.');
+      return;
+    }
+
     setErrorModalVisible(false);
     setSelectedErrorPlayerId(undefined);
+    setSelectedOpponentDefenseShooterId(selectedOnCourtPlayer.id);
     setPointMode('opponent_defense');
     setSelectedLandingLocation(undefined);
   };
@@ -374,6 +422,7 @@ export function LiveMatchScreen({ navigation, route }: Props) {
 
     setPointMode(undefined);
     setSelectedLandingLocation(undefined);
+    setSelectedOpponentDefenseShooterId(undefined);
     setErrorModalVisible(false);
     setSelectedErrorPlayerId(undefined);
     recordOpponentOwnPoint();
@@ -608,6 +657,7 @@ export function LiveMatchScreen({ navigation, route }: Props) {
           onCancel={() => {
             setPointMode(undefined);
             setSelectedLandingLocation(undefined);
+            setSelectedOpponentDefenseShooterId(undefined);
           }}
         />
       )}
@@ -756,6 +806,7 @@ export function LiveMatchScreen({ navigation, route }: Props) {
           )}
 
           {isTabletLandscape && liveMapPanel}
+          {isTabletLandscape && livePerformanceBars}
         </View>
 
         <View style={[styles.rightColumn, isTabletLandscape && styles.rightColumnTabletLandscape]}>
@@ -842,6 +893,8 @@ export function LiveMatchScreen({ navigation, route }: Props) {
       </View>
 
       {!isTabletLandscape && liveMapPanel}
+      {!isTabletLandscape && livePerformanceBars}
+      {liveRecommendationsPanel}
 
       {match.status === 'live' && (
         <View style={styles.matchControlsPanel}>

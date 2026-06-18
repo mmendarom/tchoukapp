@@ -70,7 +70,7 @@ type MatchState = {
   }) => void;
   recordOpponentOwnPoint: () => void;
   recordDefense: (playerId: string) => void;
-  recordOpponentDefense: (defenseLocation?: CourtLocation) => void;
+  recordOpponentDefense: (input?: { playerId?: string; defenseLocation?: CourtLocation }) => void;
   recordError: (playerId: string, errorType: TrackableErrorType) => void;
   substitutePlayer: (input: { playerInId: string; playerOutId?: string; slotIndex?: number }) => void;
   swapLineupPlayers: (input: { fromSlotIndex: number; toSlotIndex: number }) => void;
@@ -732,18 +732,21 @@ export const useMatchStore = create<MatchState>()(
           }),
         }));
       },
-      recordOpponentDefense: (defenseLocation) => {
+      recordOpponentDefense: (input) => {
         const { activeMatchId } = get();
 
-        if (!activeMatchId || !defenseLocation) {
+        if (!activeMatchId || !input?.playerId || !input.defenseLocation) {
           return;
         }
+
+        const playerId = input.playerId;
+        const defenseLocation = input.defenseLocation;
 
         set((state) => ({
           matches: state.matches.map((match) => {
             const normalized = normalizeMatch(match);
 
-            if (normalized.id !== activeMatchId || !canRecordInMatch(normalized)) {
+            if (normalized.id !== activeMatchId || !canRecordInMatch(normalized) || !isPlayerOnCourt(normalized, playerId)) {
               return match;
             }
 
@@ -756,6 +759,7 @@ export const useMatchStore = create<MatchState>()(
               lineupSnapshotId: getCurrentLineup(normalized, 'uruguay')?.id,
               kind: 'opponent_defense',
               team: 'opponent',
+              playerId,
               defenseLocation,
             };
 

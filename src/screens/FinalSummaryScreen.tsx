@@ -4,10 +4,12 @@ import { Share, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { ActionButton } from '../components/ActionButton';
 import { CourtMapSummary } from '../components/CourtMapSummary';
+import { PlayerPerformanceBars } from '../components/PlayerPerformanceBars';
 import { Screen } from '../components/Screen';
 import { normalizeOpponentName } from '../domain/opponent';
 import { groupOpponentDefensesByZone, groupOpponentPointsByZone, groupPointsByZone } from '../domain/court';
 import { createTacticalInsights } from '../domain/insights';
+import { buildPlayerPerformance } from '../domain/playerPerformance';
 import { buildMatchReportData } from '../domain/reportData';
 import { exportMatchReportPdf } from '../export/exportMatchReport';
 import { buildMatchReportText } from '../export/reportHtml';
@@ -94,6 +96,7 @@ export function FinalSummaryScreen({ navigation, route }: Props) {
   const defenses = getDefensesByPlayer(match.events);
   const opponentDefenses = getOpponentDefenses(match.events);
   const opponentOwnPoints = getOpponentOwnPoints(match.events);
+  const playerPerformance = buildPlayerPerformance(match.events, players);
   const zones = groupPointsByZone(match.events);
   const opponentZones = groupOpponentPointsByZone(match.events);
   const defendedZones = groupOpponentDefensesByZone(match.events);
@@ -137,6 +140,7 @@ export function FinalSummaryScreen({ navigation, route }: Props) {
       <CourtMapSummary title="Dónde hicimos los puntos" events={match.events} team="uruguay" />
       <CourtMapSummary title="Dónde nos hicieron puntos" events={match.events} team="opponent" />
       <CourtMapSummary title="Dónde nos defendieron" events={match.events} source="opponent_defenses" />
+      <PlayerPerformanceBars data={playerPerformance} title="Rendimiento total" />
       <View style={styles.card}>
         <Text style={styles.sectionTitle}>Goleadores</Text>
         {scorers.map((stat) => <Text key={stat.playerId} style={styles.metric}>{playerName(stat.playerId)}: {stat.total}</Text>)}

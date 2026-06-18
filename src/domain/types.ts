@@ -125,6 +125,7 @@ export type DefenseEvent = BaseMatchEvent & {
 export type OpponentDefenseEvent = BaseMatchEvent & {
   kind: 'opponent_defense';
   team: 'opponent';
+  playerId?: string;
   defenseLocation: CourtLocation;
 };
 
