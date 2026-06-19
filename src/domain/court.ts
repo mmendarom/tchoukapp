@@ -1,11 +1,21 @@
-import { CourtLocation, MatchEvent, OpponentDefenseEvent, PointEvent, TeamSide } from './types';
+import { CourtLocation, FrameSide, MatchEvent, OpponentDefenseEvent, PointEvent, PointFrame, TeamSide } from './types';
 
 export type DerivedCourtZone = 'izquierda' | 'central' | 'derecha';
 export type DerivedCourtHalf = 'marco_izquierdo' | 'marco_derecho' | 'centro';
+export type TacticalCourtSide = 'marco_izquierdo' | 'marco_derecho';
+export type TacticalAngleBand = '0°-30°' | '30°-60°' | '60°-120°' | '120°-150°' | '150°-180°';
 
 export type LandingZoneStat = {
   label: string;
   total: number;
+};
+
+export type TacticalCourtSector = {
+  sideLabel: string;
+  angleDegrees: number;
+  angleBand: TacticalAngleBand;
+  shortLabel: string;
+  description: string;
 };
 
 export const isPointEvent = (event: MatchEvent): event is PointEvent => event.kind === 'point';
@@ -82,6 +92,68 @@ export function getCourtHalf(location: CourtLocation): DerivedCourtHalf {
   return 'centro';
 }
 
+const getTacticalSide = (location: CourtLocation, frameOrSide?: FrameSide | PointFrame): TacticalCourtSide => {
+  if (frameOrSide === 'left-frame' || frameOrSide === 'left') {
+    return 'marco_izquierdo';
+  }
+
+  if (frameOrSide === 'right-frame' || frameOrSide === 'right') {
+    return 'marco_derecho';
+  }
+
+  return clampLocation(location).x < 0.5 ? 'marco_izquierdo' : 'marco_derecho';
+};
+
+const getAngleBand = (angleDegrees: number): TacticalAngleBand => {
+  if (angleDegrees <= 30) {
+    return '0°-30°';
+  }
+
+  if (angleDegrees <= 60) {
+    return '30°-60°';
+  }
+
+  if (angleDegrees < 120) {
+    return '60°-120°';
+  }
+
+  if (angleDegrees < 150) {
+    return '120°-150°';
+  }
+
+  return '150°-180°';
+};
+
+const tacticalSideLabel: Record<TacticalCourtSide, string> = {
+  marco_izquierdo: 'marco izquierdo',
+  marco_derecho: 'marco derecho',
+};
+
+const tacticalBandDescription: Record<TacticalAngleBand, string> = {
+  '0°-30°': 'sector de fondo',
+  '30°-60°': 'sector bajo/intermedio',
+  '60°-120°': 'zona media cerca de 90°',
+  '120°-150°': 'sector alto/intermedio',
+  '150°-180°': 'fondo opuesto',
+};
+
+export function deriveTacticalCourtSector(location: CourtLocation, frameOrSide?: FrameSide | PointFrame): TacticalCourtSector {
+  const clamped = clampLocation(location);
+  const side = getTacticalSide(clamped, frameOrSide);
+  const angleDegrees = Math.round(clamped.y * 180);
+  const angleBand = getAngleBand(angleDegrees);
+  const sideLabel = tacticalSideLabel[side];
+  const shortLabel = `${sideLabel} · ${angleBand}`;
+
+  return {
+    sideLabel,
+    angleDegrees,
+    angleBand,
+    shortLabel,
+    description: `${sideLabel}, ${tacticalBandDescription[angleBand]}`,
+  };
+}
+
 const zoneLabel: Record<DerivedCourtZone, string> = {
   izquierda: 'Zona izquierda',
   central: 'Zona central',
@@ -142,6 +214,30 @@ export function groupOpponentDefensesByZone(events: MatchEvent[]): LandingZoneSt
   return sortStats(totals);
 }
 
+export function groupPointsByTacticalSector(events: MatchEvent[], team?: TeamSide): LandingZoneStat[] {
+  const totals = new Map<string, number>();
+
+  getPointEventsWithLocation(events, team).forEach((event) => {
+    increment(totals, deriveTacticalCourtSector(event.landingLocation, event.frame).shortLabel);
+  });
+
+  return sortStats(totals);
+}
+
+export function groupOpponentPointsByTacticalSector(events: MatchEvent[]): LandingZoneStat[] {
+  return groupPointsByTacticalSector(events, 'opponent');
+}
+
+export function groupOpponentDefensesByTacticalSector(events: MatchEvent[]): LandingZoneStat[] {
+  const totals = new Map<string, number>();
+
+  getOpponentDefenseEventsWithLocation(events).forEach((event) => {
+    increment(totals, deriveTacticalCourtSector(event.defenseLocation).shortLabel);
+  });
+
+  return sortStats(totals);
+}
+
 export function getMostFrequentLandingZones(events: MatchEvent[], team?: TeamSide, limit = 3): LandingZoneStat[] {
   const totals = new Map<string, number>();
 
@@ -160,4 +256,12 @@ export function getMostFrequentOpponentDefenseZones(events: MatchEvent[], limit 
   });
 
   return sortStats(totals).slice(0, limit);
+}
+
+export function getMostFrequentOpponentScoringSectors(events: MatchEvent[], limit = 3): LandingZoneStat[] {
+  return groupOpponentPointsByTacticalSector(events).slice(0, limit);
+}
+
+export function getMostFrequentOpponentDefenseSectors(events: MatchEvent[], limit = 3): LandingZoneStat[] {
+  return groupOpponentDefensesByTacticalSector(events).slice(0, limit);
 }

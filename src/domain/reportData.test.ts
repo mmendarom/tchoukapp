@@ -119,12 +119,14 @@ describe('buildMatchReportData', () => {
     expect(report.lineups.initial).toEqual(['#1 Mauro', '#2 Marcelo']);
     expect(report.lineups.final).toEqual(['#1 Mauro', '#3 Nicolas']);
     expect(report.zones.attack[0]).toMatchObject({ label: 'Zona derecha', total: 3 });
-    expect(report.zones.against[0]).toMatchObject({ label: 'Zona izquierda', total: 1 });
-    expect(report.zones.defended[0]).toMatchObject({ label: 'Zona central', total: 4 });
+    expect(report.zones.against[0]).toMatchObject({ label: 'marco derecho · 60°-120°', total: 1 });
+    expect(report.zones.defended[0]).toMatchObject({ label: 'marco derecho · 30°-60°', total: 3 });
     expect(report.executiveSummary).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ label: 'Resultado final', value: 'Uruguay 4 - 2 Argentina' }),
         expect.objectContaining({ label: 'Puntos en contra del rival', value: '1' }),
+        expect.objectContaining({ label: 'Sector vulnerable', value: 'marco derecho · 60°-120° (1)' }),
+        expect.objectContaining({ label: 'Sector donde mas nos defendieron', value: 'marco derecho · 30°-60° (3)' }),
       ]),
     );
     expect(report.periods).toHaveLength(3);

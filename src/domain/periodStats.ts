@@ -13,7 +13,11 @@ import {
   SubstitutionEvent,
   TeamSide,
 } from './types';
-import { getMostFrequentLandingZones, getMostFrequentOpponentDefenseZones } from './court';
+import {
+  getMostFrequentLandingZones,
+  getMostFrequentOpponentDefenseSectors,
+  getMostFrequentOpponentScoringSectors,
+} from './court';
 
 export type PlayerPeriodStat = {
   playerId: string;
@@ -285,9 +289,9 @@ export function generatePeriodInsights(match: Match, periodNumber: MatchPeriod, 
   const topPuntoEnContra = [...errorBreakdown].sort((a, b) => b.puntosEnContra - a.puntosEnContra)[0];
   const puntosEnContraTotal = errorBreakdown.reduce((sum, stat) => sum + stat.puntosEnContra, 0);
   const opponentOwnPoints = getOpponentOwnPoints(periodEvents);
-  const opponentZone = getMostFrequentLandingZones(periodEvents, 'opponent')[0];
+  const opponentZone = getMostFrequentOpponentScoringSectors(periodEvents)[0];
   const uruguayZone = getMostFrequentLandingZones(periodEvents, 'uruguay')[0];
-  const opponentDefenseZone = getMostFrequentOpponentDefenseZones(periodEvents)[0];
+  const opponentDefenseZone = getMostFrequentOpponentDefenseSectors(periodEvents)[0];
   const insights: PeriodInsight[] = [];
 
   if (topScorer && topScorer.total >= 3) {
@@ -357,8 +361,8 @@ export function generatePeriodInsights(match: Match, periodNumber: MatchPeriod, 
     insights.push({
       severity: 'warning',
       title: 'Zona vulnerable',
-      description: `El rival nos hizo ${opponentZone.total} puntos en ${opponentZone.label.toLowerCase()}.`,
-      suggestedAction: 'Ajustar cobertura defensiva en esa zona.',
+      description: `El rival nos hizo ${opponentZone.total} puntos en ${opponentZone.label}.`,
+      suggestedAction: 'Ajustar cobertura defensiva en ese sector.',
     });
   }
 
@@ -374,8 +378,8 @@ export function generatePeriodInsights(match: Match, periodNumber: MatchPeriod, 
   if (opponentDefenseZone && opponentDefenseZone.total >= 3) {
     insights.push({
       severity: 'warning',
-      title: 'Nos defienden seguido en una zona',
-      description: `El rival defendio ${opponentDefenseZone.total} ataques en ${opponentDefenseZone.label.toLowerCase()}.`,
+      title: 'Nos defienden seguido en un sector',
+      description: `El rival defendio ${opponentDefenseZone.total} ataques en ${opponentDefenseZone.label}.`,
       suggestedAction: 'Variar angulos de ataque o rotar el punto de lanzamiento.',
     });
   }

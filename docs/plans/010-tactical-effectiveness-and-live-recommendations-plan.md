@@ -310,7 +310,7 @@ Estado: implementado el 2026-06-18. Polish tactico/visual actualizado posteriorm
 - No usa ni menciona asistencias.
 - Baja participacion requiere suficiente actividad y cero tiros/defensas.
 - Defensas rivales legacy sin `playerId` no cuentan como intentos de jugador pero si pueden activar zona bloqueada.
-- El cap de recomendaciones sube de 4 a 6.
+- El cap de recomendaciones sube a 12.
 - `Lo están anulando` requiere:
   - al menos 3 intentos;
   - al menos 2 tiros defendidos por el rival;
@@ -321,6 +321,10 @@ Estado: implementado el 2026-06-18. Polish tactico/visual actualizado posteriorm
 - Si un jugador tiene 2+ tiros defendidos por el rival pero mantiene 75% o mas de efectividad, se muestra `Le están defendiendo tiros` como dato neutral.
 - `Buen rendimiento ofensivo` puede aparecer con 4+ intentos y 75% o mas de efectividad, con prioridad baja.
 - El panel `Lectura en vivo` mantiene filas compactas y aprovecha dos columnas en tablet/ancho grande.
+- `Rendimiento en vivo` usa orden por contribucion: puntos, intentos, efectividad y orden de cancha en ataque; defensas, share y orden de cancha en defensa.
+- `Rendimiento en vivo` resalta los dos primeros grupos de ranking con empates incluidos.
+- `LiveMatchScreen` agrupa las acciones por contexto Uruguay/rival.
+- `Últimas acciones` muestra mas acciones en tablet/landscape y usa mejor el alto disponible.
 
 ### Ubicacion UI Sugerida
 
@@ -340,7 +344,7 @@ Estado: implementado el 2026-06-18. Polish tactico/visual actualizado posteriorm
 - Alta efectividad con tiros defendidos no genera `Lo están anulando`.
 - Alta efectividad con tiros defendidos genera nota neutral si entra por cap.
 - Baja efectividad bajo 75% genera alerta con porcentaje.
-- Maximo por defecto de 6 recomendaciones.
+- Maximo por defecto de 12 recomendaciones.
 
 ## Stage 4B - Polish De Resumenes
 
@@ -379,12 +383,93 @@ Estado: implementado como pase visual posterior a Stage 4.
 - Registrar 4 tiros: 2 goles y 2 defensas rivales.
 - Confirmar `Lo están anulando` y/o `Baja efectividad`.
 - Registrar errores repetidos y confirmar que siguen primero.
-- Confirmar maximo 6 recomendaciones.
+- Confirmar maximo 12 recomendaciones.
 - Confirmar que ninguna alerta menciona asistencias.
 - Confirmar que un jugador con defensas no aparece como baja participacion.
 - Finalizar un tiempo con puntos, defensas, errores y defensas rivales.
 - Confirmar que el resumen del tiempo es mas colorido y escaneable.
 - Probar telefono portrait y tablet landscape.
+
+## Stage 4C - Barras De Potencial Y Lectura Real Del Tiempo
+
+Estado: implementado como refinamiento posterior a Stage 4B.
+
+### Cambios
+
+1. `PlayerPerformanceBars`
+   - La columna `Ataque` muestra dos capas:
+     - fondo suave para tiros generados (`puntos + tiros defendidos por el rival`);
+     - barra frontal fuerte para puntos convertidos.
+   - La fila de ataque muestra `puntos/tiros` y porcentaje de efectividad.
+   - `punto en contra rival`, puntos rivales y defensas rivales legacy sin jugador quedan fuera de intentos individuales.
+   - La columna `Defensa` mantiene barras por defensas Uruguay.
+2. `PeriodSummaryScreen`
+   - `Alertas tácticas` pasa a `Lectura del tiempo`.
+   - Reutiliza `buildLiveRecommendations` con eventos del periodo y `maxRecommendations: 8`.
+   - Las tarjetas de `Ataque`, `Defensa`, `Errores` y `Efectividad` usan superficies de color diferenciadas.
+   - El resumen usa datos concretos del periodo: tiros, efectividad, errores, puntos en contra, defensas y zonas.
+
+### No cambia
+
+- Modelos de eventos.
+- Reglas de scoring.
+- Registro de puntos, defensas, errores o cambios.
+- Mapas.
+- PDF/export.
+- Dependencias.
+
+### QA manual
+
+- Registrar para un jugador 4 puntos de Uruguay y 2 defensas rivales contra sus tiros.
+- Confirmar que ataque muestra 6 tiros como capa de fondo y 4 puntos como capa frontal.
+- Confirmar texto compacto tipo `4/6 tiros · 67%`.
+- Confirmar que `punto en contra rival` no cambia la barra de ataque de ningun jugador.
+- Finalizar el tiempo y confirmar que `Lectura del tiempo` muestra alertas concretas con numeros.
+- Confirmar que no hay textos de asistencias.
+- Confirmar que un defensor con defensas no queda marcado negativamente.
+- Confirmar que resumen final sigue renderizando las barras sin cambios de comportamiento.
+
+## Stage 4D - Sectores Tacticos Y Propagacion A Final/Reporte
+
+Estado: implementado como mejora tactica posterior a Stage 4C.
+
+### Cambios
+
+1. `src/domain/court.ts`
+   - Agrega `deriveTacticalCourtSector(location, frameOrSide?)`.
+   - Calcula `marco izquierdo/derecho` con `frame` si existe o por mitad horizontal si no existe.
+   - Calcula una aproximacion estable de angulo usando `y` normalizado en rango 0°-180°.
+   - Agrupa puntos rivales y defensas rivales por sectores como `marco derecho · 30°-60°`.
+2. Recomendaciones
+   - `buildLiveRecommendations`, `generatePeriodInsights` y `createTacticalInsights` dejan de usar `zona izquierda/derecha` para alertas rivales.
+   - Las alertas de puntos rivales y defensas rivales usan sectores tacticos.
+3. `FinalSummaryScreen`
+   - Usa `Lectura final` basada en recomendaciones reales del partido.
+   - Agrega `Efectividad ofensiva total`.
+   - Muestra `Zonas donde nos entraron` y `Zonas donde nos defendieron` con sectores.
+4. Reporte/PDF/texto
+   - `buildMatchReportData` usa sectores para puntos rivales y defensas rivales.
+   - El HTML cambia labels a `Rendimiento ofensivo`, `Tiros generados`, `Puntos convertidos`, `Tiros atajados` y `Lectura táctica`.
+   - El texto compartible incluye resumen compacto de sectores.
+
+### No cambia
+
+- Modelos de eventos.
+- Reglas de scoring.
+- Registro de puntos, defensas, errores o cambios.
+- Coordenadas normalizadas.
+- Mapas.
+- Dependencias.
+
+### QA manual
+
+- Registrar puntos rivales repetidos en un mismo sector cerca de un marco.
+- Confirmar que `Lectura en vivo` usa `marco ... · ...°` y no `zona derecha/izquierda`.
+- Registrar defensas rivales repetidas en un mismo sector.
+- Confirmar que `Lectura del tiempo` y `Lectura final` muestran sectores concretos.
+- Finalizar partido y confirmar `Efectividad ofensiva total`.
+- Exportar PDF y confirmar `Rendimiento ofensivo`, `Lectura táctica`, `Zonas donde nos entraron` y `Zonas donde nos defendieron`.
+- Confirmar que partidos antiguos sin ubicacion no crashean.
 
 ## Stage 5 - Mejora De Insights Existentes
 

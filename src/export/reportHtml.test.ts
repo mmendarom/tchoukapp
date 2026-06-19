@@ -18,8 +18,8 @@ const report: MatchReportData = {
     { label: 'Puntos en contra', value: '1' },
     { label: 'Puntos en contra del rival', value: '1' },
     { label: 'Zona mas efectiva', value: 'Zona derecha (1)' },
-    { label: 'Zona vulnerable', value: 'Zona izquierda (1)' },
-    { label: 'Zona donde mas nos defendieron', value: 'Zona central (3)' },
+    { label: 'Sector vulnerable', value: 'marco derecho · 30°-60° (1)' },
+    { label: 'Sector donde mas nos defendieron', value: 'marco derecho · 60°-120° (3)' },
   ],
   finalScore: { uruguay: 2, opponent: 1 },
   scoreByPeriod: [
@@ -39,7 +39,7 @@ const report: MatchReportData = {
       topScorers: [{ label: '#1 Mauro', total: 1 }],
       defenses: [{ label: '#2 Marcelo', total: 2 }],
       opponentDefenses: 3,
-      opponentDefenseZones: [{ label: 'Zona central', total: 3 }],
+      opponentDefenseZones: [{ label: 'marco derecho · 60°-120°', total: 3 }],
       faltas: [{ label: '#3 Nicolas', total: 1 }],
       ownPointsByPlayer: [{ label: '#3 Nicolas', total: 1 }],
       totalErrors: [{ label: '#3 Nicolas', total: 2 }],
@@ -139,8 +139,8 @@ const report: MatchReportData = {
   },
   zones: {
     attack: [{ label: 'Zona derecha', total: 1 }],
-    against: [{ label: 'Zona izquierda', total: 1 }],
-    defended: [{ label: 'Zona central', total: 3 }],
+    against: [{ label: 'marco derecho · 30°-60°', total: 1 }],
+    defended: [{ label: 'marco derecho · 60°-120°', total: 3 }],
   },
   totalMaps: {
     uruguayPoints: [{ x: 0.75, y: 0.3 }],
@@ -167,15 +167,17 @@ describe('reportHtml', () => {
     expect(html).toContain('Goleadores');
     expect(html).toContain('Puntos en contra del rival');
     expect(html).toContain('Defensas del rival');
-    expect(html).toContain('Efectividad ofensiva');
-    expect(html).toContain('Efectividad ofensiva total');
-    expect(html).toContain('Atajados');
+    expect(html).toContain('Rendimiento ofensivo');
+    expect(html).toContain('Rendimiento ofensivo total');
+    expect(html).toContain('Tiros atajados');
+    expect(html).toContain('Tiros generados');
+    expect(html).toContain('Puntos convertidos');
     expect(html).toContain('75%');
     expect(html).toContain('Algunas defensas rivales antiguas no tienen jugador asociado');
     expect(html).toContain('Donde nos defendieron');
     expect(html).toContain('<meta charset="UTF-8"');
     expect(html).toContain('Formación inicial');
-    expect(html).toContain('Alertas tácticas');
+    expect(html).toContain('Lectura táctica');
     expect(html).toContain('La formación actual tiene plus/minus positivo');
     expect(html).toContain('Esta formación está +3');
     expect(html).toContain('Mapas del tiempo');
@@ -213,9 +215,11 @@ describe('reportHtml', () => {
     expect(text).toContain('Efectividad: #1 Mauro 3/4 (75%), #2 Marcelo 0/1 (0%).');
     expect(text).toContain('Nota: algunas defensas rivales antiguas no tienen jugador asociado');
     expect(text).toContain('Top 3 goleadores');
-    expect(text).toContain('Zonas principales');
+    expect(text).toContain('Sectores tácticos principales');
     expect(text).toContain('Donde hicimos puntos: Zona derecha (1)');
-    expect(text).toContain('Alertas tácticas');
+    expect(text).toContain('Donde nos entraron: marco derecho · 30°-60° (1)');
+    expect(text).toContain('Donde nos defendieron: marco derecho · 60°-120° (3)');
+    expect(text).toContain('Lectura táctica');
     expect(text).toContain('La formación actual tiene plus/minus positivo');
     expect(text).not.toContain('opponent_own_point');
     expect(text).not.toContain('punto_en_contra');

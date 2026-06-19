@@ -1,10 +1,124 @@
 # Implementation Log
 
+## 2026-06-19 - Tactical angle sectors and final report propagation
+
+Se agregaron sectores tacticos por angulo sin cambiar modelos de eventos, scoring, tracking, coordenadas normalizadas, mapas ni dependencias.
+
+- `src/domain/court.ts` ahora deriva sectores como `marco derecho · 30°-60°`.
+- El marco sale de `frame` cuando existe y, si falta, de la mitad horizontal de la ubicacion.
+- El angulo se aproxima desde `y` normalizado en 0°-180° con bandas:
+  - `0°-30°`;
+  - `30°-60°`;
+  - `60°-120°`;
+  - `120°-150°`;
+  - `150°-180°`.
+- `Lectura en vivo`, `Lectura del tiempo`, `createTacticalInsights` y `generatePeriodInsights` usan sectores tacticos para puntos rivales y defensas rivales.
+- `FinalSummaryScreen` ahora muestra `Lectura final`, `Efectividad ofensiva total` y sectores donde nos entraron/nos defendieron.
+- `buildMatchReportData`, PDF HTML y texto compartible incluyen sectores tacticos y labels de rendimiento ofensivo:
+  - `Tiros generados`;
+  - `Puntos convertidos`;
+  - `Tiros atajados`;
+  - `Lectura táctica`.
+- Eventos antiguos sin ubicacion se ignoran para sectores; eventos antiguos con ubicacion siguen agrupando.
+
+QA manual recomendado:
+
+- Registrar puntos rivales repetidos en un mismo sector y confirmar que la alerta usa `marco ... · ...°`.
+- Registrar defensas rivales repetidas en un mismo sector y confirmar `Zona bloqueada` con sector tactico.
+- Finalizar tiempo y confirmar que `Lectura del tiempo` no usa `zona izquierda/derecha`.
+- Finalizar partido y revisar `Lectura final`, `Efectividad ofensiva total` y sectores.
+- Exportar PDF y revisar `Rendimiento ofensivo`, `Lectura táctica` y sectores.
+- Confirmar que partidos viejos sin ubicacion no crashean.
+
+## 2026-06-19 - Period summary tactical polish and potential attack bars
+
+Se refino `PeriodSummaryScreen` y `PlayerPerformanceBars` sin cambiar modelos de eventos, scoring, tracking, mapas, PDF/export ni dependencias.
+
+- La columna `Ataque` de `PlayerPerformanceBars` ahora muestra dos capas:
+  - fondo celeste suave para tiros generados por jugador;
+  - barra azul fuerte para puntos convertidos.
+- Los tiros generados salen de `puntos Uruguay normales + defensas rivales con playerId`.
+- La fila de ataque muestra texto compacto tipo `4/6 tiros · 67%`.
+- `punto en contra rival`, puntos rivales y defensas rivales legacy sin jugador no cuentan como intentos individuales.
+- `PeriodSummaryScreen` reemplaza alertas genericas por `Lectura del tiempo`, calculada con recomendaciones reales del periodo.
+- La lectura del tiempo muestra hasta 8 recomendaciones con datos concretos de tiros, efectividad, errores, puntos en contra, defensas y zonas.
+- Las tarjetas de resumen del tiempo usan superficies de color para ataque, defensa, errores y efectividad.
+- No hay referencias a asistencias y los jugadores defensivos con defensas no quedan marcados negativamente.
+
+QA manual recomendado:
+
+- Registrar para un jugador 4 puntos y 2 defensas rivales contra sus tiros.
+- Confirmar que ataque muestra 6 tiros como fondo y 4 puntos convertidos como barra frontal.
+- Confirmar texto `4/6 tiros · 67%` o equivalente.
+- Registrar `punto en contra rival` y confirmar que no afecta la barra de ataque de ningun jugador.
+- Finalizar el tiempo y confirmar que `Lectura del tiempo` muestra alertas concretas con numeros.
+- Confirmar que no hay textos de asistencias.
+- Confirmar que un defensor con defensas no se marca como baja participacion.
+- Confirmar que resumen final sigue funcionando.
+
+## 2026-06-19 - Live performance ranking refinement
+
+Se refino el ranking visual de `Rendimiento en vivo` sin cambiar recomendaciones live, modelos de eventos, scoring, tracking, mapas ni PDF/export.
+
+- El ranking de ataque en modo contribucion ahora prioriza:
+  - mas puntos;
+  - mas intentos;
+  - mejor efectividad;
+  - orden actual de cancha como desempate final.
+- Un jugador con muchos goles ya no queda debajo de un jugador 1/1 solo por tener efectividad menor a 100%.
+- El ranking de defensa mantiene:
+  - mas defensas;
+  - mayor share defensivo;
+  - orden actual de cancha.
+- El resaltado `Top` ahora incluye los dos primeros grupos de ranking en ataque y defensa.
+- Si hay empate en un grupo top, todos los jugadores empatados quedan resaltados.
+- Jugadores sin puntos/intentos no reciben `Top ataque`; jugadores sin defensas no reciben `Top defensa`.
+- Se agregaron tests de ranking y empates.
+
+QA manual recomendado:
+
+- Registrar un jugador con 6 goles y 2 tiros defendidos.
+- Registrar otro jugador con 1 gol en 1 intento.
+- Confirmar que el jugador de 6 goles rankea arriba en ataque.
+- Crear empate de segundo lugar y confirmar que todos los empatados tienen chip `Top`.
+- Confirmar que jugadores sin estadisticas no tienen chip `Top`.
+- Registrar defensas con varios jugadores y confirmar top 2 grupos defensivos.
+- Confirmar que `Lectura en vivo` mantiene el comportamiento anterior.
+
+## 2026-06-19 - Live match tactical layout refinement
+
+Se refino `LiveMatchScreen` sin cambiar modelos de eventos, scoring, registro de acciones, mapas, PDF/export, persistencia ni dependencias.
+
+- La grilla de acciones ahora queda agrupada por contexto:
+  - fila Uruguay: `Punto Uruguay`, `Defensa`, `Error`;
+  - fila rival: `Punto rival`, `Defensa rival`, `En contra rival`.
+- `Lectura en vivo` ahora permite hasta 12 recomendaciones, manteniendo orden por prioridad.
+- `Rendimiento en vivo` usa orden por contribucion:
+  - ataque prioriza mas puntos, mas intentos, mejor efectividad y luego orden de cancha;
+  - defensa prioriza mas defensas y luego orden de cancha.
+- `PlayerPerformanceBars` resalta los dos primeros grupos de ranking de ataque/defensa con chip `Top` y borde/acento.
+- `Últimas acciones` muestra mas acciones en tablet/landscape y estira mejor para aprovechar el espacio vertical.
+- No se agregan nuevas reglas tacticas ni nuevos tipos de recomendacion.
+
+QA manual recomendado:
+
+- Abrir partido en vivo en telefono portrait.
+- Confirmar fila Uruguay: `Punto Uruguay`, `Defensa`, `Error`.
+- Confirmar fila rival: `Punto rival`, `Defensa rival`, `En contra rival`.
+- Tocar cada accion y confirmar que mantiene comportamiento previo.
+- Registrar puntos, defensas, errores y defensas rivales.
+- Confirmar que `Rendimiento en vivo` ordena ataque por efectividad/contribucion.
+- Confirmar que defensa ordena por defensas.
+- Confirmar chip `Top` en mejores aportes.
+- Generar varias recomendaciones y confirmar que pueden mostrarse hasta 12.
+- Confirmar que no hay alertas con asistencias.
+- En tablet/landscape, confirmar que `Últimas acciones` usa mejor el espacio y muestra mas filas.
+
 ## 2026-06-19 - Tactical UI polish for live recommendations and period summaries
 
 Se hizo un pase de polish tactico y visual sin cambiar modelos de eventos, scoring, registro de acciones, mapas, PDF/export, persistencia ni dependencias.
 
-- `Lectura en vivo` ahora muestra hasta 6 recomendaciones.
+- `Lectura en vivo` ahora muestra hasta 12 recomendaciones.
 - `Lo están anulando` ya no aparece solo por tener 2 tiros defendidos: requiere 3+ intentos, 2+ tiros defendidos por el rival y efectividad menor a 75%.
 - Jugadores con tiros defendidos pero efectividad de 75% o mas reciben una nota neutral `Le están defendiendo tiros`.
 - `Baja efectividad` ahora requiere 4+ intentos y efectividad menor a 75%.
@@ -24,7 +138,7 @@ QA manual recomendado:
 - Registrar 4 tiros: 2 goles y 2 defensas rivales.
 - Confirmar `Lo están anulando` y/o `Baja efectividad`.
 - Registrar errores repetidos y confirmar que siguen primero.
-- Confirmar maximo 6 recomendaciones.
+- Confirmar maximo 12 recomendaciones.
 - Confirmar que ninguna alerta menciona asistencias.
 - Confirmar que jugadores con defensas no aparecen como baja participacion.
 - Finalizar un tiempo con puntos, defensas, errores y defensas rivales.

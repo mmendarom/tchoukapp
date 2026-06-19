@@ -6,16 +6,17 @@ import { CourtMapSummary } from '../components/CourtMapSummary';
 import { PlayerPerformanceBars } from '../components/PlayerPerformanceBars';
 import { Screen } from '../components/Screen';
 import {
-  groupOpponentPointsByZone,
-  groupOpponentDefensesByZone,
+  groupOpponentDefensesByTacticalSector,
+  groupOpponentPointsByTacticalSector,
   groupPointsByZone,
 } from '../domain/court';
+import { buildLiveRecommendations } from '../domain/liveRecommendations';
+import type { LiveRecommendation } from '../domain/liveRecommendations';
 import { normalizeOpponentName } from '../domain/opponent';
 import {
   calculatePeriodScore,
   calculateTotalScore,
   formatPeriodName,
-  generatePeriodInsights,
   getDefensesByPlayerByPeriod,
   getErrorsByPlayerByPeriod,
   getErrorsByTypeByPlayerByPeriod,
@@ -75,15 +76,16 @@ export function PeriodSummaryScreen({ navigation, route }: Props) {
   ));
   const playerPerformance = buildPlayerPerformanceForPeriod(match.events, players, periodLineupPlayerIds, periodNumber);
   const effectiveZones = groupPointsByZone(periodEvents);
-  const vulnerableZones = groupOpponentPointsByZone(periodEvents);
-  const defendedZones = groupOpponentDefensesByZone(periodEvents);
+  const vulnerableZones = groupOpponentPointsByTacticalSector(periodEvents);
+  const defendedZones = groupOpponentDefensesByTacticalSector(periodEvents);
   const previousErrors = periodNumber > 1 ? getErrorsByPlayerByPeriod(match.events, (periodNumber - 1) as 1 | 2).reduce((sum, stat) => sum + stat.total, 0) : undefined;
   const currentErrors = errors.reduce((sum, stat) => sum + stat.total, 0);
-  const previousOpponentCentral = periodNumber > 1
-    ? groupOpponentPointsByZone(getEventsByPeriod(match.events, (periodNumber - 1) as 1 | 2)).find((stat) => stat.label === 'Zona central')?.total ?? 0
-    : undefined;
-  const currentOpponentCentral = vulnerableZones.find((stat) => stat.label === 'Zona central')?.total ?? 0;
-  const insights = generatePeriodInsights(match, periodNumber, playerName);
+  const periodRecommendations = buildLiveRecommendations({
+    currentLineupPlayerIds: periodLineupPlayerIds,
+    events: periodEvents,
+    maxRecommendations: 8,
+    players,
+  });
   const attackTotal = scorers.reduce((sum, stat) => sum + stat.total, 0);
   const defenseTotal = defenses.reduce((sum, stat) => sum + stat.total, 0);
   const teamGoals = playerPerformance.rows.reduce((sum, row) => sum + row.points, 0);
@@ -109,16 +111,16 @@ export function PeriodSummaryScreen({ navigation, route }: Props) {
       </View>
 
       <View style={[styles.statGrid, isWide && styles.statGridWide]}>
-        <SummaryStatCard accentColor="#0b6bcb" label="Ataque" value={`${attackTotal}`} detail="puntos Uruguay" />
-        <SummaryStatCard accentColor="#0f766e" label="Defensa" value={`${defenseTotal}`} detail="defensas" />
-        <SummaryStatCard accentColor="#b45309" label="Errores" value={`${currentErrors}`} detail="propios" />
-        <SummaryStatCard accentColor="#6d28d9" label="Efectividad" value={teamEffectiveness} detail={`${teamGoals}/${teamShotAttempts} en tiros`} />
+        <SummaryStatCard accentColor="#0b6bcb" surfaceColor="#f0f7ff" label="Ataque" value={`${attackTotal}`} detail="puntos Uruguay" />
+        <SummaryStatCard accentColor="#0f766e" surfaceColor="#f0fdfa" label="Defensa" value={`${defenseTotal}`} detail="defensas" />
+        <SummaryStatCard accentColor="#b45309" surfaceColor="#fff7ed" label="Errores" value={`${currentErrors}`} detail="propios" />
+        <SummaryStatCard accentColor="#6d28d9" surfaceColor="#f5f3ff" label="Efectividad" value={teamEffectiveness} detail={`${teamGoals}/${teamShotAttempts} en tiros`} />
       </View>
 
       <View style={styles.card}>
-        <Text style={styles.sectionTitle}>Alertas tácticas</Text>
-        {insights.length === 0 ? <Text style={styles.metric}>Sin alertas tácticas para este tiempo.</Text> : insights.map((insight) => (
-          <InsightRow key={`${insight.title}-${insight.description}`} insight={insight} />
+        <Text style={styles.sectionTitle}>Lectura del tiempo</Text>
+        {periodRecommendations.length === 0 ? <Text style={styles.metric}>Sin alertas tácticas relevantes en este tiempo.</Text> : periodRecommendations.map((recommendation) => (
+          <InsightRow key={recommendation.id} recommendation={recommendation} />
         ))}
       </View>
 
@@ -205,9 +207,6 @@ export function PeriodSummaryScreen({ navigation, route }: Props) {
               ? `Mejoramos en errores propios: ${previousErrors} a ${currentErrors}`
               : `Errores propios: ${previousErrors ?? 0} a ${currentErrors}`}
           </Text>
-          <Text style={styles.metric}>
-            Nos anotaron por zona central: {previousOpponentCentral ?? 0} a {currentOpponentCentral}
-          </Text>
         </View>
       )}
 
@@ -247,15 +246,17 @@ function SummaryStatCard({
   accentColor,
   detail,
   label,
+  surfaceColor,
   value,
 }: {
   accentColor: string;
   detail: string;
   label: string;
+  surfaceColor: string;
   value: string;
 }) {
   return (
-    <View style={styles.statCard}>
+    <View style={[styles.statCard, { backgroundColor: surfaceColor }]}>
       <View style={[styles.statAccent, { backgroundColor: accentColor }]} />
       <Text style={styles.statLabel}>{label}</Text>
       <Text style={[styles.statValue, { color: accentColor }]}>{value}</Text>
@@ -265,22 +266,21 @@ function SummaryStatCard({
 }
 
 function InsightRow({
-  insight,
+  recommendation,
 }: {
-  insight: ReturnType<typeof generatePeriodInsights>[number];
+  recommendation: LiveRecommendation;
 }) {
-  const visual = insight.severity === 'critical'
+  const visual = recommendation.type === 'warning'
     ? { label: 'Atención', color: '#b42318', backgroundColor: '#fff7ed' }
-    : insight.severity === 'warning'
+    : recommendation.type === 'adjustment'
       ? { label: 'Ajuste', color: '#0b6bcb', backgroundColor: '#f0f7ff' }
       : { label: 'Dato', color: '#0f766e', backgroundColor: '#f0fdfa' };
 
   return (
     <View style={[styles.insight, { backgroundColor: visual.backgroundColor, borderLeftColor: visual.color }]}>
       <Text style={[styles.insightBadge, { color: visual.color, borderColor: visual.color }]}>{visual.label}</Text>
-      <Text style={styles.insightTitle}>{insight.title}</Text>
-      <Text style={styles.metric} numberOfLines={2}>{insight.description}</Text>
-      <Text style={styles.action} numberOfLines={2}>{insight.suggestedAction}</Text>
+      <Text style={styles.insightTitle}>{recommendation.title}</Text>
+      {recommendation.detail && <Text style={styles.metric} numberOfLines={2}>{recommendation.detail}</Text>}
     </View>
   );
 }

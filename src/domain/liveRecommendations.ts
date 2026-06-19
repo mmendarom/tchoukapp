@@ -1,4 +1,4 @@
-import { getMostFrequentLandingZones, getMostFrequentOpponentDefenseZones } from './court';
+import { getMostFrequentOpponentDefenseSectors, getMostFrequentOpponentScoringSectors } from './court';
 import { buildPlayerPerformance } from './playerPerformance';
 import { ErrorEvent, MatchEvent, Player } from './types';
 
@@ -64,7 +64,7 @@ export function buildLiveRecommendations({
   events,
   currentLineupPlayerIds,
   players,
-  maxRecommendations = 6,
+  maxRecommendations = 12,
 }: LiveRecommendationInput): LiveRecommendation[] {
   const recommendations: LiveRecommendation[] = [];
   const performance = buildPlayerPerformance(events, players, currentLineupPlayerIds);
@@ -133,26 +133,26 @@ export function buildLiveRecommendations({
       });
     });
 
-  getMostFrequentLandingZones(events, 'opponent')
+  getMostFrequentOpponentScoringSectors(events)
     .filter((zone) => zone.total >= OPPONENT_ZONE_THRESHOLD)
     .forEach((zone) => {
       recommendations.push({
         id: `opponent-zone-${zone.label}`,
         type: 'warning',
         title: 'Zona vulnerable',
-        detail: `Nos están entrando seguido por ${zone.label.toLowerCase()}.`,
+        detail: `Nos están entrando seguido por ${zone.label}.`,
         priority: 50,
       });
     });
 
-  getMostFrequentOpponentDefenseZones(events)
+  getMostFrequentOpponentDefenseSectors(events)
     .filter((zone) => zone.total >= OPPONENT_DEFENSE_ZONE_THRESHOLD)
     .forEach((zone) => {
       recommendations.push({
         id: `opponent-defense-zone-${zone.label}`,
         type: 'adjustment',
         title: 'Zona bloqueada',
-        detail: `El rival nos está defendiendo seguido en ${zone.label.toLowerCase()}.`,
+        detail: `El rival nos está defendiendo seguido en ${zone.label}.`,
         priority: 60,
       });
     });

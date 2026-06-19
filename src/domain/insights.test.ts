@@ -45,9 +45,10 @@ describe('createTacticalInsights zone labels', () => {
 
     const text = insights.map((insight) => `${insight.title} ${insight.description}`).join(' ');
 
-    expect(text).toContain('zona central');
+    expect(text).toContain('marco derecho · 30°-60°');
     expect(text).not.toMatch(/\b(center|left|right)\b/);
     expect(text).not.toContain('desde center');
+    expect(text).not.toMatch(/zona izquierda|zona derecha/i);
   });
 
   it('does not create misleading zone insights for old events without landingLocation', () => {
@@ -111,9 +112,9 @@ describe('createTacticalInsights zone labels', () => {
     const insights = createTacticalInsights(
       {
         events: [
-          point({ id: 'rd-1', kind: 'opponent_defense', team: 'opponent', defenseLocation: { x: 0.5, y: 0.2 } } as Partial<MatchEvent>),
-          point({ id: 'rd-2', kind: 'opponent_defense', team: 'opponent', defenseLocation: { x: 0.52, y: 0.3 } } as Partial<MatchEvent>),
-          point({ id: 'rd-3', kind: 'opponent_defense', team: 'opponent', defenseLocation: { x: 0.48, y: 0.4 } } as Partial<MatchEvent>),
+          point({ id: 'rd-1', kind: 'opponent_defense', team: 'opponent', defenseLocation: { x: 0.55, y: 0.3 } } as Partial<MatchEvent>),
+          point({ id: 'rd-2', kind: 'opponent_defense', team: 'opponent', defenseLocation: { x: 0.58, y: 0.32 } } as Partial<MatchEvent>),
+          point({ id: 'rd-3', kind: 'opponent_defense', team: 'opponent', defenseLocation: { x: 0.6, y: 0.32 } } as Partial<MatchEvent>),
         ],
         lineupSnapshots: [],
       },
@@ -121,10 +122,11 @@ describe('createTacticalInsights zone labels', () => {
     );
     const text = insights.map((insight) => `${insight.title} ${insight.description}`).join(' ');
 
-    expect(text).toContain('Nos defienden seguido en una zona');
-    expect(text).toContain('zona central');
+    expect(text).toContain('Nos defienden seguido en un sector');
+    expect(text).toContain('marco derecho · 30°-60°');
     expect(text).not.toContain('opponent_defense');
     expect(text).not.toMatch(/\b(center|left|right)\b/);
+    expect(text).not.toMatch(/zona izquierda|zona derecha/i);
   });
 
   it('does not mention assists or flag defenders as low involvement', () => {

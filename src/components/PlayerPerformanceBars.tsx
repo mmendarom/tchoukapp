@@ -1,30 +1,26 @@
 import { memo, useMemo } from 'react';
 import { DimensionValue, StyleSheet, Text, View } from 'react-native';
 
-import { PlayerPerformanceData, PlayerPerformanceRow } from '../domain/playerPerformance';
+import {
+  getTopAttackPlayerIds,
+  getTopDefensePlayerIds,
+  PlayerPerformanceData,
+  PlayerPerformanceRow,
+  PlayerPerformanceSortMode,
+  sortPlayerPerformanceRows,
+} from '../domain/playerPerformance';
 import { fontSize, spacing } from '../utils/responsive';
 
 type PlayerPerformanceBarsProps = {
   data: PlayerPerformanceData;
   showRowsWhenEmpty?: boolean;
-  sortMode?: 'input' | 'stat';
+  sortMode?: PlayerPerformanceSortMode;
   title?: string;
 };
 
 const formatPercent = (value: number) => `${Math.round(value * 100)}%`;
-const formatEffectiveness = (value: number | undefined) => (typeof value === 'number' ? `${Math.round(value * 100)}% Efect.` : 'Sin tiros');
-
-const sortRows = (
-  rows: PlayerPerformanceRow[],
-  field: 'points' | 'defenses',
-  sortMode: 'input' | 'stat',
-) => {
-  if (sortMode === 'input') {
-    return rows;
-  }
-
-  return [...rows].sort((a, b) => b[field] - a[field] || a.playerName.localeCompare(b.playerName));
-};
+const formatEffectiveness = (value: number | undefined) => (typeof value === 'number' ? `${Math.round(value * 100)}%` : 'Sin tiros');
+const clampShare = (value: number) => Math.max(Math.min(value, 1), 0);
 
 export const PlayerPerformanceBars = memo(function PlayerPerformanceBars({
   data,
@@ -32,8 +28,10 @@ export const PlayerPerformanceBars = memo(function PlayerPerformanceBars({
   sortMode = 'stat',
   title = 'Rendimiento',
 }: PlayerPerformanceBarsProps) {
-  const attackRows = useMemo(() => sortRows(data.rows, 'points', sortMode), [data.rows, sortMode]);
-  const defenseRows = useMemo(() => sortRows(data.rows, 'defenses', sortMode), [data.rows, sortMode]);
+  const attackRows = useMemo(() => sortPlayerPerformanceRows(data.rows, 'points', sortMode), [data.rows, sortMode]);
+  const defenseRows = useMemo(() => sortPlayerPerformanceRows(data.rows, 'defenses', sortMode), [data.rows, sortMode]);
+  const topAttackPlayerIds = useMemo(() => getTopAttackPlayerIds(attackRows), [attackRows]);
+  const topDefensePlayerIds = useMemo(() => getTopDefensePlayerIds(defenseRows), [defenseRows]);
 
   return (
     <View style={styles.card}>
@@ -44,13 +42,14 @@ export const PlayerPerformanceBars = memo(function PlayerPerformanceBars({
           surfaceColor="#f0f7ff"
           trackColor="#d9ebff"
           countLabel="Pts"
-          emptyText="Sin puntos registrados."
+          emptyText="Sin tiros registrados."
           mode="attack"
           rows={attackRows}
           showRowsWhenEmpty={showRowsWhenEmpty}
           shareField="pointShare"
           statField="points"
           title="Ataque"
+          topPlayerIds={topAttackPlayerIds}
           total={data.totalTeamPoints}
         />
         <PerformanceColumn
@@ -65,6 +64,7 @@ export const PlayerPerformanceBars = memo(function PlayerPerformanceBars({
           shareField="defenseShare"
           statField="defenses"
           title="Defensa"
+          topPlayerIds={topDefensePlayerIds}
           total={data.totalTeamDefenses}
         />
       </View>
@@ -83,6 +83,7 @@ function PerformanceColumn({
   surfaceColor,
   statField,
   title,
+  topPlayerIds,
   total,
   trackColor,
 }: {
@@ -96,18 +97,23 @@ function PerformanceColumn({
   surfaceColor: string;
   statField: 'points' | 'defenses';
   title: string;
+  topPlayerIds: Set<string>;
   total: number;
   trackColor: string;
 }) {
+  const totalTeamAttempts = mode === 'attack' ? rows.reduce((sum, row) => sum + row.shotAttempts, 0) : 0;
+  const hasColumnStats = mode === 'attack' ? totalTeamAttempts > 0 : total > 0;
+  const totalLabel = mode === 'attack' && totalTeamAttempts > 0 ? `Pts ${total} · Tiros ${totalTeamAttempts}` : `Total ${total}`;
+
   return (
     <View style={[styles.column, { backgroundColor: surfaceColor, borderColor: trackColor }]}>
       <View style={styles.columnHeader}>
         <View style={[styles.columnAccent, { backgroundColor: accentColor }]} />
         <Text style={styles.columnTitle}>{title}</Text>
-        <Text style={[styles.totalLabel, { color: accentColor }]}>Total {total}</Text>
+        <Text style={[styles.totalLabel, { color: accentColor }]}>{totalLabel}</Text>
       </View>
 
-      {total === 0 && !showRowsWhenEmpty ? (
+      {!hasColumnStats && !showRowsWhenEmpty ? (
         <Text style={styles.emptyText}>{emptyText}</Text>
       ) : (
         rows.map((row) => (
@@ -118,9 +124,11 @@ function PerformanceColumn({
             playerName={row.playerName}
             row={row}
             share={row[shareField]}
+            teamAttempts={totalTeamAttempts}
             trackColor={trackColor}
             total={row[statField]}
             mode={mode}
+            isTop={topPlayerIds.has(row.playerId)}
           />
         ))
       )}
@@ -135,31 +143,44 @@ function PerformanceRow({
   playerName,
   row,
   share,
+  teamAttempts,
   trackColor,
   total,
+  isTop,
 }: {
   accentColor: string;
   countLabel: string;
+  isTop: boolean;
   mode: 'attack' | 'defense';
   playerName: string;
   row: PlayerPerformanceRow;
   share: number;
+  teamAttempts: number;
   trackColor: string;
   total: number;
 }) {
-  const barWidth = `${Math.max(Math.min(share, 1), 0) * 100}%` as DimensionValue;
+  const convertedShare = mode === 'attack' && teamAttempts > 0 ? row.points / teamAttempts : share;
+  const attemptShare = mode === 'attack' && teamAttempts > 0 ? row.shotAttempts / teamAttempts : 0;
+  const barWidth = `${clampShare(convertedShare) * 100}%` as DimensionValue;
+  const attemptBarWidth = `${clampShare(attemptShare) * 100}%` as DimensionValue;
   const detailText = mode === 'attack'
-    ? `${row.points} Pts · ${row.rivalDefensesAgainst} Ataj. · ${formatEffectiveness(row.effectiveness)}`
+    ? row.shotAttempts > 0
+      ? `${row.points}/${row.shotAttempts} tiros · ${formatEffectiveness(row.effectiveness)}`
+      : 'Sin tiros'
     : `${total} ${countLabel} · ${formatPercent(share)}`;
 
   return (
-    <View style={styles.row}>
+    <View style={[styles.row, isTop && { borderColor: accentColor, backgroundColor: '#ffffff' }]}>
       <View style={styles.rowMeta}>
-        <Text numberOfLines={1} style={styles.playerName}>{playerName}</Text>
+        <View style={styles.playerNameWrap}>
+          <Text numberOfLines={1} style={styles.playerName}>{playerName}</Text>
+          {isTop && <Text style={[styles.topBadge, { color: accentColor, borderColor: accentColor }]}>Top</Text>}
+        </View>
         <Text numberOfLines={1} adjustsFontSizeToFit style={styles.countText}>{detailText}</Text>
       </View>
       <View style={[styles.track, { backgroundColor: trackColor }]}>
-        <View style={[styles.bar, { backgroundColor: accentColor, width: barWidth }]} />
+        {mode === 'attack' && <View style={[styles.attemptBar, { width: attemptBarWidth }]} />}
+        <View style={[styles.bar, isTop && styles.topBar, { backgroundColor: accentColor, width: barWidth }]} />
       </View>
     </View>
   );
@@ -219,6 +240,10 @@ const styles = StyleSheet.create({
     fontWeight: '800',
   },
   row: {
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: 'transparent',
+    padding: 2,
     gap: 3,
   },
   rowMeta: {
@@ -228,10 +253,25 @@ const styles = StyleSheet.create({
     gap: spacing.xs,
   },
   playerName: {
-    flex: 1,
     color: '#0b1f33',
     fontSize: fontSize.small,
     fontWeight: '900',
+  },
+  playerNameWrap: {
+    flex: 1,
+    minWidth: 0,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+  },
+  topBadge: {
+    borderRadius: 8,
+    borderWidth: 1,
+    fontSize: fontSize.tiny,
+    fontWeight: '900',
+    overflow: 'hidden',
+    paddingHorizontal: 5,
+    paddingVertical: 1,
   },
   countText: {
     color: '#5d6b7a',
@@ -243,8 +283,19 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     overflow: 'hidden',
   },
+  attemptBar: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    top: 0,
+    backgroundColor: '#8bd3ff',
+    borderRadius: 8,
+  },
   bar: {
     height: '100%',
     borderRadius: 8,
+  },
+  topBar: {
+    minWidth: 8,
   },
 });

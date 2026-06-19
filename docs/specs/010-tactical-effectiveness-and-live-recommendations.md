@@ -205,6 +205,16 @@ Implementado en Stage 2:
 - Las defensas rivales legacy sin `playerId` no entran en efectividad individual.
 - Estas barras alimentaran la futura `Lectura en vivo`.
 
+Refinamiento implementado posteriormente:
+
+- La barra de `Ataque` usa dos capas:
+  - capa suave de fondo: tiros generados por el jugador (`goals + rivalDefensesAgainst`);
+  - capa fuerte frontal: puntos convertidos.
+- El ancho de ambas capas usa el total de tiros del equipo como denominador para que, si todos los tiros del jugador fueron gol, la capa frontal complete su capa de intentos.
+- La fila muestra un resumen compacto como `4/6 tiros · 67%`.
+- `opponent_own_point`, puntos rivales y defensas rivales legacy sin `playerId` no cuentan como tiros individuales.
+- `Defensa` mantiene barra simple por defensas Uruguay.
+
 ### D. Bloque Live De Recomendaciones
 
 Agregar un bloque full-width en `LiveMatchScreen`.
@@ -243,7 +253,7 @@ Estado Stage 4:
 
 - Implementado con `src/domain/liveRecommendations.ts` y `LiveRecommendationsPanel`.
 - Usa solo eventos del tiempo actual.
-- Muestra maximo 6 recomendaciones desde el polish posterior de Stage 4.
+- Muestra maximo 12 recomendaciones desde el refinamiento posterior de Stage 4.
 - Prioridad:
   1. puntos en contra repetidos;
   2. errores repetidos;
@@ -279,12 +289,47 @@ Estado: implementado como polish posterior a Stage 4.
   - `Errores`;
   - `Efectividad`.
 - `Alertas tácticas` del tiempo usan chips `Atención`, `Ajuste` y `Dato` con acentos de color.
+- `Lectura del tiempo` reemplaza alertas genericas en el resumen del periodo y reutiliza recomendaciones reales calculadas desde eventos de ese tiempo.
+- La lectura del tiempo muestra hasta 8 recomendaciones concretas con numeros de puntos, tiros, errores, defensas y zonas.
 - `Rendimiento del tiempo` queda antes de mapas para priorizar lectura de jugadores.
 - Los mapas se agrupan bajo `Mapas del tiempo`.
 - `FinalSummaryScreen` reutiliza el mismo lenguaje visual en forma liviana con encabezado y tarjetas de totales.
 - `PlayerPerformanceBars` mejora contraste y jerarquia visual de ataque/defensa sin agregar dependencias.
+- `Rendimiento en vivo` ordena ataque por puntos, intentos, efectividad y orden de cancha.
+- En defensa ordena por defensas, share defensivo y orden de cancha.
+- Los mejores aportes de ataque/defensa se resaltan con chip `Top`.
+- El resaltado incluye los dos primeros grupos de ranking y conserva empates.
+- Los goleadores de alto volumen no quedan penalizados solo por no tener 100% de efectividad.
+- `LiveMatchScreen` agrupa acciones por contexto:
+  - Uruguay: `Punto Uruguay`, `Defensa`, `Error`;
+  - rival: `Punto rival`, `Defensa rival`, `En contra rival`.
+- `Últimas acciones` aprovecha mejor el espacio en tablet/landscape y muestra mas acciones recientes.
 - `createTacticalInsights` elimina el uso visible de asistencias en baja participacion y considera tiros/defensas para no castigar roles defensivos.
 - No cambia modelos, scoring, eventos, mapas ni PDF/export.
+
+### J. Sectores Tacticos Por Angulo
+
+Estado: implementado como propagacion tactica posterior a Stage 4C.
+
+- Se agrega `deriveTacticalCourtSector(location, frameOrSide?)` en `src/domain/court.ts`.
+- No cambia el modelo de eventos ni las coordenadas normalizadas guardadas.
+- La derivacion usa:
+  - `frame` cuando existe (`left-frame`/`right-frame`);
+  - si no existe, la mitad horizontal de la cancha para elegir `marco izquierdo` o `marco derecho`;
+  - `y` normalizado para aproximar un angulo estable de 0° a 180°.
+- Bandas:
+  - `0°-30°`: sector de fondo;
+  - `30°-60°`: sector bajo/intermedio;
+  - `60°-120°`: zona media cerca de 90°;
+  - `120°-150°`: sector alto/intermedio;
+  - `150°-180°`: fondo opuesto.
+- Labels visibles:
+  - `marco derecho · 30°-60°`;
+  - `marco izquierdo · 60°-120°`.
+- `Lectura en vivo`, `Lectura del tiempo`, `Lectura final`, `createTacticalInsights` y reportes usan sectores para puntos rivales y defensas rivales.
+- Las listas de final/PDF para `Zonas donde nos entraron` y `Zonas donde nos defendieron` usan sectores tacticos.
+- Eventos antiguos sin ubicacion se ignoran; eventos antiguos con ubicacion siguen agrupando sin crashear.
+- Las etiquetas genericas `zona izquierda`/`zona derecha` ya no se usan para alertas rivales.
 
 ### E. Mejora De Insights
 
@@ -590,7 +635,7 @@ Estado: implementado en el corte 2026-06-18.
 
 Polish posterior:
 
-- Maximo aumentado a 6 recomendaciones.
+- Maximo aumentado a 12 recomendaciones.
 - Umbral de efectividad para alerta negativa ajustado a 75%.
 - Jugadores con 75% o mas de efectividad y tiros defendidos por el rival reciben nota informativa, no alerta negativa.
 - El panel live usa filas compactas y dos columnas en ancho grande.
@@ -627,7 +672,7 @@ Estado parcial: limpieza de baja participacion implementada en el polish posteri
 - [x] Resumen final muestra efectividad.
 - [x] PDF/text report muestra efectividad.
 - [x] Bloque live muestra alertas tacticas compactas.
-- [x] Bloque live muestra hasta 6 recomendaciones.
+- [x] Bloque live muestra hasta 12 recomendaciones.
 - [x] Jugadores con alta efectividad no reciben alerta negativa de anulado por pocos tiros defendidos.
 - [x] Resumen del tiempo mejora jerarquia visual con header, tarjetas e insights coloreados.
 - [x] Insights no mencionan asistencias.

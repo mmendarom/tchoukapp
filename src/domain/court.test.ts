@@ -3,11 +3,16 @@ import { describe, expect, it } from 'vitest';
 import {
   clamp01,
   denormalizeLocation,
+  deriveTacticalCourtSector,
   getCourtHalf,
   getCourtZone,
+  getMostFrequentOpponentDefenseSectors,
+  getMostFrequentOpponentScoringSectors,
   getOpponentDefenseEventsWithLocation,
   getPointEventsWithLocation,
+  groupOpponentDefensesByTacticalSector,
   groupOpponentDefensesByZone,
+  groupOpponentPointsByTacticalSector,
   groupOpponentPointsByZone,
   groupPointsByZone,
   isValidCourtLayout,
@@ -91,6 +96,29 @@ describe('court derived zones', () => {
     expect(getCourtHalf({ x: 0.8, y: 0.5 })).toBe('marco_derecho');
   });
 
+  it('deriveTacticalCourtSector derives stable angle bands and labels', () => {
+    expect(deriveTacticalCourtSector({ x: 0.8, y: 0.05 })).toMatchObject({
+      sideLabel: 'marco derecho',
+      angleDegrees: 9,
+      angleBand: '0°-30°',
+      shortLabel: 'marco derecho · 0°-30°',
+    });
+    expect(deriveTacticalCourtSector({ x: 0.2, y: 0.5 })).toMatchObject({
+      sideLabel: 'marco izquierdo',
+      angleDegrees: 90,
+      angleBand: '60°-120°',
+      shortLabel: 'marco izquierdo · 60°-120°',
+    });
+  });
+
+  it('deriveTacticalCourtSector respects explicit frame when available', () => {
+    expect(deriveTacticalCourtSector({ x: 0.2, y: 0.33 }, 'right-frame')).toMatchObject({
+      sideLabel: 'marco derecho',
+      angleBand: '30°-60°',
+      shortLabel: 'marco derecho · 30°-60°',
+    });
+  });
+
   it('groupPointsByZone groups Uruguay landing locations', () => {
     const stats = groupPointsByZone([
       point({ landingLocation: { x: 0.8, y: 0.2 } }),
@@ -132,6 +160,31 @@ describe('court derived zones', () => {
 
     expect(getOpponentDefenseEventsWithLocation(events)).toHaveLength(2);
     expect(groupOpponentDefensesByZone(events)[0]).toEqual({ label: 'Zona central', total: 2 });
+  });
+
+  it('groups opponent points by tactical sector without generic zone labels', () => {
+    const stats = groupOpponentPointsByTacticalSector([
+      point({ scoringTeam: 'opponent', playerId: undefined, landingLocation: { x: 0.82, y: 0.3 }, frame: 'right-frame' }),
+      point({ scoringTeam: 'opponent', playerId: undefined, landingLocation: { x: 0.78, y: 0.32 }, frame: 'right-frame' }),
+      point({ scoringTeam: 'opponent', playerId: undefined, landingLocation: undefined }),
+    ]);
+
+    expect(stats[0]).toEqual({ label: 'marco derecho · 30°-60°', total: 2 });
+    expect(getMostFrequentOpponentScoringSectors(stats.length === 0 ? [] : [
+      point({ scoringTeam: 'opponent', playerId: undefined, landingLocation: { x: 0.82, y: 0.3 }, frame: 'right-frame' }),
+      point({ scoringTeam: 'opponent', playerId: undefined, landingLocation: { x: 0.78, y: 0.32 }, frame: 'right-frame' }),
+    ])[0]).toEqual({ label: 'marco derecho · 30°-60°', total: 2 });
+  });
+
+  it('groups opponent defenses by tactical sector and keeps legacy events safe', () => {
+    const events: MatchEvent[] = [
+      point({ id: 'd-1', kind: 'opponent_defense', team: 'opponent', playerId: undefined, defenseLocation: { x: 0.48, y: 0.5 } } as Partial<MatchEvent>),
+      point({ id: 'd-2', kind: 'opponent_defense', team: 'opponent', playerId: 'p1', defenseLocation: { x: 0.46, y: 0.52 } } as Partial<MatchEvent>),
+      point({ id: 'd-old', kind: 'opponent_defense', team: 'opponent', playerId: undefined, defenseLocation: undefined } as Partial<MatchEvent>),
+    ];
+
+    expect(groupOpponentDefensesByTacticalSector(events)[0]).toEqual({ label: 'marco izquierdo · 60°-120°', total: 2 });
+    expect(getMostFrequentOpponentDefenseSectors(events)[0]).toEqual({ label: 'marco izquierdo · 60°-120°', total: 2 });
   });
 
   it('period summaries can use only current period locations', () => {

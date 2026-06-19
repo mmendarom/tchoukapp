@@ -18,6 +18,9 @@ export type PlayerPerformanceData = {
   totalTeamDefenses: number;
 };
 
+export type PlayerPerformanceSortMode = 'input' | 'stat' | 'contribution';
+export type PlayerPerformanceField = 'points' | 'defenses';
+
 const isPointEvent = (event: MatchEvent): event is PointEvent => event.kind === 'point';
 const isDefenseEvent = (event: MatchEvent): event is DefenseEvent => event.kind === 'defense';
 const isOpponentDefenseEvent = (event: MatchEvent): event is OpponentDefenseEvent => event.kind === 'opponent_defense';
@@ -150,4 +153,61 @@ export function buildLivePlayerPerformance(
   currentPeriod: MatchPeriod,
 ) {
   return buildPlayerPerformanceForPeriod(events, players, currentLineupPlayerIds, currentPeriod);
+}
+
+export function sortPlayerPerformanceRows(
+  rows: PlayerPerformanceRow[],
+  field: PlayerPerformanceField,
+  sortMode: PlayerPerformanceSortMode,
+) {
+  if (sortMode === 'input') {
+    return rows;
+  }
+
+  if (sortMode === 'contribution' && field === 'points') {
+    return rows
+      .map((row, index) => ({ index, row }))
+      .sort((a, b) => {
+        const aHasStats = a.row.points > 0 || a.row.shotAttempts > 0 ? 1 : 0;
+        const bHasStats = b.row.points > 0 || b.row.shotAttempts > 0 ? 1 : 0;
+        const aEffectiveness = a.row.effectiveness ?? -1;
+        const bEffectiveness = b.row.effectiveness ?? -1;
+
+        return (
+          bHasStats - aHasStats ||
+          b.row.points - a.row.points ||
+          b.row.shotAttempts - a.row.shotAttempts ||
+          bEffectiveness - aEffectiveness ||
+          a.index - b.index
+        );
+      })
+      .map(({ row }) => row);
+  }
+
+  if (sortMode === 'contribution' && field === 'defenses') {
+    return rows
+      .map((row, index) => ({ index, row }))
+      .sort((a, b) =>
+        b.row.defenses - a.row.defenses ||
+        b.row.defenseShare - a.row.defenseShare ||
+        a.index - b.index,
+      )
+      .map(({ row }) => row);
+  }
+
+  return [...rows].sort((a, b) => b[field] - a[field] || a.playerName.localeCompare(b.playerName));
+}
+
+export function getTopAttackPlayerIds(rows: PlayerPerformanceRow[], rankGroups = 2) {
+  const validRows = rows.filter((row) => row.points > 0 || row.shotAttempts > 0);
+  const topPointGroups = Array.from(new Set(validRows.map((row) => row.points).sort((a, b) => b - a))).slice(0, rankGroups);
+
+  return new Set(validRows.filter((row) => topPointGroups.includes(row.points)).map((row) => row.playerId));
+}
+
+export function getTopDefensePlayerIds(rows: PlayerPerformanceRow[], rankGroups = 2) {
+  const validRows = rows.filter((row) => row.defenses > 0);
+  const topDefenseGroups = Array.from(new Set(validRows.map((row) => row.defenses).sort((a, b) => b - a))).slice(0, rankGroups);
+
+  return new Set(validRows.filter((row) => topDefenseGroups.includes(row.defenses)).map((row) => row.playerId));
 }

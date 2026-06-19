@@ -1,19 +1,19 @@
 import {
   getOpponentDefenseEventsWithLocation,
   getPointEventsWithLocation,
-  groupOpponentDefensesByZone,
-  groupOpponentPointsByZone,
+  groupOpponentDefensesByTacticalSector,
+  groupOpponentPointsByTacticalSector,
   groupPointsByZone,
   LandingZoneStat,
 } from './court';
-import { createTacticalInsights, InsightCard } from './insights';
+import { InsightCard, InsightSeverity } from './insights';
+import { buildLiveRecommendations, LiveRecommendation, LiveRecommendationType } from './liveRecommendations';
 import { normalizeOpponentName } from './opponent';
 import { buildPlayerPerformance, PlayerPerformanceRow } from './playerPerformance';
 import {
   calculatePeriodScore,
   calculateTotalScore,
   formatPeriodName,
-  generatePeriodInsights,
   getDefensesByPlayer,
   getDefensesByPlayerByPeriod,
   getErrorsByPlayer,
@@ -270,6 +270,54 @@ const mapEffectivenessRows = (rows: PlayerPerformanceRow[]): ReportEffectiveness
 const buildEffectivenessRows = (events: MatchEvent[], players: Player[]) =>
   mapEffectivenessRows(buildPlayerPerformance(events, players).rows);
 
+const recommendationSeverity: Record<LiveRecommendationType, InsightSeverity> = {
+  warning: 'warning',
+  adjustment: 'warning',
+  info: 'info',
+};
+
+const recommendationAction: Record<LiveRecommendationType, string> = {
+  warning: 'Corregirlo en el proximo ajuste tactico.',
+  adjustment: 'Probar rotacion, cambio de angulo o variar el punto de lanzamiento.',
+  info: 'Mantenerlo como dato de lectura para el siguiente ajuste.',
+};
+
+const mapRecommendationToPeriodInsight = (recommendation: LiveRecommendation): PeriodInsight => ({
+  severity: recommendationSeverity[recommendation.type],
+  title: recommendation.title,
+  description: recommendation.detail ?? '',
+  suggestedAction: recommendationAction[recommendation.type],
+});
+
+const mapRecommendationToInsightCard = (recommendation: LiveRecommendation): InsightCard => ({
+  id: recommendation.id,
+  severity: recommendationSeverity[recommendation.type],
+  title: recommendation.title,
+  description: recommendation.detail ?? '',
+  suggestedAction: recommendationAction[recommendation.type],
+});
+
+const getLineupPlayerIdsForEvents = (match: Match, periodNumber?: MatchPeriod) =>
+  Array.from(new Set(
+    match.lineupSnapshots
+      .filter((lineup) => lineup.team === 'uruguay')
+      .filter((lineup) => !periodNumber || lineup.clock.period === periodNumber)
+      .flatMap((lineup) => lineup.playerIds),
+  ));
+
+const buildRecommendationInsights = (
+  events: MatchEvent[],
+  players: Player[],
+  lineupPlayerIds: string[],
+  maxRecommendations: number,
+) =>
+  buildLiveRecommendations({
+    currentLineupPlayerIds: lineupPlayerIds,
+    events,
+    maxRecommendations,
+    players,
+  });
+
 export function buildMatchReportData(match: Match, players: Player[]): MatchReportData {
   const opponentName = normalizeOpponentName(match.opponent);
   const teamPoolName = match.teamPoolName?.trim() || undefined;
@@ -279,13 +327,15 @@ export function buildMatchReportData(match: Match, players: Player[]): MatchRepo
   const finalLineup = [...match.lineupSnapshots].reverse().find((lineup) => lineup.team === 'uruguay');
   const totalErrorBreakdown = getErrorsByTypeByPlayer(match.events);
   const attackZones = groupPointsByZone(match.events);
-  const againstZones = groupOpponentPointsByZone(match.events);
-  const defendedZones = groupOpponentDefensesByZone(match.events);
+  const againstZones = groupOpponentPointsByTacticalSector(match.events);
+  const defendedZones = groupOpponentDefensesByTacticalSector(match.events);
   const periods = periodNumbers.map((periodNumber): PeriodReportData => {
     const periodEvents = getEventsByPeriod(match.events, periodNumber);
     const periodScore = calculatePeriodScore(match.events, periodNumber);
     const errorBreakdown = getErrorsByTypeByPlayerByPeriod(match.events, periodNumber);
     const ownPoints = errorBreakdown.reduce((sum, stat) => sum + stat.puntosEnContra, 0);
+    const periodLineupPlayerIds = getLineupPlayerIdsForEvents(match, periodNumber);
+    const periodRecommendations = buildRecommendationInsights(periodEvents, players, periodLineupPlayerIds, 8);
 
     return {
       periodNumber,
@@ -298,7 +348,7 @@ export function buildMatchReportData(match: Match, players: Player[]): MatchRepo
       topScorers: mapPlayerStats(getTopScorersByPeriod(match.events, periodNumber), getPlayerLabel),
       defenses: mapPlayerStats(getDefensesByPlayerByPeriod(match.events, periodNumber), getPlayerLabel),
       opponentDefenses: getOpponentDefensesByPeriod(match.events, periodNumber).length,
-      opponentDefenseZones: groupOpponentDefensesByZone(periodEvents),
+      opponentDefenseZones: groupOpponentDefensesByTacticalSector(periodEvents),
       faltas: mapFaltas(errorBreakdown, getPlayerLabel),
       ownPointsByPlayer: mapOwnPointsByPlayer(errorBreakdown, getPlayerLabel),
       totalErrors: mapPlayerStats(getErrorsByPlayerByPeriod(match.events, periodNumber), getPlayerLabel),
@@ -308,7 +358,7 @@ export function buildMatchReportData(match: Match, players: Player[]): MatchRepo
         [...getSubstitutionsByPeriod(match.events, periodNumber), ...getLineupSwapsByPeriod(match.events, periodNumber)],
         getPlayerLabel,
       ),
-      insights: generatePeriodInsights({ ...match, events: periodEvents }, periodNumber, (playerId) => getPlayerLabel(playerId)),
+      insights: periodRecommendations.map(mapRecommendationToPeriodInsight),
       maps: buildReportLocationMaps(periodEvents),
     };
   });
@@ -322,6 +372,7 @@ export function buildMatchReportData(match: Match, players: Player[]): MatchRepo
   const effectiveness = buildEffectivenessRows(match.events, players);
   const legacyOpponentDefensesWithoutPlayer = match.events.filter(isLegacyOpponentDefenseWithoutPlayer).length;
   const totalErrorCount = totalErrors.reduce((sum, stat) => sum + stat.total, 0);
+  const totalRecommendations = buildRecommendationInsights(match.events, players, getLineupPlayerIdsForEvents(match), 12);
 
   return {
     title: 'Reporte del partido',
@@ -340,8 +391,8 @@ export function buildMatchReportData(match: Match, players: Player[]): MatchRepo
       { label: 'Puntos en contra', value: String(ownPointsByPlayer.reduce((sum, stat) => sum + stat.total, 0)) },
       { label: 'Puntos en contra del rival', value: String(opponentOwnPoints) },
       { label: 'Zona mas efectiva', value: attackZones[0] ? `${attackZones[0].label} (${attackZones[0].total})` : emptyLabel },
-      { label: 'Zona vulnerable', value: againstZones[0] ? `${againstZones[0].label} (${againstZones[0].total})` : emptyLabel },
-      { label: 'Zona donde mas nos defendieron', value: defendedZones[0] ? `${defendedZones[0].label} (${defendedZones[0].total})` : emptyLabel },
+      { label: 'Sector vulnerable', value: againstZones[0] ? `${againstZones[0].label} (${againstZones[0].total})` : emptyLabel },
+      { label: 'Sector donde mas nos defendieron', value: defendedZones[0] ? `${defendedZones[0].label} (${defendedZones[0].total})` : emptyLabel },
     ],
     finalScore,
     scoreByPeriod: getScoreByPeriod(match.events).map((item) => ({
@@ -360,12 +411,7 @@ export function buildMatchReportData(match: Match, players: Player[]): MatchRepo
       legacyOpponentDefensesWithoutPlayer,
       opponentOwnPoints,
       substitutions: mapLineupActions(getLineupActions(match.events), getPlayerLabel),
-      insights: createTacticalInsights({
-        events: match.events,
-        lineupSnapshots: match.lineupSnapshots,
-        players,
-        opponentName,
-      }),
+      insights: totalRecommendations.map(mapRecommendationToInsightCard),
     },
     zones: {
       attack: attackZones,

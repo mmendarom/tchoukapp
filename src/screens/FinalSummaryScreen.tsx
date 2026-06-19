@@ -6,9 +6,9 @@ import { ActionButton } from '../components/ActionButton';
 import { CourtMapSummary } from '../components/CourtMapSummary';
 import { PlayerPerformanceBars } from '../components/PlayerPerformanceBars';
 import { Screen } from '../components/Screen';
+import { InsightCard } from '../domain/insights';
 import { normalizeOpponentName } from '../domain/opponent';
-import { groupOpponentDefensesByZone, groupOpponentPointsByZone, groupPointsByZone } from '../domain/court';
-import { createTacticalInsights } from '../domain/insights';
+import { groupOpponentDefensesByTacticalSector, groupOpponentPointsByTacticalSector, groupPointsByZone } from '../domain/court';
 import { buildPlayerPerformance } from '../domain/playerPerformance';
 import { buildMatchReportData } from '../domain/reportData';
 import { exportMatchReportPdf } from '../export/exportMatchReport';
@@ -100,8 +100,8 @@ export function FinalSummaryScreen({ navigation, route }: Props) {
   const opponentOwnPoints = getOpponentOwnPoints(match.events);
   const playerPerformance = buildPlayerPerformance(match.events, players);
   const zones = groupPointsByZone(match.events);
-  const opponentZones = groupOpponentPointsByZone(match.events);
-  const defendedZones = groupOpponentDefensesByZone(match.events);
+  const opponentZones = groupOpponentPointsByTacticalSector(match.events);
+  const defendedZones = groupOpponentDefensesByTacticalSector(match.events);
   const substitutions = getSubstitutions(match.events);
   const lineupSwaps = getLineupSwaps(match.events);
   const attackTotal = scorers.reduce((sum, stat) => sum + stat.total, 0);
@@ -110,12 +110,8 @@ export function FinalSummaryScreen({ navigation, route }: Props) {
   const teamGoals = playerPerformance.rows.reduce((sum, row) => sum + row.points, 0);
   const teamShotAttempts = playerPerformance.rows.reduce((sum, row) => sum + row.shotAttempts, 0);
   const teamEffectiveness = teamShotAttempts > 0 ? `${Math.round((teamGoals / teamShotAttempts) * 100)}%` : 'Sin tiros';
-  const insights = createTacticalInsights({
-    events: match.events,
-    lineupSnapshots: match.lineupSnapshots,
-    players,
-    opponentName,
-  });
+  const finalInsights = reportData?.totals.insights ?? [];
+  const effectivenessRows = reportData?.totals.effectiveness ?? [];
 
   return (
     <Screen>
@@ -138,23 +134,25 @@ export function FinalSummaryScreen({ navigation, route }: Props) {
         ))}
       </View>
       <View style={styles.card}>
-        <Text style={styles.sectionTitle}>Alertas tacticas generales</Text>
-        {insights.length === 0 ? (
-          <Text style={styles.metric}>Sin lecturas tacticas.</Text>
+        <Text style={styles.sectionTitle}>Lectura final</Text>
+        {finalInsights.length === 0 ? (
+          <Text style={styles.metric}>Sin alertas tácticas relevantes.</Text>
         ) : (
-          insights.map((insight) => (
-            <View key={insight.id} style={styles.insight}>
-              <Text style={styles.insightTitle}>{insight.title}</Text>
-              <Text style={styles.metric} numberOfLines={2}>{insight.description}</Text>
-              <Text style={styles.action} numberOfLines={2}>{insight.suggestedAction}</Text>
-            </View>
-          ))
+          finalInsights.map((insight) => <InsightRow key={insight.id} insight={insight} />)
         )}
+      </View>
+      <PlayerPerformanceBars data={playerPerformance} title="Rendimiento total" />
+      <View style={styles.card}>
+        <Text style={styles.sectionTitle}>Efectividad ofensiva total</Text>
+        {effectivenessRows.length === 0 ? <Text style={styles.metric}>Sin tiros registrados.</Text> : effectivenessRows.map((row) => (
+          <Text key={row.playerId} style={styles.metric}>
+            {row.playerName}: {row.goals}/{row.shotAttempts} tiros · {Math.round(row.effectiveness * 100)}% · {row.rivalDefendedShots} atajados
+          </Text>
+        ))}
       </View>
       <CourtMapSummary title="Dónde hicimos los puntos" events={match.events} team="uruguay" />
       <CourtMapSummary title="Dónde nos hicieron puntos" events={match.events} team="opponent" />
       <CourtMapSummary title="Dónde nos defendieron" events={match.events} source="opponent_defenses" />
-      <PlayerPerformanceBars data={playerPerformance} title="Rendimiento total" />
       <View style={styles.card}>
         <Text style={styles.sectionTitle}>Goleadores</Text>
         {scorers.map((stat) => <Text key={stat.playerId} style={styles.metric}>{playerName(stat.playerId)}: {stat.total}</Text>)}
@@ -196,7 +194,7 @@ export function FinalSummaryScreen({ navigation, route }: Props) {
         ))}
       </View>
       <View style={styles.card}>
-        <Text style={styles.sectionTitle}>Zonas vulnerables</Text>
+        <Text style={styles.sectionTitle}>Zonas donde nos entraron</Text>
         {opponentZones.length === 0 ? <Text style={styles.metric}>Sin ubicacion registrada.</Text> : opponentZones.map((stat) => (
           <Text key={stat.label} style={styles.metric}>{stat.label}: {stat.total}</Text>
         ))}
@@ -233,6 +231,23 @@ export function FinalSummaryScreen({ navigation, route }: Props) {
         <ActionButton label="Volver al inicio" onPress={() => navigation.navigate('Home')} variant="secondary" />
       </View>
     </Screen>
+  );
+}
+
+function InsightRow({ insight }: { insight: InsightCard }) {
+  const visual = insight.severity === 'critical'
+    ? { label: 'Atención', color: '#b42318', backgroundColor: '#fff7ed' }
+    : insight.severity === 'warning'
+      ? { label: 'Ajuste', color: '#0b6bcb', backgroundColor: '#f0f7ff' }
+      : { label: 'Dato', color: '#0f766e', backgroundColor: '#f0fdfa' };
+
+  return (
+    <View style={[styles.insight, { backgroundColor: visual.backgroundColor, borderLeftColor: visual.color }]}>
+      <Text style={[styles.insightBadge, { color: visual.color, borderColor: visual.color }]}>{visual.label}</Text>
+      <Text style={styles.insightTitle}>{insight.title}</Text>
+      <Text style={styles.metric} numberOfLines={2}>{insight.description}</Text>
+      <Text style={styles.action} numberOfLines={2}>{insight.suggestedAction}</Text>
+    </View>
   );
 }
 
@@ -344,9 +359,21 @@ const styles = StyleSheet.create({
   },
   insight: {
     borderRadius: 8,
-    backgroundColor: '#f4f7fb',
+    borderWidth: 1,
+    borderColor: '#e3ebf4',
+    borderLeftWidth: 4,
     padding: spacing.sm,
     gap: spacing.xs,
+  },
+  insightBadge: {
+    alignSelf: 'flex-start',
+    borderRadius: 8,
+    backgroundColor: '#ffffff',
+    borderWidth: 1,
+    fontSize: fontSize.tiny,
+    fontWeight: '900',
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 2,
   },
   insightTitle: {
     color: '#0b1f33',

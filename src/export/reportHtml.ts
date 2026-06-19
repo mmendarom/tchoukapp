@@ -48,9 +48,9 @@ const effectivenessHtml = (items: ReportEffectivenessRow[], legacyOpponentDefens
           <thead>
             <tr>
               <th>Jugador</th>
-              <th>Goles</th>
-              <th>Atajados</th>
-              <th>Tiros</th>
+              <th>Puntos convertidos</th>
+              <th>Tiros atajados</th>
+              <th>Tiros generados</th>
               <th>Efectividad</th>
             </tr>
           </thead>
@@ -156,7 +156,7 @@ const summaryCardsHtml = (report: MatchReportData) => `
     <div class="summary-grid">
       ${report.executiveSummary.map((item) => `<div><strong>${escapeHtml(item.label)}</strong><span>${escapeHtml(item.value)}</span></div>`).join('')}
     </div>
-    <h3>Alertas tácticas principales</h3>
+    <h3>Lectura táctica principal</h3>
     ${insightsHtml(report.totals.insights, 3)}
   </section>
 `;
@@ -178,9 +178,9 @@ const periodHtml = (period: PeriodReportData, opponentName: string) => `
         ${statListHtml(period.topScorers, 'Sin puntos de Uruguay.')}
         <h3>Defensas</h3>
         ${statListHtml(period.defenses, 'Sin defensas registradas.')}
-        <h3>Defensas del rival</h3>
+        <h3>Zonas donde nos defendieron</h3>
         ${statListHtml(period.opponentDefenseZones, 'Sin ubicaciones registradas.')}
-        <h3>Efectividad ofensiva</h3>
+        <h3>Rendimiento ofensivo</h3>
         ${effectivenessHtml(period.effectiveness, period.legacyOpponentDefensesWithoutPlayer)}
       </div>
       <div>
@@ -194,7 +194,7 @@ const periodHtml = (period: PeriodReportData, opponentName: string) => `
     </div>
     <h3>Cambios</h3>
     ${substitutionsHtml(period.substitutions)}
-    <h3>Alertas tácticas</h3>
+    <h3>Lectura táctica</h3>
     ${insightsHtml(period.insights)}
     <div class="report-map-section">
       <h3>Mapas del tiempo</h3>
@@ -277,7 +277,7 @@ export function buildMatchReportHtml(report: MatchReportData) {
         <h3>Defensas</h3>
         ${statListHtml(report.totals.defenses, 'Sin defensas registradas.')}
         <p><strong>Defensas del rival:</strong> ${report.totals.opponentDefenses}</p>
-        <h3>Efectividad ofensiva total</h3>
+        <h3>Rendimiento ofensivo total</h3>
         ${effectivenessHtml(report.totals.effectiveness, report.totals.legacyOpponentDefensesWithoutPlayer)}
         <h3>Faltas</h3>
         ${statListHtml(report.totals.faltas, 'Sin faltas registradas.')}
@@ -288,7 +288,7 @@ export function buildMatchReportHtml(report: MatchReportData) {
         <p><strong>Puntos en contra del rival:</strong> ${report.totals.opponentOwnPoints}</p>
         <h3>Errores totales</h3>
         ${statListHtml(report.totals.totalErrors, 'Sin errores registrados.')}
-        <h3>Alertas tácticas</h3>
+        <h3>Lectura táctica</h3>
         ${insightsHtml(report.totals.insights)}
       </div>
     </div>
@@ -303,11 +303,11 @@ export function buildMatchReportHtml(report: MatchReportData) {
   </section>
 
   <section>
-    <h2>Zonas principales</h2>
+    <h2>Sectores tácticos principales</h2>
     <div class="three-col">
       <h3>Zonas donde hicimos puntos</h3>
       ${statListHtml(report.zones.attack, 'Sin ubicación registrada.')}
-      <h3>Zonas donde nos hicieron puntos</h3>
+      <h3>Zonas donde nos entraron</h3>
       ${statListHtml(report.zones.against, 'Sin ubicación registrada.')}
       <h3>Zonas donde nos defendieron</h3>
       ${statListHtml(report.zones.defended, 'Sin ubicaciones registradas.')}
@@ -372,12 +372,12 @@ export function buildMatchReportText(report: MatchReportData) {
     `Puntos en contra del rival: ${report.totals.opponentOwnPoints}`,
     `Defensas del rival: ${report.totals.opponentDefenses}`,
     '',
-    'Zonas principales',
+    'Sectores tácticos principales',
     `- ${topZoneLine('Donde hicimos puntos', report.zones.attack)}`,
-    `- ${topZoneLine('Donde nos hicieron puntos', report.zones.against)}`,
+    `- ${topZoneLine('Donde nos entraron', report.zones.against)}`,
     `- ${topZoneLine('Donde nos defendieron', report.zones.defended)}`,
     '',
-    'Alertas tácticas',
+    'Lectura táctica',
     ...(report.totals.insights.length === 0
       ? ['- Sin alertas tácticas.']
       : report.totals.insights.slice(0, 3).map((item) => `- ${item.title}: ${item.description}`)),

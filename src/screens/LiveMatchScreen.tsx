@@ -220,7 +220,8 @@ export function LiveMatchScreen({ navigation, route }: Props) {
 
   const score = useMemo(() => calculateTotalScore(match.events), [match.events]);
   const canRecord = match.status === 'live' && currentPeriodState?.status === 'live';
-  const lastFiveEvents = useMemo(() => match.events.slice(0, 5), [match.events]);
+  const recentActionLimit = isTabletLandscape ? 10 : 5;
+  const recentEvents = useMemo(() => match.events.slice(0, recentActionLimit), [match.events, recentActionLimit]);
   const opponentName = normalizeOpponentName(match.opponent);
   const timerText = currentPeriodState?.remainingSeconds === 0 ? 'Tiempo cumplido' : formatTimer(currentPeriodState?.remainingSeconds ?? 0);
   const shouldShowLiveMaps = match.status === 'live';
@@ -243,13 +244,14 @@ export function LiveMatchScreen({ navigation, route }: Props) {
     [currentLineup?.playerIds, match.currentPeriod, match.events, players],
   );
   const livePerformanceBars = match.status === 'live' ? (
-    <PlayerPerformanceBars data={livePerformance} showRowsWhenEmpty sortMode="input" title="Rendimiento en vivo" />
+    <PlayerPerformanceBars data={livePerformance} showRowsWhenEmpty sortMode="contribution" title="Rendimiento en vivo" />
   ) : undefined;
   const liveRecommendations = useMemo(
     () =>
       buildLiveRecommendations({
         currentLineupPlayerIds: currentLineup?.playerIds ?? [],
         events: currentPeriodEvents,
+        maxRecommendations: 12,
         players,
       }),
     [currentLineup?.playerIds, currentPeriodEvents, players],
@@ -721,6 +723,31 @@ export function LiveMatchScreen({ navigation, route }: Props) {
 
               <Pressable
                 disabled={!canRecord}
+                onPress={recordSelectedDefense}
+                style={({ pressed }) => [
+                  styles.actionCard,
+                  styles.defenseButton,
+                  !canRecord && styles.disabledButton,
+                  pressed && styles.pressed,
+                ]}
+              >
+                <Text numberOfLines={2} adjustsFontSizeToFit style={styles.actionButtonLabel}>Defensa</Text>
+                <Text numberOfLines={1} adjustsFontSizeToFit style={styles.actionButtonHint}>Jugador</Text>
+              </Pressable>
+
+              <Pressable
+                disabled={!canRecord}
+                onPress={openErrorModal}
+                style={({ pressed }) => [styles.actionCard, styles.errorButton, !canRecord && styles.disabledButton, pressed && styles.pressed]}
+              >
+                <Text numberOfLines={2} adjustsFontSizeToFit style={styles.actionButtonLabel}>Error</Text>
+                <Text numberOfLines={1} adjustsFontSizeToFit style={styles.actionButtonHint}>{getPlayerName(players, selectedPlayerId)}</Text>
+              </Pressable>
+            </View>
+
+            <View style={styles.actionRow}>
+              <Pressable
+                disabled={!canRecord}
                 onPress={() => {
                   setPointMode('opponent_point');
                   setSelectedLandingLocation(undefined);
@@ -734,36 +761,6 @@ export function LiveMatchScreen({ navigation, route }: Props) {
               >
                 <Text numberOfLines={2} adjustsFontSizeToFit style={styles.actionButtonLabel}>Punto rival</Text>
                 <Text numberOfLines={1} adjustsFontSizeToFit style={styles.actionButtonHint}>Mapa</Text>
-              </Pressable>
-
-              <Pressable
-                disabled={!canRecord}
-                onPress={recordOpponentOwnPointAction}
-                style={({ pressed }) => [
-                  styles.actionCard,
-                  styles.opponentOwnPointButton,
-                  !canRecord && styles.disabledButton,
-                  pressed && styles.pressed,
-                ]}
-              >
-                <Text numberOfLines={2} adjustsFontSizeToFit style={styles.actionButtonLabel}>En contra rival</Text>
-                <Text numberOfLines={1} adjustsFontSizeToFit style={styles.actionButtonHint}>+1 Uruguay</Text>
-              </Pressable>
-            </View>
-
-            <View style={styles.actionRow}>
-              <Pressable
-                disabled={!canRecord}
-                onPress={recordSelectedDefense}
-                style={({ pressed }) => [
-                  styles.actionCard,
-                  styles.defenseButton,
-                  !canRecord && styles.disabledButton,
-                  pressed && styles.pressed,
-                ]}
-              >
-                <Text numberOfLines={2} adjustsFontSizeToFit style={styles.actionButtonLabel}>Defensa</Text>
-                <Text numberOfLines={1} adjustsFontSizeToFit style={styles.actionButtonHint}>Jugador</Text>
               </Pressable>
 
               <Pressable
@@ -782,11 +779,16 @@ export function LiveMatchScreen({ navigation, route }: Props) {
 
               <Pressable
                 disabled={!canRecord}
-                onPress={openErrorModal}
-                style={({ pressed }) => [styles.actionCard, styles.errorButton, !canRecord && styles.disabledButton, pressed && styles.pressed]}
+                onPress={recordOpponentOwnPointAction}
+                style={({ pressed }) => [
+                  styles.actionCard,
+                  styles.opponentOwnPointButton,
+                  !canRecord && styles.disabledButton,
+                  pressed && styles.pressed,
+                ]}
               >
-                <Text numberOfLines={2} adjustsFontSizeToFit style={styles.actionButtonLabel}>Error</Text>
-                <Text numberOfLines={1} adjustsFontSizeToFit style={styles.actionButtonHint}>{getPlayerName(players, selectedPlayerId)}</Text>
+                <Text numberOfLines={2} adjustsFontSizeToFit style={styles.actionButtonLabel}>En contra rival</Text>
+                <Text numberOfLines={1} adjustsFontSizeToFit style={styles.actionButtonHint}>+1 Uruguay</Text>
               </Pressable>
             </View>
 
@@ -876,12 +878,12 @@ export function LiveMatchScreen({ navigation, route }: Props) {
             </View>
           )}
 
-          <View style={styles.panel}>
+          <View style={[styles.panel, styles.latestActionsPanel, isTabletLandscape && styles.latestActionsPanelTablet]}>
             <Text style={styles.panelTitle}>Últimas acciones</Text>
-            {lastFiveEvents.length === 0 ? (
+            {recentEvents.length === 0 ? (
               <Text style={styles.emptyText}>Todavía no hay acciones.</Text>
             ) : (
-              lastFiveEvents.map((event) => (
+              recentEvents.map((event) => (
                 <View key={event.id} style={styles.eventRow}>
                   <Text style={styles.eventTime}>{formatPeriodName(event.periodNumber).slice(0, 3)}</Text>
                   <Text style={styles.eventText}>{describeEvent(event, players)}</Text>
@@ -1041,7 +1043,7 @@ const styles = StyleSheet.create({
   mainGrid: {
     flexDirection: 'row',
     gap: spacing.md,
-    alignItems: 'flex-start',
+    alignItems: 'stretch',
   },
   mainGridTabletLandscape: {
     gap: spacing.lg,
@@ -1065,6 +1067,12 @@ const styles = StyleSheet.create({
   },
   rightColumnTabletLandscape: {
     flex: 0.9,
+  },
+  latestActionsPanel: {
+    flexGrow: 1,
+  },
+  latestActionsPanelTablet: {
+    minHeight: 300,
   },
   actionGrid: {
     gap: spacing.xs,

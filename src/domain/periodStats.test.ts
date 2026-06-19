@@ -192,8 +192,8 @@ describe('periodStats', () => {
         event({ id: 'u-2', scoringTeam: 'uruguay', landingLocation: { x: 0.52, y: 0.4 }, zone: 'right-wing' }),
         event({ id: 'u-3', scoringTeam: 'uruguay', landingLocation: { x: 0.48, y: 0.5 }, zone: 'backcourt' }),
         event({ id: 'o-1', scoringTeam: 'opponent', playerId: undefined, landingLocation: { x: 0.82, y: 0.3 }, zone: 'center' }),
-        event({ id: 'o-2', scoringTeam: 'opponent', playerId: undefined, landingLocation: { x: 0.84, y: 0.4 }, zone: 'center' }),
-        event({ id: 'o-3', scoringTeam: 'opponent', playerId: undefined, landingLocation: { x: 0.86, y: 0.5 }, zone: 'center' }),
+        event({ id: 'o-2', scoringTeam: 'opponent', playerId: undefined, landingLocation: { x: 0.84, y: 0.32 }, zone: 'center' }),
+        event({ id: 'o-3', scoringTeam: 'opponent', playerId: undefined, landingLocation: { x: 0.86, y: 0.32 }, zone: 'center' }),
       ],
     };
 
@@ -202,8 +202,9 @@ describe('periodStats', () => {
       .join(' ');
 
     expect(text).toContain('zona central');
-    expect(text).toContain('zona derecha');
+    expect(text).toContain('marco derecho · 30°-60°');
     expect(text).not.toMatch(/\b(center|left|right)\b/);
+    expect(text).not.toMatch(/zona izquierda|zona derecha/i);
     expect(text).not.toContain('desde center');
   });
 
@@ -238,17 +239,17 @@ describe('periodStats', () => {
     const defenseMatch: Match = {
       ...match,
       events: [
-        event({ id: 'rd-1', kind: 'opponent_defense', team: 'opponent', playerId: undefined, defenseLocation: { x: 0.5, y: 0.3 } } as Partial<MatchEvent>),
-        event({ id: 'rd-2', kind: 'opponent_defense', team: 'opponent', playerId: undefined, defenseLocation: { x: 0.52, y: 0.4 } } as Partial<MatchEvent>),
-        event({ id: 'rd-3', kind: 'opponent_defense', team: 'opponent', playerId: undefined, defenseLocation: { x: 0.48, y: 0.5 } } as Partial<MatchEvent>),
+        event({ id: 'rd-1', kind: 'opponent_defense', team: 'opponent', playerId: undefined, defenseLocation: { x: 0.55, y: 0.3 } } as Partial<MatchEvent>),
+        event({ id: 'rd-2', kind: 'opponent_defense', team: 'opponent', playerId: undefined, defenseLocation: { x: 0.58, y: 0.32 } } as Partial<MatchEvent>),
+        event({ id: 'rd-3', kind: 'opponent_defense', team: 'opponent', playerId: undefined, defenseLocation: { x: 0.6, y: 0.32 } } as Partial<MatchEvent>),
       ],
     };
     const text = generatePeriodInsights(defenseMatch, 1, (playerId) => playerId)
       .map((insight) => `${insight.title} ${insight.description}`)
       .join(' ');
 
-    expect(text).toContain('Nos defienden seguido en una zona');
-    expect(text).toContain('zona central');
+    expect(text).toContain('Nos defienden seguido en un sector');
+    expect(text).toContain('marco derecho · 30°-60°');
     expect(text).not.toMatch(/\b(center|left|right|opponent_defense)\b/);
   });
 });

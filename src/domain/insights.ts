@@ -1,4 +1,4 @@
-﻿import { getMostFrequentLandingZones, getMostFrequentOpponentDefenseZones } from './court';
+﻿import { getMostFrequentOpponentDefenseSectors, getMostFrequentOpponentScoringSectors } from './court';
 import { calculateScore, getCurrentLineup } from './stats';
 import {
   DefenseEvent,
@@ -252,15 +252,15 @@ const createOpponentZoneInsights = (
   opponentName: string,
   rules: TacticalInsightRules,
 ): InsightCard[] => {
-  return getMostFrequentLandingZones(recentEvents, 'opponent')
+  return getMostFrequentOpponentScoringSectors(recentEvents)
     .map((zone) => [zone.label, zone.total] as const)
     .filter(([, total]) => total >= rules.repeatedOpponentZoneWarning)
     .map(([label, total]) => ({
       id: `opponent-zone-${label}`,
       severity: total >= rules.repeatedOpponentZoneCritical ? 'critical' : 'warning',
-      title: `${opponentName} repite puntos en ${label.toLowerCase()}`,
-            description: `${opponentName} convirtió ${total} puntos recientes hacia ${label.toLowerCase()}.`,
-      suggestedAction: 'Ajustar la cobertura hacia esa zona y presionar la línea de pase antes del lanzamiento al marco.',
+      title: `${opponentName} repite puntos en ${label}`,
+      description: `${opponentName} convirtió ${total} puntos recientes hacia ${label}.`,
+      suggestedAction: 'Ajustar la cobertura de ese sector y presionar la línea de pase antes del lanzamiento al marco.',
     }));
 };
 
@@ -289,13 +289,13 @@ const createOpponentDefenseZoneInsights = (
   recentEvents: MatchEvent[],
   rules: TacticalInsightRules,
 ): InsightCard[] => {
-  return getMostFrequentOpponentDefenseZones(recentEvents)
+  return getMostFrequentOpponentDefenseSectors(recentEvents)
     .filter((zone) => zone.total >= rules.opponentDefenseZoneWarning)
     .map((zone) => ({
       id: `opponent-defense-zone-${zone.label}`,
       severity: 'warning',
-      title: 'Nos defienden seguido en una zona',
-      description: `El rival defendio ${zone.total} ataques en ${zone.label.toLowerCase()}.`,
+      title: 'Nos defienden seguido en un sector',
+      description: `El rival defendio ${zone.total} ataques en ${zone.label}.`,
       suggestedAction: 'Variar angulos de ataque o rotar el punto de lanzamiento.',
     }));
 };

@@ -2,8 +2,11 @@ import { describe, expect, it } from 'vitest';
 
 import {
   buildLivePlayerPerformance,
+  getTopAttackPlayerIds,
+  getTopDefensePlayerIds,
   buildPlayerPerformance,
   buildPlayerPerformanceForPeriod,
+  sortPlayerPerformanceRows,
 } from './playerPerformance';
 import { MatchEvent, Player } from './types';
 
@@ -11,6 +14,8 @@ const players: Player[] = [
   { id: 'p1', firstName: 'Mauro', lastName: '', number: 1, position: 'Wing', usualPlayingZone: 'izquierda', dominantHand: 'Right', caps: 0, goals: 0, blocks: 0 },
   { id: 'p2', firstName: 'Fede', lastName: '', number: 2, position: 'Wing', usualPlayingZone: 'derecha', dominantHand: 'Right', caps: 0, goals: 0, blocks: 0 },
   { id: 'p3', firstName: 'Ileana', lastName: '', number: 3, position: 'Center', usualPlayingZone: 'central', dominantHand: 'Left', caps: 0, goals: 0, blocks: 0 },
+  { id: 'p4', firstName: 'Ceci', lastName: '', number: 4, position: 'Center', usualPlayingZone: 'central', dominantHand: 'Right', caps: 0, goals: 0, blocks: 0 },
+  { id: 'p5', firstName: 'Rodo', lastName: '', number: 5, position: 'Wing', usualPlayingZone: 'izquierda', dominantHand: 'Left', caps: 0, goals: 0, blocks: 0 },
 ];
 
 const point = (overrides: Partial<MatchEvent> = {}): MatchEvent => ({
@@ -54,6 +59,9 @@ const opponentDefense = (overrides: Partial<MatchEvent> = {}): MatchEvent => ({
 } as MatchEvent);
 
 describe('playerPerformance', () => {
+  const repeat = (count: number, createEvent: (index: number) => MatchEvent) =>
+    Array.from({ length: count }, (_, index) => createEvent(index));
+
   it('calculates attack share from normal Uruguay points by player', () => {
     const data = buildPlayerPerformance([
       point({ id: 'p1-a', playerId: 'p1' }),
@@ -133,6 +141,22 @@ describe('playerPerformance', () => {
       rivalDefensesAgainst: 1,
       shotAttempts: 1,
       effectiveness: 0,
+    });
+  });
+
+  it('tracks generated attack volume from converted points and defended shots', () => {
+    const data = buildPlayerPerformance([
+      ...repeat(4, (index) => point({ id: `goal-${index}`, playerId: 'p1' })),
+      ...repeat(2, (index) => opponentDefense({ id: `defended-${index}`, playerId: 'p1' })),
+      point({ id: 'opponent-own', playerId: undefined, pointSource: 'opponent_own_point', landingLocation: undefined }),
+      opponentDefense({ id: 'legacy-defended', playerId: undefined }),
+    ], players);
+
+    expect(data.rows.find((row) => row.playerId === 'p1')).toMatchObject({
+      points: 4,
+      rivalDefensesAgainst: 2,
+      shotAttempts: 6,
+      effectiveness: 4 / 6,
     });
   });
 
@@ -220,5 +244,82 @@ describe('playerPerformance', () => {
     expect(data.totalTeamPoints).toBe(2);
     expect(data.totalTeamDefenses).toBe(1);
     expect(data.rows.find((row) => row.playerId === 'p2')).toMatchObject({ points: 1, defenses: 1 });
+  });
+
+  it('sorts attack contribution by points before attempts and effectiveness', () => {
+    const data = buildPlayerPerformance([
+      ...repeat(6, (index) => point({ id: `p1-goal-${index}`, playerId: 'p1' })),
+      ...repeat(2, (index) => opponentDefense({ id: `p1-defended-${index}`, playerId: 'p1' })),
+      point({ id: 'p2-goal', playerId: 'p2' }),
+      ...repeat(3, (index) => point({ id: `p3-goal-${index}`, playerId: 'p3' })),
+      ...repeat(2, (index) => opponentDefense({ id: `p3-defended-${index}`, playerId: 'p3' })),
+      ...repeat(2, (index) => point({ id: `p4-goal-${index}`, playerId: 'p4' })),
+    ], players, ['p5']);
+
+    const sorted = sortPlayerPerformanceRows(data.rows, 'points', 'contribution');
+
+    expect(sorted.map((row) => row.playerId)).toEqual(['p1', 'p3', 'p4', 'p2', 'p5']);
+    expect(sorted.find((row) => row.playerId === 'p1')).toMatchObject({ points: 6, shotAttempts: 8, effectiveness: 0.75 });
+    expect(sorted.find((row) => row.playerId === 'p2')).toMatchObject({ points: 1, shotAttempts: 1, effectiveness: 1 });
+  });
+
+  it('uses attempts and effectiveness only after points tie in attack contribution', () => {
+    const data = buildPlayerPerformance([
+      ...repeat(2, (index) => point({ id: `p1-goal-${index}`, playerId: 'p1' })),
+      ...repeat(3, (index) => opponentDefense({ id: `p1-defended-${index}`, playerId: 'p1' })),
+      ...repeat(2, (index) => point({ id: `p2-goal-${index}`, playerId: 'p2' })),
+      ...repeat(2, (index) => point({ id: `p3-goal-${index}`, playerId: 'p3' })),
+      opponentDefense({ id: 'p3-defended', playerId: 'p3' }),
+    ], players);
+
+    const sorted = sortPlayerPerformanceRows(data.rows, 'points', 'contribution');
+
+    expect(sorted.map((row) => row.playerId)).toEqual(['p1', 'p3', 'p2']);
+  });
+
+  it('keeps zero-stat players lower in contribution sorting', () => {
+    const data = buildPlayerPerformance([
+      opponentDefense({ id: 'p2-defended', playerId: 'p2' }),
+    ], players, ['p1', 'p2', 'p3']);
+
+    const sorted = sortPlayerPerformanceRows(data.rows, 'points', 'contribution');
+
+    expect(sorted.map((row) => row.playerId)).toEqual(['p2', 'p1', 'p3']);
+  });
+
+  it('highlights top two attack rank groups including ties', () => {
+    const data = buildPlayerPerformance([
+      ...repeat(5, (index) => point({ id: `p1-goal-${index}`, playerId: 'p1' })),
+      ...repeat(4, (index) => point({ id: `p2-goal-${index}`, playerId: 'p2' })),
+      ...repeat(4, (index) => point({ id: `p3-goal-${index}`, playerId: 'p3' })),
+      ...repeat(2, (index) => point({ id: `p4-goal-${index}`, playerId: 'p4' })),
+      opponentDefense({ id: 'p5-defended', playerId: 'p5' }),
+    ], players);
+
+    expect(Array.from(getTopAttackPlayerIds(data.rows)).sort()).toEqual(['p1', 'p2', 'p3']);
+  });
+
+  it('highlights tied first attack group plus second rank group and skips zero-stat players', () => {
+    const data = buildPlayerPerformance([
+      ...repeat(5, (index) => point({ id: `p1-goal-${index}`, playerId: 'p1' })),
+      ...repeat(5, (index) => point({ id: `p2-goal-${index}`, playerId: 'p2' })),
+      ...repeat(3, (index) => point({ id: `p3-goal-${index}`, playerId: 'p3' })),
+    ], players, ['p4', 'p5']);
+
+    expect(Array.from(getTopAttackPlayerIds(data.rows)).sort()).toEqual(['p1', 'p2', 'p3']);
+  });
+
+  it('highlights top two defense rank groups including ties', () => {
+    const data = buildPlayerPerformance([
+      ...repeat(4, (index) => defense({ id: `p1-defense-${index}`, playerId: 'p1' })),
+      ...repeat(3, (index) => defense({ id: `p2-defense-${index}`, playerId: 'p2' })),
+      ...repeat(3, (index) => defense({ id: `p3-defense-${index}`, playerId: 'p3' })),
+      defense({ id: 'p4-defense', playerId: 'p4' }),
+    ], players, ['p5']);
+
+    const sorted = sortPlayerPerformanceRows(data.rows, 'defenses', 'contribution');
+
+    expect(sorted.map((row) => row.playerId)).toEqual(['p1', 'p2', 'p3', 'p4', 'p5']);
+    expect(Array.from(getTopDefensePlayerIds(data.rows)).sort()).toEqual(['p1', 'p2', 'p3']);
   });
 });
