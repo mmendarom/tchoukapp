@@ -99,23 +99,51 @@ describe('court derived zones', () => {
   it('deriveTacticalCourtSector derives stable angle bands and labels', () => {
     expect(deriveTacticalCourtSector({ x: 0.8, y: 0.05 })).toMatchObject({
       sideLabel: 'marco derecho',
+      areaSideLabel: 'lado izquierdo',
       angleDegrees: 9,
       angleBand: '0°-30°',
-      shortLabel: 'marco derecho · 0°-30°',
+      shortLabel: 'marco derecho · lado izquierdo · 0°-30°',
     });
     expect(deriveTacticalCourtSector({ x: 0.2, y: 0.5 })).toMatchObject({
       sideLabel: 'marco izquierdo',
+      areaSideLabel: 'lado izquierdo',
       angleDegrees: 90,
-      angleBand: '60°-120°',
-      shortLabel: 'marco izquierdo · 60°-120°',
+      angleBand: '60°-90°',
+      shortLabel: 'marco izquierdo · lado izquierdo · 60°-90°',
     });
   });
 
   it('deriveTacticalCourtSector respects explicit frame when available', () => {
     expect(deriveTacticalCourtSector({ x: 0.2, y: 0.33 }, 'right-frame')).toMatchObject({
       sideLabel: 'marco derecho',
+      areaSideLabel: 'lado izquierdo',
       angleBand: '30°-60°',
-      shortLabel: 'marco derecho · 30°-60°',
+      shortLabel: 'marco derecho · lado izquierdo · 30°-60°',
+    });
+  });
+
+  it('mirrors both area sides into stable 0°-90° bands', () => {
+    const leftSide = deriveTacticalCourtSector({ x: 0.8, y: 0.2 }, 'right-frame');
+    const rightSide = deriveTacticalCourtSector({ x: 0.8, y: 0.8 }, 'right-frame');
+
+    expect(leftSide).toMatchObject({ areaSideLabel: 'lado izquierdo', angleDegrees: 36, angleBand: '30°-60°' });
+    expect(rightSide).toMatchObject({ areaSideLabel: 'lado derecho', angleDegrees: 36, angleBand: '30°-60°' });
+    expect(`${leftSide.shortLabel} ${rightSide.shortLabel}`).not.toMatch(/60°-120°|120°|150°|180°/);
+  });
+
+  it('reads area sides from center and reverses their orientation between frames', () => {
+    expect(deriveTacticalCourtSector({ x: 0.2, y: 0.2 }).shortLabel).toBe('marco izquierdo · lado derecho · 30°-60°');
+    expect(deriveTacticalCourtSector({ x: 0.2, y: 0.8 }).shortLabel).toBe('marco izquierdo · lado izquierdo · 30°-60°');
+    expect(deriveTacticalCourtSector({ x: 0.8, y: 0.2 }).shortLabel).toBe('marco derecho · lado izquierdo · 30°-60°');
+    expect(deriveTacticalCourtSector({ x: 0.8, y: 0.8 }).shortLabel).toBe('marco derecho · lado derecho · 30°-60°');
+  });
+
+  it('falls back to the location for the frame and still labels legacy events safely', () => {
+    expect(deriveTacticalCourtSector({ x: 0.75, y: 0.7 })).toMatchObject({
+      sideLabel: 'marco derecho',
+      areaSideLabel: 'lado derecho',
+      angleBand: '30°-60°',
+      shortLabel: 'marco derecho · lado derecho · 30°-60°',
     });
   });
 
@@ -164,27 +192,27 @@ describe('court derived zones', () => {
 
   it('groups opponent points by tactical sector without generic zone labels', () => {
     const stats = groupOpponentPointsByTacticalSector([
-      point({ scoringTeam: 'opponent', playerId: undefined, landingLocation: { x: 0.82, y: 0.3 }, frame: 'right-frame' }),
-      point({ scoringTeam: 'opponent', playerId: undefined, landingLocation: { x: 0.78, y: 0.32 }, frame: 'right-frame' }),
+      point({ scoringTeam: 'opponent', playerId: undefined, landingLocation: { x: 0.18, y: 0.3 }, frame: 'right-frame' }),
+      point({ scoringTeam: 'opponent', playerId: undefined, landingLocation: { x: 0.22, y: 0.32 }, frame: 'right-frame' }),
       point({ scoringTeam: 'opponent', playerId: undefined, landingLocation: undefined }),
     ]);
 
-    expect(stats[0]).toEqual({ label: 'marco derecho · 30°-60°', total: 2 });
+    expect(stats[0]).toEqual({ label: 'marco izquierdo · lado derecho · 30°-60°', total: 2 });
     expect(getMostFrequentOpponentScoringSectors(stats.length === 0 ? [] : [
-      point({ scoringTeam: 'opponent', playerId: undefined, landingLocation: { x: 0.82, y: 0.3 }, frame: 'right-frame' }),
-      point({ scoringTeam: 'opponent', playerId: undefined, landingLocation: { x: 0.78, y: 0.32 }, frame: 'right-frame' }),
-    ])[0]).toEqual({ label: 'marco derecho · 30°-60°', total: 2 });
+      point({ scoringTeam: 'opponent', playerId: undefined, landingLocation: { x: 0.18, y: 0.3 }, frame: 'right-frame' }),
+      point({ scoringTeam: 'opponent', playerId: undefined, landingLocation: { x: 0.22, y: 0.32 }, frame: 'right-frame' }),
+    ])[0]).toEqual({ label: 'marco izquierdo · lado derecho · 30°-60°', total: 2 });
   });
 
   it('groups opponent defenses by tactical sector and keeps legacy events safe', () => {
     const events: MatchEvent[] = [
-      point({ id: 'd-1', kind: 'opponent_defense', team: 'opponent', playerId: undefined, defenseLocation: { x: 0.48, y: 0.5 } } as Partial<MatchEvent>),
-      point({ id: 'd-2', kind: 'opponent_defense', team: 'opponent', playerId: 'p1', defenseLocation: { x: 0.46, y: 0.52 } } as Partial<MatchEvent>),
+      point({ id: 'd-1', kind: 'opponent_defense', team: 'opponent', playerId: undefined, defenseLocation: { x: 0.48, y: 0.48 } } as Partial<MatchEvent>),
+      point({ id: 'd-2', kind: 'opponent_defense', team: 'opponent', playerId: 'p1', defenseLocation: { x: 0.46, y: 0.46 } } as Partial<MatchEvent>),
       point({ id: 'd-old', kind: 'opponent_defense', team: 'opponent', playerId: undefined, defenseLocation: undefined } as Partial<MatchEvent>),
     ];
 
-    expect(groupOpponentDefensesByTacticalSector(events)[0]).toEqual({ label: 'marco izquierdo · 60°-120°', total: 2 });
-    expect(getMostFrequentOpponentDefenseSectors(events)[0]).toEqual({ label: 'marco izquierdo · 60°-120°', total: 2 });
+    expect(groupOpponentDefensesByTacticalSector(events)[0]).toEqual({ label: 'marco izquierdo · lado derecho · 60°-90°', total: 2 });
+    expect(getMostFrequentOpponentDefenseSectors(events)[0]).toEqual({ label: 'marco izquierdo · lado derecho · 60°-90°', total: 2 });
   });
 
   it('period summaries can use only current period locations', () => {

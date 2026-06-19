@@ -316,19 +316,24 @@ Estado: implementado como propagacion tactica posterior a Stage 4C.
 - La derivacion usa:
   - `frame` cuando existe (`left-frame`/`right-frame`);
   - si no existe, la mitad horizontal de la cancha para elegir `marco izquierdo` o `marco derecho`;
-  - `y` normalizado para aproximar un angulo estable de 0° a 180°.
+  - `y` normalizado para elegir `lado izquierdo` o `lado derecho` dentro del area de cada marco;
+  - los lados se leen mirando cada marco desde el centro, por lo que su orientacion se invierte entre marcos;
+  - la distancia espejada al borde del area para aproximar un angulo estable de 0° a 90°.
 - Bandas:
   - `0°-30°`: sector de fondo;
   - `30°-60°`: sector bajo/intermedio;
-  - `60°-120°`: zona media cerca de 90°;
-  - `120°-150°`: sector alto/intermedio;
-  - `150°-180°`: fondo opuesto.
+  - `60°-90°`: sector central cerca de 90°.
 - Labels visibles:
-  - `marco derecho · 30°-60°`;
-  - `marco izquierdo · 60°-120°`.
+  - `marco derecho · lado izquierdo · 30°-60°`;
+  - `marco izquierdo · lado derecho · 60°-90°`.
+- El modelo anterior de 0° a 180° era incorrecto para esta lectura tactica y queda reemplazado por dos lados independientes de 0° a 90°.
 - `Lectura en vivo`, `Lectura del tiempo`, `Lectura final`, `createTacticalInsights` y reportes usan sectores para puntos rivales y defensas rivales.
+- Report Export v3 incluye esas mismas lecturas por tiempo y final, rendimiento por jugador y sectores tacticos en PDF/texto.
+- Para puntos rivales, `landingLocation` es la fuente de verdad completa del sector: el marco se deriva de `x` y no del `frame` persistido, porque eventos actuales y legacy pueden conservar el valor default `right-frame` aunque la pelota haya caido en el area izquierda.
+- Sectores rivales distintos no se colapsan; si varios superan el umbral, pueden mostrarse varias alertas vulnerables.
 - Las listas de final/PDF para `Zonas donde nos entraron` y `Zonas donde nos defendieron` usan sectores tacticos.
 - Eventos antiguos sin ubicacion se ignoran; eventos antiguos con ubicacion siguen agrupando sin crashear.
+- No se migran eventos ni se modifican las coordenadas guardadas.
 - Las etiquetas genericas `zona izquierda`/`zona derecha` ya no se usan para alertas rivales.
 
 ### E. Mejora De Insights

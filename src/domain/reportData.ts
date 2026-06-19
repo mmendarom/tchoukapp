@@ -3,13 +3,20 @@ import {
   getPointEventsWithLocation,
   groupOpponentDefensesByTacticalSector,
   groupOpponentPointsByTacticalSector,
-  groupPointsByZone,
+  groupPointsByTacticalSector,
   LandingZoneStat,
 } from './court';
 import { InsightCard, InsightSeverity } from './insights';
 import { buildLiveRecommendations, LiveRecommendation, LiveRecommendationType } from './liveRecommendations';
 import { normalizeOpponentName } from './opponent';
-import { buildPlayerPerformance, PlayerPerformanceRow } from './playerPerformance';
+import {
+  buildPlayerPerformance,
+  getTopAttackPlayerIds,
+  getTopDefensePlayerIds,
+  PlayerPerformanceData,
+  PlayerPerformanceRow,
+  sortPlayerPerformanceRows,
+} from './playerPerformance';
 import {
   calculatePeriodScore,
   calculateTotalScore,
@@ -71,6 +78,27 @@ export type ReportEffectivenessRow = {
   effectiveness: number;
 };
 
+export type ReportPlayerPerformanceRow = {
+  playerId: string;
+  playerName: string;
+  goals: number;
+  rivalDefendedShots: number;
+  shotAttempts: number;
+  effectiveness?: number;
+  defenses: number;
+  attackShare: number;
+  defenseShare: number;
+};
+
+export type ReportPlayerPerformance = {
+  rows: ReportPlayerPerformanceRow[];
+  totalGoals: number;
+  totalShotAttempts: number;
+  totalDefenses: number;
+  topAttack: ReportPlayerPerformanceRow[];
+  topDefense: ReportPlayerPerformanceRow[];
+};
+
 export type PeriodReportData = {
   periodNumber: MatchPeriod;
   periodLabel: string;
@@ -82,11 +110,13 @@ export type PeriodReportData = {
   topScorers: ReportStat[];
   defenses: ReportStat[];
   opponentDefenses: number;
+  opponentScoringZones: LandingZoneStat[];
   opponentDefenseZones: LandingZoneStat[];
   faltas: ReportStat[];
   ownPointsByPlayer: ReportStat[];
   totalErrors: ReportStat[];
   effectiveness: ReportEffectivenessRow[];
+  performance: ReportPlayerPerformance;
   legacyOpponentDefensesWithoutPlayer: number;
   substitutions: ReportSubstitution[];
   insights: PeriodInsight[];
@@ -116,6 +146,7 @@ export type MatchReportData = {
     ownPointsByPlayer: ReportStat[];
     totalErrors: ReportStat[];
     effectiveness: ReportEffectivenessRow[];
+    performance: ReportPlayerPerformance;
     legacyOpponentDefensesWithoutPlayer: number;
     opponentOwnPoints: number;
     substitutions: ReportSubstitution[];
@@ -270,6 +301,39 @@ const mapEffectivenessRows = (rows: PlayerPerformanceRow[]): ReportEffectiveness
 const buildEffectivenessRows = (events: MatchEvent[], players: Player[]) =>
   mapEffectivenessRows(buildPlayerPerformance(events, players).rows);
 
+const mapPerformanceRow = (row: PlayerPerformanceRow): ReportPlayerPerformanceRow => ({
+  playerId: row.playerId,
+  playerName: row.playerName,
+  goals: row.points,
+  rivalDefendedShots: row.rivalDefensesAgainst,
+  shotAttempts: row.shotAttempts,
+  effectiveness: row.effectiveness,
+  defenses: row.defenses,
+  attackShare: row.pointShare,
+  defenseShare: row.defenseShare,
+});
+
+const buildReportPerformance = (data: PlayerPerformanceData): ReportPlayerPerformance => {
+  const relevantRows = data.rows.filter((row) => row.shotAttempts > 0 || row.defenses > 0);
+  const attackRows = sortPlayerPerformanceRows(relevantRows, 'points', 'contribution');
+  const defenseRows = sortPlayerPerformanceRows(relevantRows, 'defenses', 'contribution');
+  const topAttackIds = getTopAttackPlayerIds(attackRows, 1);
+  const topDefenseIds = getTopDefensePlayerIds(defenseRows, 1);
+  const rows = relevantRows.map(mapPerformanceRow);
+
+  return {
+    rows,
+    totalGoals: data.totalTeamPoints,
+    totalShotAttempts: relevantRows.reduce((sum, row) => sum + row.shotAttempts, 0),
+    totalDefenses: data.totalTeamDefenses,
+    topAttack: attackRows.filter((row) => topAttackIds.has(row.playerId)).map(mapPerformanceRow),
+    topDefense: defenseRows.filter((row) => topDefenseIds.has(row.playerId)).map(mapPerformanceRow),
+  };
+};
+
+const buildPerformance = (events: MatchEvent[], players: Player[], includedPlayerIds: string[] = []) =>
+  buildReportPerformance(buildPlayerPerformance(events, players, includedPlayerIds));
+
 const recommendationSeverity: Record<LiveRecommendationType, InsightSeverity> = {
   warning: 'warning',
   adjustment: 'warning',
@@ -326,7 +390,7 @@ export function buildMatchReportData(match: Match, players: Player[]): MatchRepo
   const initialLineup = match.lineupSnapshots.find((lineup) => lineup.team === 'uruguay');
   const finalLineup = [...match.lineupSnapshots].reverse().find((lineup) => lineup.team === 'uruguay');
   const totalErrorBreakdown = getErrorsByTypeByPlayer(match.events);
-  const attackZones = groupPointsByZone(match.events);
+  const attackZones = groupPointsByTacticalSector(match.events, 'uruguay');
   const againstZones = groupOpponentPointsByTacticalSector(match.events);
   const defendedZones = groupOpponentDefensesByTacticalSector(match.events);
   const periods = periodNumbers.map((periodNumber): PeriodReportData => {
@@ -336,6 +400,7 @@ export function buildMatchReportData(match: Match, players: Player[]): MatchRepo
     const ownPoints = errorBreakdown.reduce((sum, stat) => sum + stat.puntosEnContra, 0);
     const periodLineupPlayerIds = getLineupPlayerIdsForEvents(match, periodNumber);
     const periodRecommendations = buildRecommendationInsights(periodEvents, players, periodLineupPlayerIds, 8);
+    const performance = buildPerformance(periodEvents, players, periodLineupPlayerIds);
 
     return {
       periodNumber,
@@ -348,11 +413,13 @@ export function buildMatchReportData(match: Match, players: Player[]): MatchRepo
       topScorers: mapPlayerStats(getTopScorersByPeriod(match.events, periodNumber), getPlayerLabel),
       defenses: mapPlayerStats(getDefensesByPlayerByPeriod(match.events, periodNumber), getPlayerLabel),
       opponentDefenses: getOpponentDefensesByPeriod(match.events, periodNumber).length,
+      opponentScoringZones: groupOpponentPointsByTacticalSector(periodEvents),
       opponentDefenseZones: groupOpponentDefensesByTacticalSector(periodEvents),
       faltas: mapFaltas(errorBreakdown, getPlayerLabel),
       ownPointsByPlayer: mapOwnPointsByPlayer(errorBreakdown, getPlayerLabel),
       totalErrors: mapPlayerStats(getErrorsByPlayerByPeriod(match.events, periodNumber), getPlayerLabel),
       effectiveness: buildEffectivenessRows(periodEvents, players),
+      performance,
       legacyOpponentDefensesWithoutPlayer: periodEvents.filter(isLegacyOpponentDefenseWithoutPlayer).length,
       substitutions: mapLineupActions(
         [...getSubstitutionsByPeriod(match.events, periodNumber), ...getLineupSwapsByPeriod(match.events, periodNumber)],
@@ -370,6 +437,7 @@ export function buildMatchReportData(match: Match, players: Player[]): MatchRepo
   const opponentOwnPoints = getOpponentOwnPoints(match.events);
   const opponentDefenses = getOpponentDefenses(match.events).length;
   const effectiveness = buildEffectivenessRows(match.events, players);
+  const performance = buildPerformance(match.events, players, getLineupPlayerIdsForEvents(match));
   const legacyOpponentDefensesWithoutPlayer = match.events.filter(isLegacyOpponentDefenseWithoutPlayer).length;
   const totalErrorCount = totalErrors.reduce((sum, stat) => sum + stat.total, 0);
   const totalRecommendations = buildRecommendationInsights(match.events, players, getLineupPlayerIdsForEvents(match), 12);
@@ -387,6 +455,19 @@ export function buildMatchReportData(match: Match, players: Player[]): MatchRepo
       ...(teamPoolName ? [{ label: 'Plantel', value: teamPoolName }] : []),
       { label: 'Mejor goleador', value: topScorers[0] ? `${topScorers[0].label} (${topScorers[0].total})` : emptyLabel },
       { label: 'Mas defensas Uruguay', value: defenses[0] ? `${defenses[0].label} (${defenses[0].total})` : emptyLabel },
+      {
+        label: 'Top ataque',
+        value: performance.topAttack[0]
+          ? `${performance.topAttack[0].playerName} ${performance.topAttack[0].goals}/${performance.topAttack[0].shotAttempts} (${Math.round((performance.topAttack[0].effectiveness ?? 0) * 100)}%)`
+          : emptyLabel,
+      },
+      { label: 'Top defensa', value: performance.topDefense[0] ? `${performance.topDefense[0].playerName} (${performance.topDefense[0].defenses})` : emptyLabel },
+      {
+        label: 'Efectividad ofensiva total',
+        value: performance.totalShotAttempts > 0
+          ? `${performance.totalGoals}/${performance.totalShotAttempts} (${Math.round((performance.totalGoals / performance.totalShotAttempts) * 100)}%)`
+          : 'Sin tiros',
+      },
       { label: 'Errores totales', value: String(totalErrorCount) },
       { label: 'Puntos en contra', value: String(ownPointsByPlayer.reduce((sum, stat) => sum + stat.total, 0)) },
       { label: 'Puntos en contra del rival', value: String(opponentOwnPoints) },
@@ -408,6 +489,7 @@ export function buildMatchReportData(match: Match, players: Player[]): MatchRepo
       ownPointsByPlayer,
       totalErrors,
       effectiveness,
+      performance,
       legacyOpponentDefensesWithoutPlayer,
       opponentOwnPoints,
       substitutions: mapLineupActions(getLineupActions(match.events), getPlayerLabel),

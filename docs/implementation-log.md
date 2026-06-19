@@ -1,5 +1,96 @@
 # Implementation Log
 
+## 2026-06-19 - Report Export v3
+
+Se actualizo el PDF y el texto compartible para acercarlos a `PeriodSummaryScreen` y `FinalSummaryScreen` sin cambiar eventos, scoring, tracking, mapas ni backups.
+
+Auditoria previa:
+
+- v2 ya incluia score, efectividad, mapas e insights;
+- faltaba una estructura unificada de rendimiento por jugador con ataque y defensa;
+- faltaban top ataque/top defensa y sectores vulnerables dentro de cada tiempo;
+- las lecturas tacticas y la jerarquia visual no reflejaban claramente `Lectura del tiempo` y `Lectura final`.
+
+Implementado:
+
+- `MatchReportData` agrega rendimiento por jugador por tiempo y total: goles, tiros atajados, intentos, efectividad, defensas y shares.
+- Cada tiempo agrega sectores donde el rival anoto y donde defendio tiros Uruguay.
+- Resumen ejecutivo agrega top ataque, top defensa y efectividad ofensiva total.
+- PDF agrega `Rendimiento del tiempo`, `Efectividad ofensiva`, `Lectura del tiempo`, sectores tacticos, `Rendimiento total` y `Lectura final`.
+- Barras CSS simples muestran tiros generados, puntos convertidos y contribucion defensiva sin dependencias nuevas.
+- Texto compartible agrega tops, efectividad y principales sectores tacticos en formato compacto.
+- Todas las zonas exportadas usan labels tacticos `marco ... · lado ... · 0°-90°`; no se exportan labels genericos izquierda/derecha/central.
+- Defensas rivales legacy con ubicacion siguen en mapas/sectores, pero sin `playerId` quedan fuera de efectividad/rendimiento individual. Eventos sin ubicacion no generan sectores.
+
+QA manual recomendado:
+
+- Crear un partido con puntos de varios jugadores, defensas Uruguay y defensas rivales asociadas a tiradores.
+- Registrar puntos rivales repetidos y defensas rivales en sectores tacticos distintos.
+- Finalizar un tiempo y comparar sus datos con `Lectura del tiempo`.
+- Finalizar el partido y exportar PDF.
+- Confirmar encabezado, parciales, secciones por tiempo, rendimiento, efectividad, barras, tops, lecturas y sectores.
+- Confirmar que no aparecen `zona derecha/izquierda/central` ni angulos superiores a 90°.
+- Compartir el resumen textual y confirmar que sea compacto y util.
+- Probar un partido antiguo si esta disponible; confirmar que no crashea y que mantiene ubicaciones legacy.
+- Confirmar que los mapas exportados siguen coincidiendo con las ubicaciones registradas.
+
+## 2026-06-19 - Fix de marco vulnerable desde ubicacion de caida
+
+Se corrigio la deteccion de sectores vulnerables para que describa la ubicacion visible donde cae la pelota.
+
+- `CourtMapInput` guarda coordenadas normalizadas sin invertir y `CourtLocationMap` las representa directamente.
+- La causa era que los puntos reciben `right-frame` como valor default y el agrupador rival lo priorizaba sobre `landingLocation`, incluso para caidas en el area izquierda.
+- Los puntos rivales ahora derivan marco, lado y banda exclusivamente desde `landingLocation`; `frame` deja de ser fuente de verdad para esta lectura.
+- Sectores distintos conservan conteos separados y pueden generar varias alertas si cada uno alcanza el umbral.
+- Eventos antiguos con ubicacion se recalculan sin migracion. Eventos sin ubicacion siguen excluidos de alertas tacticas.
+- No se modificaron coordenadas, modelos, scoring, tracking ni mapas.
+
+QA manual recomendado:
+
+- Iniciar un partido y registrar 3 o mas puntos rivales en el area izquierda del mapa, lado derecho del marco izquierdo.
+- Confirmar `marco izquierdo · lado derecho · ...` y no `marco derecho · lado izquierdo · ...`.
+- Registrar 3 o mas puntos rivales en otro sector y confirmar que ambas vulnerabilidades pueden aparecer.
+- Finalizar el tiempo y revisar `Lectura del tiempo`.
+- Finalizar el partido y revisar `Lectura final`, zonas, PDF y texto compartible.
+- Confirmar visualmente que los marcadores de los mapas coinciden con las ubicaciones tocadas.
+
+## 2026-06-19 - Modelo tactico bilateral de 0° a 90°
+
+Se corrigio el modelo de sectores tacticos: la lectura anterior de 0° a 180° no representaba el uso tactico del cuerpo tecnico.
+
+- Cada sector ahora combina `marco izquierdo/derecho`, `lado izquierdo/derecho` leido desde el centro y una banda de `0°-30°`, `30°-60°` o `60°-90°`.
+- La orientacion de `lado izquierdo/derecho` se invierte entre marcos para conservar esa perspectiva desde el centro.
+- La segunda mitad del area se espeja para mantener todos los angulos entre 0° y 90°.
+- La clave visible y de agrupacion queda en formato `marco derecho · lado izquierdo · 30°-60°`.
+- Todos los consumidores reciben el cambio desde `deriveTacticalCourtSector`: live, resumen del tiempo, resumen final, report data, PDF y texto compartible.
+- No se modificaron modelos, coordenadas persistidas, scoring, tracking ni mapas. Eventos antiguos con ubicacion se recalculan; sin ubicacion se omiten de alertas tacticas.
+
+QA manual recomendado:
+
+- Iniciar un partido y registrar puntos rivales cerca de ambos lados de un mismo marco.
+- Confirmar que `Lectura en vivo` muestra `marco ... · lado ... · 0°-30°`, `30°-60°` o `60°-90°`.
+- Confirmar que ninguna etiqueta supera 90° y que no aparece `zona derecha` ni `zona izquierda` en alertas tacticas.
+- Finalizar el tiempo y revisar `Lectura del tiempo`.
+- Finalizar el partido y revisar resumen final, PDF y texto compartible.
+- Confirmar que los mapas siguen mostrando las ubicaciones registradas.
+
+## 2026-06-19 - Fix de sectores tacticos en recomendaciones live
+
+Se blindo `Lectura en vivo` para que las alertas de puntos y defensas rivales usen exclusivamente sectores derivados de la ubicacion real.
+
+- Los puntos rivales se agrupan desde `landingLocation` mediante `deriveTacticalCourtSector`, usando `frame` cuando existe y el fallback espacial del helper para eventos antiguos sin `frame`.
+- Las defensas rivales se agrupan desde `defenseLocation` mediante el mismo criterio tactico.
+- Los eventos sin la ubicacion correspondiente se ignoran y no generan un fallback a `zona izquierda`, `zona derecha` o `zona central`.
+- Se agregaron regresiones para ambas alertas, eventos legacy, ausencia de ubicacion, texto generico prohibido y ausencia de menciones a asistencias.
+
+QA manual recomendado:
+
+- Iniciar un partido y registrar 3 o mas puntos rivales con mapa en la misma area.
+- Confirmar que `Lectura en vivo` muestra `marco ... · ...°-...°` y no muestra `zona derecha` ni `zona izquierda`.
+- Registrar 3 o mas defensas rivales con mapa en la misma area y confirmar el mismo formato tactico, sin texto generico.
+- Finalizar el tiempo y confirmar que `Lectura del tiempo` mantiene los sectores tacticos.
+- Finalizar el partido y confirmar que el resumen final sigue funcionando.
+
 ## 2026-06-19 - Tactical angle sectors and final report propagation
 
 Se agregaron sectores tacticos por angulo sin cambiar modelos de eventos, scoring, tracking, coordenadas normalizadas, mapas ni dependencias.

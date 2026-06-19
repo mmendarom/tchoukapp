@@ -438,11 +438,14 @@ Estado: implementado como mejora tactica posterior a Stage 4C.
 1. `src/domain/court.ts`
    - Agrega `deriveTacticalCourtSector(location, frameOrSide?)`.
    - Calcula `marco izquierdo/derecho` con `frame` si existe o por mitad horizontal si no existe.
-   - Calcula una aproximacion estable de angulo usando `y` normalizado en rango 0°-180°.
-   - Agrupa puntos rivales y defensas rivales por sectores como `marco derecho · 30°-60°`.
+   - Divide cada area en `lado izquierdo` y `lado derecho` mirando desde el centro; invierte la orientacion entre marcos y espeja `y` para una aproximacion estable de 0°-90°.
+   - Usa solo las bandas `0°-30°`, `30°-60°` y `60°-90°`.
+   - Agrupa puntos rivales y defensas rivales por sectores como `marco derecho · lado izquierdo · 30°-60°`.
 2. Recomendaciones
    - `buildLiveRecommendations`, `generatePeriodInsights` y `createTacticalInsights` dejan de usar `zona izquierda/derecha` para alertas rivales.
    - Las alertas de puntos rivales y defensas rivales usan sectores tacticos.
+   - El agrupador de puntos rivales deriva marco, lado y angulo exclusivamente desde `landingLocation`, sin confiar en el `frame` default del evento.
+   - Cada sector mantiene su conteo independiente y puede generar otra alerta si supera el umbral.
 3. `FinalSummaryScreen`
    - Usa `Lectura final` basada en recomendaciones reales del partido.
    - Agrega `Efectividad ofensiva total`.
@@ -451,6 +454,7 @@ Estado: implementado como mejora tactica posterior a Stage 4C.
    - `buildMatchReportData` usa sectores para puntos rivales y defensas rivales.
    - El HTML cambia labels a `Rendimiento ofensivo`, `Tiros generados`, `Puntos convertidos`, `Tiros atajados` y `Lectura táctica`.
    - El texto compartible incluye resumen compacto de sectores.
+   - Report Export v3 agrega rendimiento completo por tiempo/total, barras de intentos-conversiones, top ataque/defensa y lecturas `Lectura del tiempo`/`Lectura final`.
 
 ### No cambia
 
@@ -464,11 +468,16 @@ Estado: implementado como mejora tactica posterior a Stage 4C.
 ### QA manual
 
 - Registrar puntos rivales repetidos en un mismo sector cerca de un marco.
-- Confirmar que `Lectura en vivo` usa `marco ... · ...°` y no `zona derecha/izquierda`.
+- Registrar puntos rivales en ambos lados del mismo marco.
+- Confirmar que `Lectura en vivo` usa `marco ... · lado ... · ...°` y no `zona derecha/izquierda`.
+- Registrar 3 o mas puntos rivales en el area del marco izquierdo, lado derecho, y confirmar que no aparece `marco derecho · lado izquierdo`.
+- Repetir 3 o mas puntos en un segundo sector y confirmar que ambos sectores pueden aparecer.
+- Confirmar que ninguna etiqueta supera 90°.
 - Registrar defensas rivales repetidas en un mismo sector.
 - Confirmar que `Lectura del tiempo` y `Lectura final` muestran sectores concretos.
 - Finalizar partido y confirmar `Efectividad ofensiva total`.
 - Exportar PDF y confirmar `Rendimiento ofensivo`, `Lectura táctica`, `Zonas donde nos entraron` y `Zonas donde nos defendieron`.
+- Confirmar que los mapas mantienen sus ubicaciones y funcionamiento.
 - Confirmar que partidos antiguos sin ubicacion no crashean.
 
 ## Stage 5 - Mejora De Insights Existentes

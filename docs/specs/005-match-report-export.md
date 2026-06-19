@@ -215,6 +215,37 @@ PDF/share:
 
 Estado: Implemented.
 
+## Report Export v3
+
+Estado: Implemented.
+
+### Problema
+
+El reporte v2 incluye score, mapas, efectividad e insights, pero no refleja de forma completa la lectura post-periodo/post-partido: falta rendimiento unificado por jugador, comparacion visual entre tiros generados y puntos convertidos, top ataque/defensa y sectores vulnerables por tiempo.
+
+### Alcance
+
+- Agregar rendimiento por jugador por tiempo y total: puntos, tiros defendidos, intentos, efectividad y defensas Uruguay.
+- Agregar top ataque y top defensa derivados de las mismas reglas que usa la UI.
+- Incluir `Lectura del tiempo` y `Lectura final` con recomendaciones reales.
+- Incluir por tiempo sectores donde el rival anoto y donde defendio tiros Uruguay.
+- Renderizar barras HTML/CSS simples, sin dependencias nuevas.
+- Ampliar el texto compartible con top ataque, top defensa, efectividad y sectores tacticos principales.
+- Mantener eventos legacy seguros: defensas rivales sin jugador quedan en sectores/mapas pero no en efectividad individual; eventos sin ubicacion no generan sectores.
+
+### No cambia
+
+- Modelos persistidos, scoring, tracking, mapas, backups ni flujo live.
+- Las coordenadas y eventos existentes se recalculan on demand; no hay migracion.
+
+### Resultado implementado
+
+- Encabezado y resumen ejecutivo con resultado, plantel, tops y efectividad total.
+- Secciones por tiempo con score, tarjetas, rendimiento, efectividad, lectura real y sectores tacticos.
+- Totales con rendimiento, efectividad, lectura final, errores, puntos regalados y sectores principales.
+- Barras CSS: fondo para tiros generados, frente para puntos convertidos y barra de share defensivo.
+- Texto compartible compacto con top ataque, top defensa, efectividad y sectores principales.
+
 ### Contexto
 
 La primera version exporta PDF y texto compartible correctamente, pero el reporte no es todavia suficientemente util para coaching post-partido. Hoy incluye muchos datos como texto/listas, pero le falta una narrativa clara, mejor separacion por tiempo, mapas visuales exportables y un resumen ejecutivo que ayude a entender el partido rapido.

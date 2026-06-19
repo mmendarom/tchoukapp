@@ -45,7 +45,7 @@ describe('createTacticalInsights zone labels', () => {
 
     const text = insights.map((insight) => `${insight.title} ${insight.description}`).join(' ');
 
-    expect(text).toContain('marco derecho · 30°-60°');
+    expect(text).toContain('marco derecho · lado izquierdo · 30°-60°');
     expect(text).not.toMatch(/\b(center|left|right)\b/);
     expect(text).not.toContain('desde center');
     expect(text).not.toMatch(/zona izquierda|zona derecha/i);
@@ -123,7 +123,7 @@ describe('createTacticalInsights zone labels', () => {
     const text = insights.map((insight) => `${insight.title} ${insight.description}`).join(' ');
 
     expect(text).toContain('Nos defienden seguido en un sector');
-    expect(text).toContain('marco derecho · 30°-60°');
+    expect(text).toContain('marco derecho · lado izquierdo · 30°-60°');
     expect(text).not.toContain('opponent_defense');
     expect(text).not.toMatch(/\b(center|left|right)\b/);
     expect(text).not.toMatch(/zona izquierda|zona derecha/i);

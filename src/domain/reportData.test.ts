@@ -118,15 +118,26 @@ describe('buildMatchReportData', () => {
     );
     expect(report.lineups.initial).toEqual(['#1 Mauro', '#2 Marcelo']);
     expect(report.lineups.final).toEqual(['#1 Mauro', '#3 Nicolas']);
-    expect(report.zones.attack[0]).toMatchObject({ label: 'Zona derecha', total: 3 });
-    expect(report.zones.against[0]).toMatchObject({ label: 'marco derecho · 60°-120°', total: 1 });
-    expect(report.zones.defended[0]).toMatchObject({ label: 'marco derecho · 30°-60°', total: 3 });
+    expect(report.zones.attack[0]).toMatchObject({ label: 'marco derecho · lado izquierdo · 30°-60°', total: 3 });
+    expect(report.zones.against[0]).toMatchObject({ label: 'marco izquierdo · lado derecho · 60°-90°', total: 1 });
+    expect(report.zones.defended[0]).toMatchObject({ label: 'marco derecho · lado izquierdo · 30°-60°', total: 3 });
+    expect(report.periods[0].opponentScoringZones[0]).toMatchObject({ label: 'marco izquierdo · lado derecho · 60°-90°', total: 1 });
+    expect(report.periods[0].performance).toMatchObject({ totalGoals: 2, totalShotAttempts: 3, totalDefenses: 1 });
+    expect(report.periods[0].performance.rows).toEqual(expect.arrayContaining([
+      expect.objectContaining({ playerId: 'p1', goals: 2, rivalDefendedShots: 1, shotAttempts: 3, effectiveness: 2 / 3, defenses: 1 }),
+    ]));
+    expect(report.totals.performance).toMatchObject({ totalGoals: 3, totalShotAttempts: 5, totalDefenses: 1 });
+    expect(report.totals.performance.topAttack[0]).toMatchObject({ playerId: 'p1', goals: 2, shotAttempts: 3 });
+    expect(report.totals.performance.topDefense[0]).toMatchObject({ playerId: 'p1', defenses: 1 });
     expect(report.executiveSummary).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ label: 'Resultado final', value: 'Uruguay 4 - 2 Argentina' }),
         expect.objectContaining({ label: 'Puntos en contra del rival', value: '1' }),
-        expect.objectContaining({ label: 'Sector vulnerable', value: 'marco derecho · 60°-120° (1)' }),
-        expect.objectContaining({ label: 'Sector donde mas nos defendieron', value: 'marco derecho · 30°-60° (3)' }),
+        expect.objectContaining({ label: 'Top ataque', value: '#1 Mauro 2/3 (67%)' }),
+        expect.objectContaining({ label: 'Top defensa', value: '#1 Mauro (1)' }),
+        expect.objectContaining({ label: 'Efectividad ofensiva total', value: '3/5 (60%)' }),
+        expect.objectContaining({ label: 'Sector vulnerable', value: 'marco izquierdo · lado derecho · 60°-90° (1)' }),
+        expect.objectContaining({ label: 'Sector donde mas nos defendieron', value: 'marco derecho · lado izquierdo · 30°-60° (3)' }),
       ]),
     );
     expect(report.periods).toHaveLength(3);
@@ -169,6 +180,34 @@ describe('buildMatchReportData', () => {
     expect(report.totalMaps.opponentDefenses).toEqual([]);
     expect(report.totals.effectiveness).toEqual([{ playerId: 'p1', playerName: '#1 Mauro', goals: 1, rivalDefendedShots: 0, shotAttempts: 1, effectiveness: 1 }]);
     expect(report.totals.legacyOpponentDefensesWithoutPlayer).toBe(0);
+    expect(report.totals.performance.rows).toEqual([
+      expect.objectContaining({ playerId: 'p1', goals: 1, rivalDefendedShots: 0, shotAttempts: 1 }),
+    ]);
+    expect(JSON.stringify(report.zones)).not.toMatch(/zona (?:derecha|izquierda|central)/i);
+  });
+
+  it('includes real period/final tactical readings and legacy locations without attributing legacy attempts', () => {
+    const report = buildMatchReportData(
+      match([
+        point({ id: 'o-1', scoringTeam: 'opponent', playerId: undefined, landingLocation: { x: 0.2, y: 0.3 } }),
+        point({ id: 'o-2', scoringTeam: 'opponent', playerId: undefined, landingLocation: { x: 0.22, y: 0.32 } }),
+        point({ id: 'o-3', scoringTeam: 'opponent', playerId: undefined, landingLocation: { x: 0.24, y: 0.32 } }),
+        point({ id: 'legacy-rd-1', kind: 'opponent_defense', team: 'opponent', playerId: undefined, defenseLocation: { x: 0.7, y: 0.3 } } as Partial<MatchEvent>),
+        point({ id: 'legacy-rd-2', kind: 'opponent_defense', team: 'opponent', playerId: undefined, defenseLocation: { x: 0.72, y: 0.32 } } as Partial<MatchEvent>),
+        point({ id: 'legacy-rd-3', kind: 'opponent_defense', team: 'opponent', playerId: undefined, defenseLocation: { x: 0.74, y: 0.32 } } as Partial<MatchEvent>),
+      ]),
+      players,
+    );
+    const periodReading = report.periods[0].insights.map((item) => `${item.title} ${item.description}`).join(' ');
+    const finalReading = report.totals.insights.map((item) => `${item.title} ${item.description}`).join(' ');
+
+    expect(periodReading).toContain('Zona vulnerable');
+    expect(periodReading).toContain('marco izquierdo · lado derecho · 30°-60°');
+    expect(finalReading).toContain('Zona bloqueada');
+    expect(report.periods[0].opponentDefenseZones[0]).toEqual({ label: 'marco derecho · lado izquierdo · 30°-60°', total: 3 });
+    expect(report.totals.performance.rows).toEqual([]);
+    expect(report.totals.effectiveness).toEqual([]);
+    expect(`${periodReading} ${finalReading}`).not.toMatch(/zona (?:derecha|izquierda|central)|asist/i);
   });
 
   it('uses custom rival name in report labels', () => {

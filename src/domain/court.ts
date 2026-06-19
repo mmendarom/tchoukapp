@@ -3,7 +3,8 @@ import { CourtLocation, FrameSide, MatchEvent, OpponentDefenseEvent, PointEvent,
 export type DerivedCourtZone = 'izquierda' | 'central' | 'derecha';
 export type DerivedCourtHalf = 'marco_izquierdo' | 'marco_derecho' | 'centro';
 export type TacticalCourtSide = 'marco_izquierdo' | 'marco_derecho';
-export type TacticalAngleBand = '0°-30°' | '30°-60°' | '60°-120°' | '120°-150°' | '150°-180°';
+export type TacticalAreaSide = 'lado_izquierdo' | 'lado_derecho';
+export type TacticalAngleBand = '0°-30°' | '30°-60°' | '60°-90°';
 
 export type LandingZoneStat = {
   label: string;
@@ -12,6 +13,7 @@ export type LandingZoneStat = {
 
 export type TacticalCourtSector = {
   sideLabel: string;
+  areaSideLabel: string;
   angleDegrees: number;
   angleBand: TacticalAngleBand;
   shortLabel: string;
@@ -113,15 +115,17 @@ const getAngleBand = (angleDegrees: number): TacticalAngleBand => {
     return '30°-60°';
   }
 
-  if (angleDegrees < 120) {
-    return '60°-120°';
+  return '60°-90°';
+};
+
+const getTacticalAreaSide = (location: CourtLocation, frameSide: TacticalCourtSide): TacticalAreaSide => {
+  const isUpperHalf = clampLocation(location).y < 0.5;
+
+  if (frameSide === 'marco_derecho') {
+    return isUpperHalf ? 'lado_izquierdo' : 'lado_derecho';
   }
 
-  if (angleDegrees < 150) {
-    return '120°-150°';
-  }
-
-  return '150°-180°';
+  return isUpperHalf ? 'lado_derecho' : 'lado_izquierdo';
 };
 
 const tacticalSideLabel: Record<TacticalCourtSide, string> = {
@@ -129,28 +133,34 @@ const tacticalSideLabel: Record<TacticalCourtSide, string> = {
   marco_derecho: 'marco derecho',
 };
 
+const tacticalAreaSideLabel: Record<TacticalAreaSide, string> = {
+  lado_izquierdo: 'lado izquierdo',
+  lado_derecho: 'lado derecho',
+};
+
 const tacticalBandDescription: Record<TacticalAngleBand, string> = {
   '0°-30°': 'sector de fondo',
   '30°-60°': 'sector bajo/intermedio',
-  '60°-120°': 'zona media cerca de 90°',
-  '120°-150°': 'sector alto/intermedio',
-  '150°-180°': 'fondo opuesto',
+  '60°-90°': 'sector central cerca de 90°',
 };
 
 export function deriveTacticalCourtSector(location: CourtLocation, frameOrSide?: FrameSide | PointFrame): TacticalCourtSector {
   const clamped = clampLocation(location);
   const side = getTacticalSide(clamped, frameOrSide);
-  const angleDegrees = Math.round(clamped.y * 180);
+  const areaSide = getTacticalAreaSide(clamped, side);
+  const angleDegrees = Math.round(Math.min(clamped.y, 1 - clamped.y) * 180);
   const angleBand = getAngleBand(angleDegrees);
   const sideLabel = tacticalSideLabel[side];
-  const shortLabel = `${sideLabel} · ${angleBand}`;
+  const areaSideLabel = tacticalAreaSideLabel[areaSide];
+  const shortLabel = `${sideLabel} · ${areaSideLabel} · ${angleBand}`;
 
   return {
     sideLabel,
+    areaSideLabel,
     angleDegrees,
     angleBand,
     shortLabel,
-    description: `${sideLabel}, ${tacticalBandDescription[angleBand]}`,
+    description: `${sideLabel}, ${areaSideLabel}, ${tacticalBandDescription[angleBand]}`,
   };
 }
 
@@ -225,7 +235,13 @@ export function groupPointsByTacticalSector(events: MatchEvent[], team?: TeamSid
 }
 
 export function groupOpponentPointsByTacticalSector(events: MatchEvent[]): LandingZoneStat[] {
-  return groupPointsByTacticalSector(events, 'opponent');
+  const totals = new Map<string, number>();
+
+  getPointEventsWithLocation(events, 'opponent').forEach((event) => {
+    increment(totals, deriveTacticalCourtSector(event.landingLocation).shortLabel);
+  });
+
+  return sortStats(totals);
 }
 
 export function groupOpponentDefensesByTacticalSector(events: MatchEvent[]): LandingZoneStat[] {

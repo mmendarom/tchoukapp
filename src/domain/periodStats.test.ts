@@ -191,9 +191,9 @@ describe('periodStats', () => {
         event({ id: 'u-1', scoringTeam: 'uruguay', landingLocation: { x: 0.5, y: 0.3 }, zone: 'left-wing' }),
         event({ id: 'u-2', scoringTeam: 'uruguay', landingLocation: { x: 0.52, y: 0.4 }, zone: 'right-wing' }),
         event({ id: 'u-3', scoringTeam: 'uruguay', landingLocation: { x: 0.48, y: 0.5 }, zone: 'backcourt' }),
-        event({ id: 'o-1', scoringTeam: 'opponent', playerId: undefined, landingLocation: { x: 0.82, y: 0.3 }, zone: 'center' }),
-        event({ id: 'o-2', scoringTeam: 'opponent', playerId: undefined, landingLocation: { x: 0.84, y: 0.32 }, zone: 'center' }),
-        event({ id: 'o-3', scoringTeam: 'opponent', playerId: undefined, landingLocation: { x: 0.86, y: 0.32 }, zone: 'center' }),
+        event({ id: 'o-1', scoringTeam: 'opponent', playerId: undefined, landingLocation: { x: 0.18, y: 0.3 }, zone: 'center' }),
+        event({ id: 'o-2', scoringTeam: 'opponent', playerId: undefined, landingLocation: { x: 0.2, y: 0.32 }, zone: 'center' }),
+        event({ id: 'o-3', scoringTeam: 'opponent', playerId: undefined, landingLocation: { x: 0.22, y: 0.32 }, zone: 'center' }),
       ],
     };
 
@@ -202,7 +202,8 @@ describe('periodStats', () => {
       .join(' ');
 
     expect(text).toContain('zona central');
-    expect(text).toContain('marco derecho · 30°-60°');
+    expect(text).toContain('marco izquierdo · lado derecho · 30°-60°');
+    expect(text).not.toContain('marco derecho · lado izquierdo · 30°-60°');
     expect(text).not.toMatch(/\b(center|left|right)\b/);
     expect(text).not.toMatch(/zona izquierda|zona derecha/i);
     expect(text).not.toContain('desde center');
@@ -249,7 +250,7 @@ describe('periodStats', () => {
       .join(' ');
 
     expect(text).toContain('Nos defienden seguido en un sector');
-    expect(text).toContain('marco derecho · 30°-60°');
+    expect(text).toContain('marco derecho · lado izquierdo · 30°-60°');
     expect(text).not.toMatch(/\b(center|left|right|opponent_defense)\b/);
   });
 });

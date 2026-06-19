@@ -3,6 +3,8 @@ import {
   PeriodReportData,
   ReportEffectivenessRow,
   ReportLocationMaps,
+  ReportPlayerPerformance,
+  ReportPlayerPerformanceRow,
   ReportStat,
   ReportSubstitution,
   reportEmptyLabel,
@@ -22,6 +24,7 @@ const scoreText = (uruguay: number, opponent: number, opponentName = 'Rival') =>
 
 const topItems = (items: ReportStat[], limit = 3) => items.slice(0, limit);
 const formatPercent = (value: number) => `${Math.round(value * 100)}%`;
+const clampPercent = (value: number) => Math.max(0, Math.min(100, value));
 
 const statListHtml = (items: ReportStat[], emptyText = reportEmptyLabel) =>
   items.length === 0
@@ -69,6 +72,47 @@ const effectivenessHtml = (items: ReportEffectivenessRow[], legacyOpponentDefens
   }
   ${legacyEffectivenessNoteHtml(legacyOpponentDefensesWithoutPlayer)}
 `;
+
+const attackPerformanceRowHtml = (item: ReportPlayerPerformanceRow, totalAttempts: number) => {
+  const attemptWidth = totalAttempts > 0 ? clampPercent((item.shotAttempts / totalAttempts) * 100) : 0;
+  const convertedWidth = totalAttempts > 0 ? clampPercent((item.goals / totalAttempts) * 100) : 0;
+  const effectiveness = typeof item.effectiveness === 'number' ? formatPercent(item.effectiveness) : 'Sin tiros';
+
+  return `<div class="performance-row">
+    <div class="performance-meta"><strong>${escapeHtml(item.playerName)}</strong><span>${item.goals}/${item.shotAttempts} tiros · ${escapeHtml(effectiveness)}</span></div>
+    <div class="performance-track attack-track">
+      <div class="attempt-bar" style="width:${attemptWidth.toFixed(1)}%"></div>
+      <div class="converted-bar" style="width:${convertedWidth.toFixed(1)}%"></div>
+    </div>
+    <small>${item.rivalDefendedShots} tiros atajados</small>
+  </div>`;
+};
+
+const defensePerformanceRowHtml = (item: ReportPlayerPerformanceRow, totalDefenses: number) => {
+  const width = totalDefenses > 0 ? clampPercent((item.defenses / totalDefenses) * 100) : 0;
+
+  return `<div class="performance-row">
+    <div class="performance-meta"><strong>${escapeHtml(item.playerName)}</strong><span>${item.defenses} defensas</span></div>
+    <div class="performance-track defense-track"><div class="defense-bar" style="width:${width.toFixed(1)}%"></div></div>
+  </div>`;
+};
+
+const performanceHtml = (performance: ReportPlayerPerformance) => {
+  const attackRows = performance.rows.filter((row) => row.shotAttempts > 0);
+  const defenseRows = performance.rows.filter((row) => row.defenses > 0);
+
+  return `<div class="performance-grid">
+    <div class="performance-column">
+      <h4>Ataque</h4>
+      <p class="performance-legend">Rendimiento ofensivo · Tiros generados <span class="legend-attempt"></span> Puntos convertidos <span class="legend-converted"></span></p>
+      ${attackRows.length === 0 ? '<p class="muted">Sin tiros registrados.</p>' : attackRows.map((row) => attackPerformanceRowHtml(row, performance.totalShotAttempts)).join('')}
+    </div>
+    <div class="performance-column">
+      <h4>Defensa</h4>
+      ${defenseRows.length === 0 ? '<p class="muted">Sin defensas registradas.</p>' : defenseRows.map((row) => defensePerformanceRowHtml(row, performance.totalDefenses)).join('')}
+    </div>
+  </div>`;
+};
 
 const substitutionsHtml = (items: ReportSubstitution[]) =>
   items.length === 0
@@ -171,16 +215,18 @@ const periodHtml = (period: PeriodReportData, opponentName: string) => `
       <div><strong>Puntos en contra</strong><span>${period.ownPoints}</span></div>
       <div><strong>Puntos en contra del rival</strong><span>${period.opponentOwnPoints}</span></div>
       <div><strong>Defensas del rival</strong><span>${period.opponentDefenses}</span></div>
+      <div><strong>Defensas Uruguay</strong><span>${period.performance.totalDefenses}</span></div>
+      <div><strong>Errores</strong><span>${period.totalErrors.reduce((sum, item) => sum + item.total, 0)}</span></div>
     </div>
+    <h3>Rendimiento del tiempo</h3>
+    ${performanceHtml(period.performance)}
     <div class="two-col">
       <div>
         <h3>Goleadores</h3>
         ${statListHtml(period.topScorers, 'Sin puntos de Uruguay.')}
         <h3>Defensas</h3>
         ${statListHtml(period.defenses, 'Sin defensas registradas.')}
-        <h3>Zonas donde nos defendieron</h3>
-        ${statListHtml(period.opponentDefenseZones, 'Sin ubicaciones registradas.')}
-        <h3>Rendimiento ofensivo</h3>
+        <h3>Efectividad ofensiva</h3>
         ${effectivenessHtml(period.effectiveness, period.legacyOpponentDefensesWithoutPlayer)}
       </div>
       <div>
@@ -194,8 +240,12 @@ const periodHtml = (period: PeriodReportData, opponentName: string) => `
     </div>
     <h3>Cambios</h3>
     ${substitutionsHtml(period.substitutions)}
-    <h3>Lectura táctica</h3>
+    <h3>Lectura del tiempo</h3>
     ${insightsHtml(period.insights)}
+    <div class="two-col tactical-sectors">
+      <div><h3>Zonas donde nos entraron</h3>${statListHtml(period.opponentScoringZones, 'Sin ubicaciones registradas.')}</div>
+      <div><h3>Zonas donde nos defendieron</h3>${statListHtml(period.opponentDefenseZones, 'Sin ubicaciones registradas.')}</div>
+    </div>
     <div class="report-map-section">
       <h3>Mapas del tiempo</h3>
       ${renderMapStack(period.maps)}
@@ -244,6 +294,21 @@ export function buildMatchReportHtml(report: MatchReportData) {
     .period-section { break-inside: auto; }
     .note { background: #f4f7fb; border-left: 4px solid #0b6bcb; padding: 8px; border-radius: 6px; }
     .effectiveness-table { margin-top: 4px; }
+    .performance-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 8px 0 12px; }
+    .performance-column { background: #f7fafc; border: 1px solid #dbe4ef; border-radius: 8px; padding: 9px; }
+    .performance-row { margin: 7px 0; break-inside: avoid; }
+    .performance-meta { display: flex; justify-content: space-between; gap: 8px; font-size: 11px; }
+    .performance-meta span, .performance-row small { color: #5d6b7a; }
+    .performance-track { position: relative; height: 9px; border-radius: 99px; overflow: hidden; margin: 3px 0; background: #dbe4ef; }
+    .attempt-bar, .converted-bar, .defense-bar { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 99px; }
+    .attempt-bar { background: #8bd3ff; }
+    .converted-bar { background: #0b6bcb; }
+    .defense-bar { background: #0f766e; }
+    .performance-legend { color: #5d6b7a; font-size: 9px; }
+    .legend-attempt, .legend-converted { display: inline-block; width: 10px; height: 6px; margin: 0 5px 0 2px; }
+    .legend-attempt { background: #8bd3ff; }
+    .legend-converted { background: #0b6bcb; }
+    .tactical-sectors { break-inside: avoid; }
   </style>
 </head>
 <body>
@@ -270,6 +335,8 @@ export function buildMatchReportHtml(report: MatchReportData) {
   <section>
     <h2>Totales del partido</h2>
     <p class="score">${escapeHtml(scoreText(report.finalScore.uruguay, report.finalScore.opponent, report.opponent))}</p>
+    <h3>Rendimiento total</h3>
+    ${performanceHtml(report.totals.performance)}
     <div class="two-col">
       <div>
         <h3>Goleadores</h3>
@@ -277,7 +344,7 @@ export function buildMatchReportHtml(report: MatchReportData) {
         <h3>Defensas</h3>
         ${statListHtml(report.totals.defenses, 'Sin defensas registradas.')}
         <p><strong>Defensas del rival:</strong> ${report.totals.opponentDefenses}</p>
-        <h3>Rendimiento ofensivo total</h3>
+        <h3>Efectividad ofensiva total</h3>
         ${effectivenessHtml(report.totals.effectiveness, report.totals.legacyOpponentDefensesWithoutPlayer)}
         <h3>Faltas</h3>
         ${statListHtml(report.totals.faltas, 'Sin faltas registradas.')}
@@ -288,7 +355,7 @@ export function buildMatchReportHtml(report: MatchReportData) {
         <p><strong>Puntos en contra del rival:</strong> ${report.totals.opponentOwnPoints}</p>
         <h3>Errores totales</h3>
         ${statListHtml(report.totals.totalErrors, 'Sin errores registrados.')}
-        <h3>Lectura táctica</h3>
+        <h3>Lectura final</h3>
         ${insightsHtml(report.totals.insights)}
       </div>
     </div>
@@ -307,9 +374,9 @@ export function buildMatchReportHtml(report: MatchReportData) {
     <div class="three-col">
       <h3>Zonas donde hicimos puntos</h3>
       ${statListHtml(report.zones.attack, 'Sin ubicación registrada.')}
-      <h3>Zonas donde nos entraron</h3>
+      <h3>Zonas vulnerables del partido</h3>
       ${statListHtml(report.zones.against, 'Sin ubicación registrada.')}
-      <h3>Zonas donde nos defendieron</h3>
+      <h3>Zonas donde el rival nos defendió</h3>
       ${statListHtml(report.zones.defended, 'Sin ubicaciones registradas.')}
     </div>
   </section>
@@ -345,6 +412,18 @@ const effectivenessTextLine = (items: ReportEffectivenessRow[]) =>
         .map((item) => `${item.playerName} ${item.goals}/${item.shotAttempts} (${formatPercent(item.effectiveness)})`)
         .join(', ')}.`;
 
+const topAttackText = (performance: ReportPlayerPerformance) => {
+  const player = performance.topAttack[0];
+  return player
+    ? `Top ataque: ${player.playerName} ${player.goals}/${player.shotAttempts} (${formatPercent(player.effectiveness ?? 0)}).`
+    : 'Top ataque: Sin tiros registrados.';
+};
+
+const topDefenseText = (performance: ReportPlayerPerformance) => {
+  const player = performance.topDefense[0];
+  return player ? `Top defensa: ${player.playerName} ${player.defenses} defensas.` : 'Top defensa: Sin defensas registradas.';
+};
+
 export function buildMatchReportText(report: MatchReportData) {
   const lines = [
     report.title,
@@ -352,6 +431,8 @@ export function buildMatchReportText(report: MatchReportData) {
     ...(report.teamPoolName ? [`Plantel: ${report.teamPoolName}`] : []),
     `${report.dateLabel} - ${report.venueLabel}`,
     scoreText(report.finalScore.uruguay, report.finalScore.opponent, report.opponent),
+    topAttackText(report.totals.performance),
+    topDefenseText(report.totals.performance),
     '',
     'Resultado por tiempos',
     ...report.scoreByPeriod.map((item) => `- ${item.periodLabel}: ${scoreText(item.score.uruguay, item.score.opponent, report.opponent)}`),
@@ -374,8 +455,8 @@ export function buildMatchReportText(report: MatchReportData) {
     '',
     'Sectores tácticos principales',
     `- ${topZoneLine('Donde hicimos puntos', report.zones.attack)}`,
-    `- ${topZoneLine('Donde nos entraron', report.zones.against)}`,
-    `- ${topZoneLine('Donde nos defendieron', report.zones.defended)}`,
+    `- ${topZoneLine('Zona vulnerable', report.zones.against)}`,
+    `- ${topZoneLine('Zona donde el rival nos defendio', report.zones.defended)}`,
     '',
     'Lectura táctica',
     ...(report.totals.insights.length === 0

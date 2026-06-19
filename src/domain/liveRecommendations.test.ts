@@ -145,21 +145,54 @@ describe('buildLiveRecommendations', () => {
 
   it('creates opponent scoring zone alert', () => {
     const recommendations = build([
-      point({ id: 'o-1', scoringTeam: 'opponent', playerId: undefined, landingLocation: { x: 0.2, y: 0.3 }, frame: 'left-frame' }),
-      point({ id: 'o-2', scoringTeam: 'opponent', playerId: undefined, landingLocation: { x: 0.25, y: 0.32 }, frame: 'left-frame' }),
-      point({ id: 'o-3', scoringTeam: 'opponent', playerId: undefined, landingLocation: { x: 0.3, y: 0.32 }, frame: 'left-frame' }),
+      point({ id: 'o-1', scoringTeam: 'opponent', playerId: undefined, landingLocation: { x: 0.2, y: 0.3 }, frame: 'right-frame' }),
+      point({ id: 'o-2', scoringTeam: 'opponent', playerId: undefined, landingLocation: { x: 0.25, y: 0.32 }, frame: 'right-frame' }),
+      point({ id: 'o-3', scoringTeam: 'opponent', playerId: undefined, landingLocation: { x: 0.3, y: 0.32 }, frame: 'right-frame' }),
     ]);
 
     expect(recommendations).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
-          id: 'opponent-zone-marco izquierdo · 30°-60°',
+          id: 'opponent-zone-marco izquierdo · lado derecho · 30°-60°',
           title: 'Zona vulnerable',
-          detail: 'Nos están entrando seguido por marco izquierdo · 30°-60°.',
+          detail: 'Nos están entrando seguido por marco izquierdo · lado derecho · 30°-60°.',
         }),
       ]),
     );
     expect(recommendations.map((item) => item.detail).join(' ')).not.toMatch(/zona izquierda|zona derecha/i);
+    expect(recommendations.map((item) => item.detail).join(' ')).not.toContain('marco derecho · lado izquierdo');
+  });
+
+  it('keeps repeated rival points in distinct vulnerable sectors', () => {
+    const recommendations = build([
+      point({ id: 'left-right-1', scoringTeam: 'opponent', playerId: undefined, landingLocation: { x: 0.2, y: 0.3 } }),
+      point({ id: 'left-right-2', scoringTeam: 'opponent', playerId: undefined, landingLocation: { x: 0.22, y: 0.32 } }),
+      point({ id: 'left-right-3', scoringTeam: 'opponent', playerId: undefined, landingLocation: { x: 0.24, y: 0.32 } }),
+      point({ id: 'left-left-1', scoringTeam: 'opponent', playerId: undefined, landingLocation: { x: 0.2, y: 0.7 } }),
+      point({ id: 'left-left-2', scoringTeam: 'opponent', playerId: undefined, landingLocation: { x: 0.22, y: 0.68 } }),
+      point({ id: 'left-left-3', scoringTeam: 'opponent', playerId: undefined, landingLocation: { x: 0.24, y: 0.68 } }),
+    ]);
+    const vulnerableDetails = recommendations
+      .filter((item) => item.title === 'Zona vulnerable')
+      .map((item) => item.detail);
+
+    expect(vulnerableDetails).toEqual(expect.arrayContaining([
+      'Nos están entrando seguido por marco izquierdo · lado derecho · 30°-60°.',
+      'Nos están entrando seguido por marco izquierdo · lado izquierdo · 30°-60°.',
+    ]));
+    expect(vulnerableDetails).toHaveLength(2);
+  });
+
+  it('uses the tactical fallback for legacy rival points with location but no frame', () => {
+    const recommendations = build([
+      point({ id: 'o-legacy-1', scoringTeam: 'opponent', playerId: undefined, landingLocation: { x: 0.7, y: 0.3 }, frame: undefined }),
+      point({ id: 'o-legacy-2', scoringTeam: 'opponent', playerId: undefined, landingLocation: { x: 0.72, y: 0.32 }, frame: undefined }),
+      point({ id: 'o-legacy-3', scoringTeam: 'opponent', playerId: undefined, landingLocation: { x: 0.75, y: 0.32 }, frame: undefined }),
+    ]);
+
+    expect(recommendations.find((item) => item.title === 'Zona vulnerable')).toMatchObject({
+      detail: 'Nos están entrando seguido por marco derecho · lado izquierdo · 30°-60°.',
+    });
   });
 
   it('uses legacy rival defenses without playerId for zone alert without crashing', () => {
@@ -172,12 +205,45 @@ describe('buildLiveRecommendations', () => {
     expect(recommendations).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
-          id: 'opponent-defense-zone-marco derecho · 30°-60°',
+          id: 'opponent-defense-zone-marco derecho · lado izquierdo · 30°-60°',
           title: 'Zona bloqueada',
-          detail: 'El rival nos está defendiendo seguido en marco derecho · 30°-60°.',
+          detail: 'El rival nos está defendiendo seguido en marco derecho · lado izquierdo · 30°-60°.',
         }),
       ]),
     );
+    expect(recommendations.map((item) => item.detail).join(' ')).not.toMatch(/zona izquierda|zona derecha/i);
+  });
+
+  it('ignores rival events without location instead of using their generic zone', () => {
+    const recommendations = build([
+      point({ id: 'o-no-location-1', scoringTeam: 'opponent', playerId: undefined, landingLocation: undefined, zone: 'right-wing' }),
+      point({ id: 'o-no-location-2', scoringTeam: 'opponent', playerId: undefined, landingLocation: undefined, zone: 'right-wing' }),
+      point({ id: 'o-no-location-3', scoringTeam: 'opponent', playerId: undefined, landingLocation: undefined, zone: 'right-wing' }),
+      rivalDefense({ id: 'rd-no-location-1', playerId: undefined, defenseLocation: undefined }),
+      rivalDefense({ id: 'rd-no-location-2', playerId: undefined, defenseLocation: undefined }),
+      rivalDefense({ id: 'rd-no-location-3', playerId: undefined, defenseLocation: undefined }),
+    ]);
+
+    expect(recommendations.find((item) => item.title === 'Zona vulnerable')).toBeUndefined();
+    expect(recommendations.find((item) => item.title === 'Zona bloqueada')).toBeUndefined();
+  });
+
+  it('never emits generic tactical zone labels or mentions assists', () => {
+    const recommendations = build([
+      point({ id: 'o-1', scoringTeam: 'opponent', playerId: undefined, landingLocation: { x: 0.2, y: 0.3 }, zone: 'left-wing', frame: 'left-frame' }),
+      point({ id: 'o-2', scoringTeam: 'opponent', playerId: undefined, landingLocation: { x: 0.22, y: 0.32 }, zone: 'left-wing', frame: 'left-frame' }),
+      point({ id: 'o-3', scoringTeam: 'opponent', playerId: undefined, landingLocation: { x: 0.24, y: 0.32 }, zone: 'left-wing', frame: 'left-frame' }),
+      rivalDefense({ id: 'rd-1', defenseLocation: { x: 0.7, y: 0.3 } }),
+      rivalDefense({ id: 'rd-2', defenseLocation: { x: 0.72, y: 0.32 } }),
+      rivalDefense({ id: 'rd-3', defenseLocation: { x: 0.74, y: 0.32 } }),
+    ]);
+    const text = recommendations.map((item) => `${item.title} ${item.detail ?? ''}`).join(' ');
+
+    expect(text).toContain('marco izquierdo · lado derecho · 30°-60°');
+    expect(text).toContain('marco derecho · lado izquierdo · 30°-60°');
+    expect(text).not.toMatch(/60°-120°|120°|150°|180°/);
+    expect(text).not.toMatch(/zona (?:derecha|izquierda|central)/i);
+    expect(text).not.toMatch(/asist/i);
   });
 
   it('does not show no-involvement too early or for players with defenses', () => {

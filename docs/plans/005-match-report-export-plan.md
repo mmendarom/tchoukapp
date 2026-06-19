@@ -1,5 +1,15 @@
 # Plan 005 - Exportar reporte de partido
 
+## Report Export v3
+
+1. Extender `MatchReportData` con rendimiento por jugador, top ataque/defensa y sectores tacticos por tiempo.
+2. Derivar todos los datos desde helpers de dominio existentes, preservando reglas de efectividad y compatibilidad legacy.
+3. Renderizar resumen ejecutivo, secciones por tiempo y totales con barras CSS print-friendly.
+4. Hacer explicitos `Lectura del tiempo`, `Lectura final`, sectores vulnerables y sectores donde nos defendieron.
+5. Compactar el texto compartible con score, tops, efectividad y sectores principales.
+6. Agregar regresiones de datos, HTML, labels tacticos y eventos antiguos.
+7. Ejecutar `npm test`, `npx tsc --noEmit` y `git diff --check`.
+
 Spec relacionada: `docs/specs/005-match-report-export.md`
 
 ## Stage 1 - Documentacion y decision
