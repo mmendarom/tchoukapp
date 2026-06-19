@@ -243,7 +243,7 @@ Estado Stage 4:
 
 - Implementado con `src/domain/liveRecommendations.ts` y `LiveRecommendationsPanel`.
 - Usa solo eventos del tiempo actual.
-- Muestra maximo 4 recomendaciones.
+- Muestra maximo 6 recomendaciones desde el polish posterior de Stage 4.
 - Prioridad:
   1. puntos en contra repetidos;
   2. errores repetidos;
@@ -256,6 +256,10 @@ Estado Stage 4:
 - No menciona asistencias.
 - Jugadores con defensas Uruguay no se marcan como baja participacion.
    - Debe ayudar a no marcar a ese jugador como bajo involucramiento.
+- `Lo están anulando` solo se muestra como alerta de ajuste si el jugador tiene al menos 3 intentos, 2 tiros defendidos por el rival y efectividad menor a 75%.
+- Si tiene 2+ tiros defendidos por el rival pero mantiene 75% o mas de efectividad, se muestra como dato neutral: `Le están defendiendo tiros`.
+- `Baja efectividad` usa al menos 4 intentos y efectividad menor a 75%.
+- `Buen rendimiento ofensivo` puede aparecer como dato neutral con 4+ intentos y 75% o mas de efectividad, siempre con prioridad baja para no tapar alertas urgentes.
 
 Priorizacion:
 
@@ -263,6 +267,24 @@ Priorizacion:
 - Evitar duplicar mensajes equivalentes.
 - Limitar ruido.
 - Preferir alertas accionables sobre datos obvios.
+
+### I. Polish Visual De Resumenes
+
+Estado: implementado como polish posterior a Stage 4.
+
+- `PeriodSummaryScreen` agrega un encabezado oscuro con resultado del tiempo, marcador del tiempo y marcador global.
+- El resumen del tiempo agrega tarjetas compactas de lectura rapida:
+  - `Ataque`;
+  - `Defensa`;
+  - `Errores`;
+  - `Efectividad`.
+- `Alertas tácticas` del tiempo usan chips `Atención`, `Ajuste` y `Dato` con acentos de color.
+- `Rendimiento del tiempo` queda antes de mapas para priorizar lectura de jugadores.
+- Los mapas se agrupan bajo `Mapas del tiempo`.
+- `FinalSummaryScreen` reutiliza el mismo lenguaje visual en forma liviana con encabezado y tarjetas de totales.
+- `PlayerPerformanceBars` mejora contraste y jerarquia visual de ataque/defensa sin agregar dependencias.
+- `createTacticalInsights` elimina el uso visible de asistencias en baja participacion y considera tiros/defensas para no castigar roles defensivos.
+- No cambia modelos, scoring, eventos, mapas ni PDF/export.
 
 ### E. Mejora De Insights
 
@@ -566,12 +588,22 @@ Estado: implementado en el corte 2026-06-18.
 
 Estado: implementado en el corte 2026-06-18.
 
+Polish posterior:
+
+- Maximo aumentado a 6 recomendaciones.
+- Umbral de efectividad para alerta negativa ajustado a 75%.
+- Jugadores con 75% o mas de efectividad y tiros defendidos por el rival reciben nota informativa, no alerta negativa.
+- El panel live usa filas compactas y dos columnas en ancho grande.
+- Resumen por tiempo y resumen final recibieron mejoras visuales de jerarquia y color.
+
 ### Stage 5 - Mejora De Insights Existentes
 
 - Eliminar referencias a asistencias.
 - Ajustar baja participacion para considerar tiros y defensas.
 - Agregar alertas de baja efectividad/anulado.
 - Tests de no ruido y defensive roles.
+
+Estado parcial: limpieza de baja participacion implementada en el polish posterior a Stage 4. Ya no menciona asistencias y no marca como bajo involucramiento a jugadores con defensas o tiros defendidos por el rival.
 
 ## Checklist De Aceptacion
 
@@ -595,8 +627,11 @@ Estado: implementado en el corte 2026-06-18.
 - [x] Resumen final muestra efectividad.
 - [x] PDF/text report muestra efectividad.
 - [x] Bloque live muestra alertas tacticas compactas.
-- [ ] Insights no mencionan asistencias.
-- [ ] Jugadores con defensas no se marcan como sin participacion.
+- [x] Bloque live muestra hasta 6 recomendaciones.
+- [x] Jugadores con alta efectividad no reciben alerta negativa de anulado por pocos tiros defendidos.
+- [x] Resumen del tiempo mejora jerarquia visual con header, tarjetas e insights coloreados.
+- [x] Insights no mencionan asistencias.
+- [x] Jugadores con defensas no se marcan como sin participacion.
 - [ ] No se agregan backend/auth/cloud.
 - [ ] `landingLocation` y `defenseLocation` siguen siendo fuente de verdad para ubicaciones.
 - [ ] `npm test` pasa.

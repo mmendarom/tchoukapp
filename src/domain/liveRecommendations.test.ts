@@ -54,7 +54,7 @@ const error = (overrides: Partial<MatchEvent> = {}) =>
     ...overrides,
   } as Partial<MatchEvent>);
 
-const build = (events: MatchEvent[], maxRecommendations = 4) =>
+const build = (events: MatchEvent[], maxRecommendations = 6) =>
   buildLiveRecommendations({
     currentLineupPlayerIds: ['p1', 'p2', 'p3'],
     events,
@@ -67,8 +67,9 @@ describe('buildLiveRecommendations', () => {
     expect(build([])).toEqual([]);
   });
 
-  it('creates blocked-player recommendation after repeated rival defenses against a shooter', () => {
+  it('creates blocked-player recommendation only when defended shots lower effectiveness', () => {
     const recommendations = build([
+      point({ id: 'goal-1', playerId: 'p1' }),
       rivalDefense({ id: 'rd-1', playerId: 'p1' }),
       rivalDefense({ id: 'rd-2', playerId: 'p1' }),
     ]);
@@ -76,18 +77,46 @@ describe('buildLiveRecommendations', () => {
     expect(recommendations[0]).toMatchObject({
       id: 'blocked-p1',
       title: 'Lo están anulando',
-      detail: 'A #1 Mauro le defendieron 2 tiros. Probar otra zona o rotación.',
+      detail: 'A #1 Mauro le defendieron 2 tiros y lleva 1/3.',
     });
+  });
+
+  it('does not create negative blocked alert when effectiveness stays high despite defended shots', () => {
+    const recommendations = build([
+      point({ id: 'goal-1', playerId: 'p1' }),
+      point({ id: 'goal-2', playerId: 'p1' }),
+      point({ id: 'goal-3', playerId: 'p1' }),
+      point({ id: 'goal-4', playerId: 'p1' }),
+      point({ id: 'goal-5', playerId: 'p1' }),
+      point({ id: 'goal-6', playerId: 'p1' }),
+      rivalDefense({ id: 'rd-1', playerId: 'p1' }),
+      rivalDefense({ id: 'rd-2', playerId: 'p1' }),
+    ]);
+
+    expect(recommendations.find((item) => item.id === 'blocked-p1')).toBeUndefined();
+    expect(recommendations.find((item) => item.id === 'low-effectiveness-p1')).toBeUndefined();
+    expect(recommendations).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: 'defended-shots-info-p1',
+          title: 'Le están defendiendo tiros',
+          type: 'info',
+          detail: 'A #1 Mauro le defendieron 2, pero mantiene 75% de efectividad.',
+        }),
+      ]),
+    );
   });
 
   it('creates low-effectiveness recommendation only after enough attempts', () => {
     expect(build([
+      point({ id: 'goal-1', playerId: 'p1' }),
       rivalDefense({ id: 'rd-1', playerId: 'p1' }),
       rivalDefense({ id: 'rd-2', playerId: 'p1' }),
     ]).some((item) => item.id === 'low-effectiveness-p1')).toBe(false);
 
     const recommendations = build([
       point({ id: 'goal-1', playerId: 'p1' }),
+      point({ id: 'goal-2', playerId: 'p1' }),
       rivalDefense({ id: 'rd-1', playerId: 'p1' }),
       rivalDefense({ id: 'rd-2', playerId: 'p1' }),
     ]);
@@ -97,7 +126,7 @@ describe('buildLiveRecommendations', () => {
         expect.objectContaining({
           id: 'low-effectiveness-p1',
           title: 'Baja efectividad',
-          detail: '#1 Mauro: 1/3 en tiros.',
+          detail: '#1 Mauro: 2/4 en tiros (50%).',
         }),
       ]),
     );
@@ -166,22 +195,52 @@ describe('buildLiveRecommendations', () => {
     expect(recommendations.map((item) => `${item.title} ${item.detail}`).join(' ')).not.toMatch(/asist/i);
   });
 
-  it('creates strong defensive contribution and caps sorted recommendations', () => {
+  it('creates strong defensive contribution and caps sorted recommendations at six by default', () => {
     const recommendations = build([
       error({ id: 'e-1', playerId: 'p1', errorType: 'punto_en_contra' }),
       error({ id: 'e-2', playerId: 'p2', errorType: 'punto_en_contra' }),
+      error({ id: 'e-3', playerId: 'p2', errorType: 'falta' }),
+      point({ id: 'goal-1', playerId: 'p1' }),
       rivalDefense({ id: 'rd-1', playerId: 'p1' }),
       rivalDefense({ id: 'rd-2', playerId: 'p1' }),
+      point({ id: 'o-1', scoringTeam: 'opponent', playerId: undefined, landingLocation: { x: 0.2, y: 0.3 } }),
+      point({ id: 'o-2', scoringTeam: 'opponent', playerId: undefined, landingLocation: { x: 0.25, y: 0.4 } }),
+      point({ id: 'o-3', scoringTeam: 'opponent', playerId: undefined, landingLocation: { x: 0.3, y: 0.5 } }),
+      rivalDefense({ id: 'rd-zone-1', playerId: undefined, defenseLocation: { x: 0.45, y: 0.3 } }),
+      rivalDefense({ id: 'rd-zone-2', playerId: undefined, defenseLocation: { x: 0.5, y: 0.4 } }),
+      rivalDefense({ id: 'rd-zone-3', playerId: undefined, defenseLocation: { x: 0.55, y: 0.5 } }),
       defense({ id: 'd-1', playerId: 'p3' }),
       defense({ id: 'd-2', playerId: 'p3' }),
       defense({ id: 'd-3', playerId: 'p3' }),
-    ], 3);
+      defense({ id: 'd-4', playerId: 'p2' }),
+    ]);
 
-    expect(recommendations).toHaveLength(3);
-    expect(recommendations.map((item) => item.priority)).toEqual([10, 30, 80]);
+    expect(recommendations).toHaveLength(6);
+    expect(recommendations.map((item) => item.priority)).toEqual([10, 20, 30, 50, 60, 80]);
     expect(recommendations).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ id: 'strong-defense-p3', title: 'Aporte defensivo' }),
+      ]),
+    );
+  });
+
+  it('keeps strong offensive performance as a low-priority info note', () => {
+    const recommendations = build([
+      point({ id: 'goal-1', playerId: 'p1' }),
+      point({ id: 'goal-2', playerId: 'p1' }),
+      point({ id: 'goal-3', playerId: 'p1' }),
+      rivalDefense({ id: 'rd-1', playerId: 'p1' }),
+    ]);
+
+    expect(recommendations).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: 'strong-offense-p1',
+          title: 'Buen rendimiento ofensivo',
+          type: 'info',
+          detail: '#1 Mauro: 3/4 en tiros (75%).',
+          priority: 100,
+        }),
       ]),
     );
   });

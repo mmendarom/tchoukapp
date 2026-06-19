@@ -1,5 +1,36 @@
 # Implementation Log
 
+## 2026-06-19 - Tactical UI polish for live recommendations and period summaries
+
+Se hizo un pase de polish tactico y visual sin cambiar modelos de eventos, scoring, registro de acciones, mapas, PDF/export, persistencia ni dependencias.
+
+- `Lectura en vivo` ahora muestra hasta 6 recomendaciones.
+- `Lo están anulando` ya no aparece solo por tener 2 tiros defendidos: requiere 3+ intentos, 2+ tiros defendidos por el rival y efectividad menor a 75%.
+- Jugadores con tiros defendidos pero efectividad de 75% o mas reciben una nota neutral `Le están defendiendo tiros`.
+- `Baja efectividad` ahora requiere 4+ intentos y efectividad menor a 75%.
+- Se agrego nota informativa de `Buen rendimiento ofensivo` para 4+ intentos y 75% o mas de efectividad, con prioridad baja.
+- `LiveRecommendationsPanel` queda mas compacto, con acentos de severidad mas claros y dos columnas en ancho grande.
+- `PlayerPerformanceBars` diferencia mejor ataque y defensa con superficies y barras de color.
+- `PeriodSummaryScreen` agrega header de resultado, tarjetas de `Ataque`, `Defensa`, `Errores` y `Efectividad`, alertas tacticas con chips de severidad y encabezado `Mapas del tiempo`.
+- `FinalSummaryScreen` recibe consistencia visual ligera con header y tarjetas de totales.
+- `createTacticalInsights` deja de usar o mencionar asistencias en baja participacion; considera tiros y defensas para no castigar roles defensivos.
+- No se agregaron dependencias.
+
+QA manual recomendado:
+
+- Registrar 8 tiros de un jugador: 6 goles y 2 defensas rivales.
+- Confirmar que no aparece `Lo están anulando`.
+- Confirmar que `Le están defendiendo tiros`, si aparece, usa tono neutral.
+- Registrar 4 tiros: 2 goles y 2 defensas rivales.
+- Confirmar `Lo están anulando` y/o `Baja efectividad`.
+- Registrar errores repetidos y confirmar que siguen primero.
+- Confirmar maximo 6 recomendaciones.
+- Confirmar que ninguna alerta menciona asistencias.
+- Confirmar que jugadores con defensas no aparecen como baja participacion.
+- Finalizar un tiempo con puntos, defensas, errores y defensas rivales.
+- Confirmar que el resumen del tiempo es mas colorido y legible.
+- Probar telefono portrait y tablet landscape.
+
 ## 2026-06-18 - Tactical effectiveness Stage 4 live recommendations
 
 Se agrego un bloque compacto de lectura tactica en vivo sin cambiar modelos de eventos, scoring, registro de acciones, mapas ni PDF.

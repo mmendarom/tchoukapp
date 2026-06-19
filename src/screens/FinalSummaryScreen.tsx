@@ -1,6 +1,6 @@
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useMemo, useState } from 'react';
-import { Share, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Share, StyleSheet, Text, TextInput, useWindowDimensions, View } from 'react-native';
 
 import { ActionButton } from '../components/ActionButton';
 import { CourtMapSummary } from '../components/CourtMapSummary';
@@ -32,6 +32,8 @@ import { fontSize, spacing } from '../utils/responsive';
 type Props = NativeStackScreenProps<RootStackParamList, 'FinalSummary'>;
 
 export function FinalSummaryScreen({ navigation, route }: Props) {
+  const { width } = useWindowDimensions();
+  const isWide = width >= 760;
   const [exporting, setExporting] = useState(false);
   const [exportMessage, setExportMessage] = useState<string | undefined>();
   const matches = useMatchStore((state) => state.matches);
@@ -102,6 +104,12 @@ export function FinalSummaryScreen({ navigation, route }: Props) {
   const defendedZones = groupOpponentDefensesByZone(match.events);
   const substitutions = getSubstitutions(match.events);
   const lineupSwaps = getLineupSwaps(match.events);
+  const attackTotal = scorers.reduce((sum, stat) => sum + stat.total, 0);
+  const defenseTotal = defenses.reduce((sum, stat) => sum + stat.total, 0);
+  const errorsTotal = errors.reduce((sum, stat) => sum + stat.total, 0);
+  const teamGoals = playerPerformance.rows.reduce((sum, row) => sum + row.points, 0);
+  const teamShotAttempts = playerPerformance.rows.reduce((sum, row) => sum + row.shotAttempts, 0);
+  const teamEffectiveness = teamShotAttempts > 0 ? `${Math.round((teamGoals / teamShotAttempts) * 100)}%` : 'Sin tiros';
   const insights = createTacticalInsights({
     events: match.events,
     lineupSnapshots: match.lineupSnapshots,
@@ -111,9 +119,15 @@ export function FinalSummaryScreen({ navigation, route }: Props) {
 
   return (
     <Screen>
-      <Text style={styles.title}>Resumen final del partido</Text>
-      <View style={styles.card}>
-        <Text style={styles.score}>Uruguay {totalScore.uruguay} - {totalScore.opponent} {opponentName}</Text>
+      <View style={styles.hero}>
+        <Text style={styles.heroEyebrow}>Resumen final del partido</Text>
+        <Text style={styles.heroScore}>Uruguay {totalScore.uruguay} - {totalScore.opponent} {opponentName}</Text>
+      </View>
+      <View style={[styles.statGrid, isWide && styles.statGridWide]}>
+        <SummaryStatCard accentColor="#0b6bcb" label="Ataque" value={`${attackTotal}`} detail="puntos Uruguay" />
+        <SummaryStatCard accentColor="#0f766e" label="Defensa" value={`${defenseTotal}`} detail="defensas" />
+        <SummaryStatCard accentColor="#b45309" label="Errores" value={`${errorsTotal}`} detail="propios" />
+        <SummaryStatCard accentColor="#6d28d9" label="Efectividad" value={teamEffectiveness} detail={`${teamGoals}/${teamShotAttempts} en tiros`} />
       </View>
       <View style={styles.card}>
         <Text style={styles.sectionTitle}>Resultado por tiempos</Text>
@@ -222,11 +236,89 @@ export function FinalSummaryScreen({ navigation, route }: Props) {
   );
 }
 
+function SummaryStatCard({
+  accentColor,
+  detail,
+  label,
+  value,
+}: {
+  accentColor: string;
+  detail: string;
+  label: string;
+  value: string;
+}) {
+  return (
+    <View style={styles.statCard}>
+      <View style={[styles.statAccent, { backgroundColor: accentColor }]} />
+      <Text style={styles.statLabel}>{label}</Text>
+      <Text style={[styles.statValue, { color: accentColor }]}>{value}</Text>
+      <Text style={styles.statDetail}>{detail}</Text>
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
   title: {
     color: '#0b1f33',
     fontSize: fontSize.title,
     fontWeight: '900',
+  },
+  hero: {
+    borderRadius: 8,
+    backgroundColor: '#0b1f33',
+    borderWidth: 1,
+    borderColor: '#0b1f33',
+    padding: spacing.md,
+    gap: spacing.xs,
+  },
+  heroEyebrow: {
+    color: '#8bd3ff',
+    fontSize: fontSize.small,
+    fontWeight: '900',
+    textTransform: 'uppercase',
+  },
+  heroScore: {
+    color: '#ffffff',
+    fontSize: 28,
+    fontWeight: '900',
+  },
+  statGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
+  },
+  statGridWide: {
+    flexWrap: 'nowrap',
+  },
+  statCard: {
+    flex: 1,
+    minWidth: 145,
+    borderRadius: 8,
+    backgroundColor: '#ffffff',
+    borderWidth: 1,
+    borderColor: '#dbe4ef',
+    padding: spacing.sm,
+    gap: 2,
+  },
+  statAccent: {
+    width: 30,
+    height: 4,
+    borderRadius: 8,
+    marginBottom: spacing.xs,
+  },
+  statLabel: {
+    color: '#5d6b7a',
+    fontSize: fontSize.small,
+    fontWeight: '900',
+  },
+  statValue: {
+    fontSize: 26,
+    fontWeight: '900',
+  },
+  statDetail: {
+    color: '#5d6b7a',
+    fontSize: fontSize.tiny,
+    fontWeight: '800',
   },
   card: {
     borderRadius: 8,

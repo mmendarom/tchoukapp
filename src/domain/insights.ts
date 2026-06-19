@@ -6,6 +6,7 @@ import {
   LineupSnapshot,
   Match,
   MatchEvent,
+  OpponentDefenseEvent,
   Player,
   PointEvent,
   TeamSide,
@@ -68,6 +69,8 @@ const isOpponentOwnPointEvent = (event: MatchEvent): event is PointEvent =>
 const isErrorEvent = (event: MatchEvent): event is ErrorEvent => event.kind === 'error';
 
 const isDefenseEvent = (event: MatchEvent): event is DefenseEvent => event.kind === 'defense';
+
+const isOpponentDefenseEvent = (event: MatchEvent): event is OpponentDefenseEvent => event.kind === 'opponent_defense';
 
 const isTrackedErrorEvent = (event: MatchEvent): event is ErrorEvent =>
   isErrorEvent(event) && (event.errorType === 'falta' || event.errorType === 'punto_en_contra');
@@ -345,6 +348,10 @@ const createLowInvolvementInsights = (
   team: TeamSide,
   rules: TacticalInsightRules,
 ): InsightCard[] => {
+  if (team !== 'uruguay') {
+    return [];
+  }
+
   const currentLineup = getCurrentLineup(buildSyntheticMatch(events, lineupSnapshots), team);
 
   if (!currentLineup) {
@@ -360,13 +367,20 @@ const createLowInvolvementInsights = (
   }
 
   const involvementCounts = countBy(lineupPointEvents, (event) => event.playerId);
-  lineupPointEvents.forEach((event) => {
-    if (!event.assistPlayerId) {
-      return;
-    }
-
-    involvementCounts.set(event.assistPlayerId, (involvementCounts.get(event.assistPlayerId) ?? 0) + 1);
-  });
+  events
+    .filter(isOpponentDefenseEvent)
+    .filter((event) => event.lineupSnapshotId === currentLineup.id)
+    .forEach((event) => {
+      if (event.playerId) {
+        involvementCounts.set(event.playerId, (involvementCounts.get(event.playerId) ?? 0) + 1);
+      }
+    });
+  events
+    .filter(isDefenseEvent)
+    .filter((event) => event.lineupSnapshotId === currentLineup.id)
+    .forEach((event) => {
+      involvementCounts.set(event.playerId, (involvementCounts.get(event.playerId) ?? 0) + 1);
+    });
 
   return currentLineup.playerIds
     .filter((playerId) => (involvementCounts.get(playerId) ?? 0) <= rules.lowInvolvementTouches)
@@ -374,7 +388,7 @@ const createLowInvolvementInsights = (
       id: `low-involvement-${playerId}`,
       severity: 'warning',
       title: `${getPlayerLabel(players, playerId)} participa poco en ataque`,
-      description: `${getPlayerLabel(players, playerId)} no tiene puntos ni asistencias registradas mientras esta formación convirtió ${lineupPointEvents.length} puntos.`,
+      description: `${getPlayerLabel(players, playerId)} no tiene tiros ni defensas registradas mientras esta formación convirtió ${lineupPointEvents.length} puntos.`,
       suggestedAction: 'Buscar una jugada por su zona o rotarlo si el rival está anulando su rol.',
     }));
 };

@@ -1,5 +1,5 @@
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 
 import { ActionButton } from '../components/ActionButton';
 import { CourtMapSummary } from '../components/CourtMapSummary';
@@ -34,6 +34,8 @@ import { fontSize, spacing } from '../utils/responsive';
 type Props = NativeStackScreenProps<RootStackParamList, 'PeriodSummary'>;
 
 export function PeriodSummaryScreen({ navigation, route }: Props) {
+  const { width } = useWindowDimensions();
+  const isWide = width >= 760;
   const matches = useMatchStore((state) => state.matches);
   const players = useMatchStore((state) => state.players);
   const advancePeriod = useMatchStore((state) => state.advancePeriod);
@@ -82,33 +84,52 @@ export function PeriodSummaryScreen({ navigation, route }: Props) {
     : undefined;
   const currentOpponentCentral = vulnerableZones.find((stat) => stat.label === 'Zona central')?.total ?? 0;
   const insights = generatePeriodInsights(match, periodNumber, playerName);
+  const attackTotal = scorers.reduce((sum, stat) => sum + stat.total, 0);
+  const defenseTotal = defenses.reduce((sum, stat) => sum + stat.total, 0);
+  const teamGoals = playerPerformance.rows.reduce((sum, row) => sum + row.points, 0);
+  const teamShotAttempts = playerPerformance.rows.reduce((sum, row) => sum + row.shotAttempts, 0);
+  const teamEffectiveness = teamShotAttempts > 0 ? `${Math.round((teamGoals / teamShotAttempts) * 100)}%` : 'Sin tiros';
+  const resultLabel =
+    periodScore.uruguay > periodScore.opponent
+      ? 'Tiempo ganado'
+      : periodScore.uruguay < periodScore.opponent
+        ? 'Tiempo abajo'
+        : 'Tiempo parejo';
 
   return (
     <Screen>
-      <Text style={styles.title}>Resumen del tiempo</Text>
-      <View style={styles.card}>
-        <Text style={styles.sectionTitle}>{formatPeriodName(periodNumber)}</Text>
-        <Text style={styles.score}>Uruguay {periodScore.uruguay} - {periodScore.opponent} {opponentName}</Text>
-        <Text style={styles.metric}>Global: Uruguay {totalScore.uruguay} - {totalScore.opponent} {opponentName}</Text>
+      <View style={styles.hero}>
+        <View style={styles.heroTop}>
+          <Text style={styles.heroEyebrow}>Resumen del tiempo</Text>
+          <Text style={styles.resultPill}>{resultLabel}</Text>
+        </View>
+        <Text style={styles.heroTitle}>{formatPeriodName(periodNumber)}</Text>
+        <Text style={styles.heroScore}>Uruguay {periodScore.uruguay} - {periodScore.opponent} {opponentName}</Text>
+        <Text style={styles.heroMeta}>Global: Uruguay {totalScore.uruguay} - {totalScore.opponent} {opponentName}</Text>
+      </View>
+
+      <View style={[styles.statGrid, isWide && styles.statGridWide]}>
+        <SummaryStatCard accentColor="#0b6bcb" label="Ataque" value={`${attackTotal}`} detail="puntos Uruguay" />
+        <SummaryStatCard accentColor="#0f766e" label="Defensa" value={`${defenseTotal}`} detail="defensas" />
+        <SummaryStatCard accentColor="#b45309" label="Errores" value={`${currentErrors}`} detail="propios" />
+        <SummaryStatCard accentColor="#6d28d9" label="Efectividad" value={teamEffectiveness} detail={`${teamGoals}/${teamShotAttempts} en tiros`} />
       </View>
 
       <View style={styles.card}>
-        <Text style={styles.sectionTitle}>Lecturas tácticas</Text>
+        <Text style={styles.sectionTitle}>Alertas tácticas</Text>
         {insights.length === 0 ? <Text style={styles.metric}>Sin alertas tácticas para este tiempo.</Text> : insights.map((insight) => (
-          <View key={`${insight.title}-${insight.description}`} style={styles.insight}>
-            <Text style={styles.insightBadge}>{insight.severity === 'critical' ? '!' : insight.severity === 'warning' ? 'AT' : 'OK'}</Text>
-            <Text style={styles.insightTitle}>{insight.title}</Text>
-            <Text style={styles.metric} numberOfLines={2}>{insight.description}</Text>
-            <Text style={styles.action} numberOfLines={2}>{insight.suggestedAction}</Text>
-          </View>
+          <InsightRow key={`${insight.title}-${insight.description}`} insight={insight} />
         ))}
       </View>
 
+      <PlayerPerformanceBars data={playerPerformance} title="Rendimiento del tiempo" />
+
+      <View style={styles.sectionHeader}>
+        <Text style={styles.sectionHeaderTitle}>Mapas del tiempo</Text>
+      </View>
       <CourtMapSummary title="Dónde hicimos los puntos" events={periodEvents} team="uruguay" />
       <CourtMapSummary title="Dónde nos hicieron puntos" events={periodEvents} team="opponent" />
       <CourtMapSummary title="Dónde nos defendieron" events={periodEvents} source="opponent_defenses" />
-
-      <PlayerPerformanceBars data={playerPerformance} title="Rendimiento del tiempo" />
 
       <View style={styles.card}>
         <Text style={styles.sectionTitle}>Goleadores del tiempo</Text>
@@ -222,11 +243,137 @@ export function PeriodSummaryScreen({ navigation, route }: Props) {
   );
 }
 
+function SummaryStatCard({
+  accentColor,
+  detail,
+  label,
+  value,
+}: {
+  accentColor: string;
+  detail: string;
+  label: string;
+  value: string;
+}) {
+  return (
+    <View style={styles.statCard}>
+      <View style={[styles.statAccent, { backgroundColor: accentColor }]} />
+      <Text style={styles.statLabel}>{label}</Text>
+      <Text style={[styles.statValue, { color: accentColor }]}>{value}</Text>
+      <Text style={styles.statDetail}>{detail}</Text>
+    </View>
+  );
+}
+
+function InsightRow({
+  insight,
+}: {
+  insight: ReturnType<typeof generatePeriodInsights>[number];
+}) {
+  const visual = insight.severity === 'critical'
+    ? { label: 'Atención', color: '#b42318', backgroundColor: '#fff7ed' }
+    : insight.severity === 'warning'
+      ? { label: 'Ajuste', color: '#0b6bcb', backgroundColor: '#f0f7ff' }
+      : { label: 'Dato', color: '#0f766e', backgroundColor: '#f0fdfa' };
+
+  return (
+    <View style={[styles.insight, { backgroundColor: visual.backgroundColor, borderLeftColor: visual.color }]}>
+      <Text style={[styles.insightBadge, { color: visual.color, borderColor: visual.color }]}>{visual.label}</Text>
+      <Text style={styles.insightTitle}>{insight.title}</Text>
+      <Text style={styles.metric} numberOfLines={2}>{insight.description}</Text>
+      <Text style={styles.action} numberOfLines={2}>{insight.suggestedAction}</Text>
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
   title: {
     color: '#0b1f33',
     fontSize: fontSize.title,
     fontWeight: '900',
+  },
+  hero: {
+    borderRadius: 8,
+    backgroundColor: '#0b1f33',
+    borderWidth: 1,
+    borderColor: '#0b1f33',
+    padding: spacing.md,
+    gap: spacing.xs,
+  },
+  heroTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
+  },
+  heroEyebrow: {
+    color: '#8bd3ff',
+    fontSize: fontSize.small,
+    fontWeight: '900',
+    textTransform: 'uppercase',
+  },
+  resultPill: {
+    borderRadius: 8,
+    backgroundColor: '#ffffff',
+    color: '#0b1f33',
+    fontSize: fontSize.tiny,
+    fontWeight: '900',
+    overflow: 'hidden',
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 3,
+  },
+  heroTitle: {
+    color: '#ffffff',
+    fontSize: fontSize.title,
+    fontWeight: '900',
+  },
+  heroScore: {
+    color: '#ffffff',
+    fontSize: 28,
+    fontWeight: '900',
+  },
+  heroMeta: {
+    color: '#d7e5f2',
+    fontSize: fontSize.body,
+    fontWeight: '800',
+  },
+  statGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
+  },
+  statGridWide: {
+    flexWrap: 'nowrap',
+  },
+  statCard: {
+    flex: 1,
+    minWidth: 145,
+    borderRadius: 8,
+    backgroundColor: '#ffffff',
+    borderWidth: 1,
+    borderColor: '#dbe4ef',
+    padding: spacing.sm,
+    gap: 2,
+  },
+  statAccent: {
+    width: 30,
+    height: 4,
+    borderRadius: 8,
+    marginBottom: spacing.xs,
+  },
+  statLabel: {
+    color: '#5d6b7a',
+    fontSize: fontSize.small,
+    fontWeight: '900',
+  },
+  statValue: {
+    fontSize: 26,
+    fontWeight: '900',
+  },
+  statDetail: {
+    color: '#5d6b7a',
+    fontSize: fontSize.tiny,
+    fontWeight: '800',
   },
   card: {
     borderRadius: 8,
@@ -252,15 +399,17 @@ const styles = StyleSheet.create({
   },
   insight: {
     borderRadius: 8,
-    backgroundColor: '#f4f7fb',
+    borderWidth: 1,
+    borderColor: '#e3ebf4',
+    borderLeftWidth: 4,
     padding: spacing.sm,
     gap: spacing.xs,
   },
   insightBadge: {
     alignSelf: 'flex-start',
     borderRadius: 8,
-    backgroundColor: '#e7eef7',
-    color: '#0b1f33',
+    backgroundColor: '#ffffff',
+    borderWidth: 1,
     fontSize: fontSize.tiny,
     fontWeight: '900',
     paddingHorizontal: spacing.sm,
@@ -280,5 +429,18 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: spacing.sm,
+  },
+  sectionHeader: {
+    borderRadius: 8,
+    backgroundColor: '#eef6ff',
+    borderWidth: 1,
+    borderColor: '#cfe4ff',
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+  },
+  sectionHeaderTitle: {
+    color: '#0b1f33',
+    fontSize: fontSize.section,
+    fontWeight: '900',
   },
 });

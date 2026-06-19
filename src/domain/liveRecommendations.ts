@@ -20,14 +20,16 @@ type LiveRecommendationInput = {
 };
 
 const PLAYER_BLOCKED_THRESHOLD = 2;
-const LOW_EFFECTIVENESS_ATTEMPTS_THRESHOLD = 3;
-const LOW_EFFECTIVENESS_THRESHOLD = 1 / 3;
+const PLAYER_BLOCKED_ATTEMPTS_THRESHOLD = 3;
+const LOW_EFFECTIVENESS_ATTEMPTS_THRESHOLD = 4;
+const EFFECTIVENESS_WARNING_THRESHOLD = 0.75;
 const REPEATED_ERRORS_THRESHOLD = 2;
 const TEAM_OWN_POINTS_THRESHOLD = 2;
 const OPPONENT_ZONE_THRESHOLD = 3;
 const OPPONENT_DEFENSE_ZONE_THRESHOLD = 3;
 const NO_INVOLVEMENT_EVENT_THRESHOLD = 8;
 const STRONG_DEFENSE_THRESHOLD = 3;
+const STRONG_OFFENSE_ATTEMPTS_THRESHOLD = 4;
 
 const getPlayerLabel = (players: Player[], playerId: string) => {
   const player = players.find((item) => item.id === playerId);
@@ -56,11 +58,13 @@ const increment = (totals: Map<string, number>, key: string | undefined) => {
 const byPriority = (a: LiveRecommendation, b: LiveRecommendation) =>
   a.priority - b.priority || a.title.localeCompare(b.title) || (a.detail ?? '').localeCompare(b.detail ?? '');
 
+const formatPercent = (value: number) => `${Math.round(value * 100)}%`;
+
 export function buildLiveRecommendations({
   events,
   currentLineupPlayerIds,
   players,
-  maxRecommendations = 4,
+  maxRecommendations = 6,
 }: LiveRecommendationInput): LiveRecommendation[] {
   const recommendations: LiveRecommendation[] = [];
   const performance = buildPlayerPerformance(events, players, currentLineupPlayerIds);
@@ -95,25 +99,36 @@ export function buildLiveRecommendations({
     });
 
   performance.rows
-    .filter((row) => row.rivalDefensesAgainst >= PLAYER_BLOCKED_THRESHOLD)
+    .filter(
+      (row) =>
+        row.shotAttempts >= PLAYER_BLOCKED_ATTEMPTS_THRESHOLD &&
+        row.rivalDefensesAgainst >= PLAYER_BLOCKED_THRESHOLD &&
+        typeof row.effectiveness === 'number' &&
+        row.effectiveness < EFFECTIVENESS_WARNING_THRESHOLD,
+    )
     .forEach((row) => {
       recommendations.push({
         id: `blocked-${row.playerId}`,
         type: 'adjustment',
         title: 'Lo están anulando',
-        detail: `A ${row.playerName} le defendieron ${row.rivalDefensesAgainst} tiros. Probar otra zona o rotación.`,
+        detail: `A ${row.playerName} le defendieron ${row.rivalDefensesAgainst} tiros y lleva ${row.points}/${row.shotAttempts}.`,
         priority: 30,
       });
     });
 
   performance.rows
-    .filter((row) => row.shotAttempts >= LOW_EFFECTIVENESS_ATTEMPTS_THRESHOLD && (row.effectiveness ?? 0) <= LOW_EFFECTIVENESS_THRESHOLD)
+    .filter(
+      (row) =>
+        row.shotAttempts >= LOW_EFFECTIVENESS_ATTEMPTS_THRESHOLD &&
+        typeof row.effectiveness === 'number' &&
+        row.effectiveness < EFFECTIVENESS_WARNING_THRESHOLD,
+    )
     .forEach((row) => {
       recommendations.push({
         id: `low-effectiveness-${row.playerId}`,
         type: 'adjustment',
         title: 'Baja efectividad',
-        detail: `${row.playerName}: ${row.points}/${row.shotAttempts} en tiros.`,
+        detail: `${row.playerName}: ${row.points}/${row.shotAttempts} en tiros (${formatPercent(row.effectiveness ?? 0)}).`,
         priority: 40,
       });
     });
@@ -166,6 +181,40 @@ export function buildLiveRecommendations({
         title: 'Aporte defensivo',
         detail: `${row.playerName} sostiene defensa con ${row.defenses} defensas.`,
         priority: 80,
+      });
+    });
+
+  performance.rows
+    .filter(
+      (row) =>
+        row.rivalDefensesAgainst >= PLAYER_BLOCKED_THRESHOLD &&
+        typeof row.effectiveness === 'number' &&
+        row.effectiveness >= EFFECTIVENESS_WARNING_THRESHOLD,
+    )
+    .forEach((row) => {
+      recommendations.push({
+        id: `defended-shots-info-${row.playerId}`,
+        type: 'info',
+        title: 'Le están defendiendo tiros',
+        detail: `A ${row.playerName} le defendieron ${row.rivalDefensesAgainst}, pero mantiene ${formatPercent(row.effectiveness ?? 0)} de efectividad.`,
+        priority: 90,
+      });
+    });
+
+  performance.rows
+    .filter(
+      (row) =>
+        row.shotAttempts >= STRONG_OFFENSE_ATTEMPTS_THRESHOLD &&
+        typeof row.effectiveness === 'number' &&
+        row.effectiveness >= EFFECTIVENESS_WARNING_THRESHOLD,
+    )
+    .forEach((row) => {
+      recommendations.push({
+        id: `strong-offense-${row.playerId}`,
+        type: 'info',
+        title: 'Buen rendimiento ofensivo',
+        detail: `${row.playerName}: ${row.points}/${row.shotAttempts} en tiros (${formatPercent(row.effectiveness ?? 0)}).`,
+        priority: 100,
       });
     });
 

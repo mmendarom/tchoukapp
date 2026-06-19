@@ -41,6 +41,8 @@ export const PlayerPerformanceBars = memo(function PlayerPerformanceBars({
       <View style={styles.columns}>
         <PerformanceColumn
           accentColor="#0b6bcb"
+          surfaceColor="#f0f7ff"
+          trackColor="#d9ebff"
           countLabel="Pts"
           emptyText="Sin puntos registrados."
           mode="attack"
@@ -52,7 +54,9 @@ export const PlayerPerformanceBars = memo(function PlayerPerformanceBars({
           total={data.totalTeamPoints}
         />
         <PerformanceColumn
-          accentColor="#188038"
+          accentColor="#0f766e"
+          surfaceColor="#f0fdfa"
+          trackColor="#ccfbf1"
           countLabel="Def"
           emptyText="Sin defensas registradas."
           mode="defense"
@@ -76,9 +80,11 @@ function PerformanceColumn({
   rows,
   showRowsWhenEmpty,
   shareField,
+  surfaceColor,
   statField,
   title,
   total,
+  trackColor,
 }: {
   accentColor: string;
   countLabel: string;
@@ -87,15 +93,18 @@ function PerformanceColumn({
   rows: PlayerPerformanceRow[];
   showRowsWhenEmpty: boolean;
   shareField: 'pointShare' | 'defenseShare';
+  surfaceColor: string;
   statField: 'points' | 'defenses';
   title: string;
   total: number;
+  trackColor: string;
 }) {
   return (
-    <View style={styles.column}>
+    <View style={[styles.column, { backgroundColor: surfaceColor, borderColor: trackColor }]}>
       <View style={styles.columnHeader}>
+        <View style={[styles.columnAccent, { backgroundColor: accentColor }]} />
         <Text style={styles.columnTitle}>{title}</Text>
-        <Text style={styles.totalLabel}>Total {total}</Text>
+        <Text style={[styles.totalLabel, { color: accentColor }]}>Total {total}</Text>
       </View>
 
       {total === 0 && !showRowsWhenEmpty ? (
@@ -109,6 +118,7 @@ function PerformanceColumn({
             playerName={row.playerName}
             row={row}
             share={row[shareField]}
+            trackColor={trackColor}
             total={row[statField]}
             mode={mode}
           />
@@ -125,6 +135,7 @@ function PerformanceRow({
   playerName,
   row,
   share,
+  trackColor,
   total,
 }: {
   accentColor: string;
@@ -133,6 +144,7 @@ function PerformanceRow({
   playerName: string;
   row: PlayerPerformanceRow;
   share: number;
+  trackColor: string;
   total: number;
 }) {
   const barWidth = `${Math.max(Math.min(share, 1), 0) * 100}%` as DimensionValue;
@@ -146,7 +158,7 @@ function PerformanceRow({
         <Text numberOfLines={1} style={styles.playerName}>{playerName}</Text>
         <Text numberOfLines={1} adjustsFontSizeToFit style={styles.countText}>{detailText}</Text>
       </View>
-      <View style={styles.track}>
+      <View style={[styles.track, { backgroundColor: trackColor }]}>
         <View style={[styles.bar, { backgroundColor: accentColor, width: barWidth }]} />
       </View>
     </View>
@@ -175,15 +187,23 @@ const styles = StyleSheet.create({
   column: {
     flex: 1,
     minWidth: 220,
+    borderRadius: 8,
+    borderWidth: 1,
+    padding: spacing.xs,
     gap: spacing.xs,
   },
   columnHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
     gap: spacing.xs,
   },
+  columnAccent: {
+    width: 6,
+    height: 18,
+    borderRadius: 8,
+  },
   columnTitle: {
+    flex: 1,
     color: '#0b1f33',
     fontSize: fontSize.body,
     fontWeight: '900',
@@ -221,7 +241,6 @@ const styles = StyleSheet.create({
   track: {
     height: 8,
     borderRadius: 8,
-    backgroundColor: '#e7eef7',
     overflow: 'hidden',
   },
   bar: {

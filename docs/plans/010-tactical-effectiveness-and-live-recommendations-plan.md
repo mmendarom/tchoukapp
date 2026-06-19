@@ -273,7 +273,7 @@ Estado: implementado el 2026-06-18.
 
 ## Stage 4 - Bloque Live De Recomendaciones
 
-Estado: implementado el 2026-06-18.
+Estado: implementado el 2026-06-18. Polish tactico/visual actualizado posteriormente.
 
 ### Cambios
 
@@ -310,6 +310,17 @@ Estado: implementado el 2026-06-18.
 - No usa ni menciona asistencias.
 - Baja participacion requiere suficiente actividad y cero tiros/defensas.
 - Defensas rivales legacy sin `playerId` no cuentan como intentos de jugador pero si pueden activar zona bloqueada.
+- El cap de recomendaciones sube de 4 a 6.
+- `Lo están anulando` requiere:
+  - al menos 3 intentos;
+  - al menos 2 tiros defendidos por el rival;
+  - efectividad menor a 75%.
+- `Baja efectividad` requiere:
+  - al menos 4 intentos;
+  - efectividad menor a 75%.
+- Si un jugador tiene 2+ tiros defendidos por el rival pero mantiene 75% o mas de efectividad, se muestra `Le están defendiendo tiros` como dato neutral.
+- `Buen rendimiento ofensivo` puede aparecer con 4+ intentos y 75% o mas de efectividad, con prioridad baja.
+- El panel `Lectura en vivo` mantiene filas compactas y aprovecha dos columnas en tablet/ancho grande.
 
 ### Ubicacion UI Sugerida
 
@@ -326,8 +337,58 @@ Estado: implementado el 2026-06-18.
 - Baja efectividad aparece con umbral.
 - Jugador con defensas no aparece como sin participacion.
 - Texto no menciona asistencias.
+- Alta efectividad con tiros defendidos no genera `Lo están anulando`.
+- Alta efectividad con tiros defendidos genera nota neutral si entra por cap.
+- Baja efectividad bajo 75% genera alerta con porcentaje.
+- Maximo por defecto de 6 recomendaciones.
+
+## Stage 4B - Polish De Resumenes
+
+Estado: implementado como pase visual posterior a Stage 4.
+
+### Cambios
+
+1. `PeriodSummaryScreen`
+   - Header oscuro con `Resumen del tiempo`, estado del resultado, marcador del tiempo y marcador global.
+   - Tarjetas compactas para `Ataque`, `Defensa`, `Errores` y `Efectividad`.
+   - `Alertas tácticas` con chips por severidad y acentos de color.
+   - `Rendimiento del tiempo` queda antes de mapas.
+   - Se agrega encabezado `Mapas del tiempo`.
+2. `PlayerPerformanceBars`
+   - Superficies y tracks diferenciados para ataque y defensa.
+   - Colores mas claros:
+     - ataque azul/celeste;
+     - defensa verde/teal.
+3. `FinalSummaryScreen`
+   - Header y tarjetas de totales para consistencia visual ligera.
+
+### No cambia
+
+- Modelos de eventos.
+- Reglas de scoring.
+- Registro de puntos, defensas, errores o cambios.
+- Mapas.
+- PDF/export.
+- Dependencias.
+
+### QA manual
+
+- Registrar 8 tiros de un jugador: 6 goles y 2 defensas rivales.
+- Confirmar que no aparece alerta negativa `Lo están anulando`.
+- Confirmar que, si aparece, `Le están defendiendo tiros` es dato neutral.
+- Registrar 4 tiros: 2 goles y 2 defensas rivales.
+- Confirmar `Lo están anulando` y/o `Baja efectividad`.
+- Registrar errores repetidos y confirmar que siguen primero.
+- Confirmar maximo 6 recomendaciones.
+- Confirmar que ninguna alerta menciona asistencias.
+- Confirmar que un jugador con defensas no aparece como baja participacion.
+- Finalizar un tiempo con puntos, defensas, errores y defensas rivales.
+- Confirmar que el resumen del tiempo es mas colorido y escaneable.
+- Probar telefono portrait y tablet landscape.
 
 ## Stage 5 - Mejora De Insights Existentes
+
+Estado: limpieza parcial implementada durante el polish tactico posterior a Stage 4.
 
 ### Cambios
 
@@ -345,6 +406,13 @@ Estado: implementado el 2026-06-18.
    - zonas rivales;
    - defensores clave;
    - puntos regalados.
+
+### Cambios ya implementados
+
+- `createLowInvolvementInsights` ya no lee ni suma `assistPlayerId`.
+- El texto visible ya no menciona asistencias.
+- Baja participacion considera puntos, defensas Uruguay y defensas rivales con `playerId`.
+- Un jugador con defensas o tiros defendidos por el rival no queda marcado como bajo involucramiento.
 
 ### Tests
 

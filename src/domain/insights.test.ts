@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { createTacticalInsights } from './insights';
-import { MatchEvent } from './types';
+import { LineupSnapshot, MatchEvent } from './types';
 
 const point = (overrides: Partial<MatchEvent>): MatchEvent => ({
   id: `event-${Math.random()}`,
@@ -18,6 +18,15 @@ const point = (overrides: Partial<MatchEvent>): MatchEvent => ({
   pointSource: 'attack',
   ...overrides,
 } as MatchEvent);
+
+const currentLineup: LineupSnapshot = {
+  id: 'lineup-1',
+  matchId: 'match-1',
+  team: 'uruguay',
+  playerIds: ['p1', 'p2', 'p3', 'p4'],
+  capturedAt: '2026-01-01T00:00:00.000Z',
+  clock: { period: 1, secondsElapsed: 0 },
+};
 
 describe('createTacticalInsights zone labels', () => {
   it('uses Spanish labels derived from landingLocation', () => {
@@ -116,5 +125,29 @@ describe('createTacticalInsights zone labels', () => {
     expect(text).toContain('zona central');
     expect(text).not.toContain('opponent_defense');
     expect(text).not.toMatch(/\b(center|left|right)\b/);
+  });
+
+  it('does not mention assists or flag defenders as low involvement', () => {
+    const events: MatchEvent[] = [
+      point({ id: 'u-1', scoringTeam: 'uruguay', playerId: 'p1', lineupSnapshotId: currentLineup.id }),
+      point({ id: 'u-2', scoringTeam: 'uruguay', playerId: 'p1', lineupSnapshotId: currentLineup.id }),
+      point({ id: 'u-3', scoringTeam: 'uruguay', playerId: 'p1', lineupSnapshotId: currentLineup.id }),
+      point({ id: 'u-4', scoringTeam: 'uruguay', playerId: 'p1', lineupSnapshotId: currentLineup.id }),
+      point({ id: 'u-5', scoringTeam: 'uruguay', playerId: 'p1', lineupSnapshotId: currentLineup.id }),
+      point({ id: 'd-1', kind: 'defense', team: 'uruguay', playerId: 'p3', lineupSnapshotId: currentLineup.id } as Partial<MatchEvent>),
+      point({ id: 'rd-1', kind: 'opponent_defense', team: 'opponent', playerId: 'p4', defenseLocation: { x: 0.5, y: 0.5 }, lineupSnapshotId: currentLineup.id } as Partial<MatchEvent>),
+    ];
+
+    const insights = createTacticalInsights({
+      events,
+      lineupSnapshots: [currentLineup],
+      players: [],
+    });
+    const text = insights.map((insight) => `${insight.title} ${insight.description}`).join(' ');
+
+    expect(insights.find((insight) => insight.id === 'low-involvement-p2')).toBeDefined();
+    expect(insights.find((insight) => insight.id === 'low-involvement-p3')).toBeUndefined();
+    expect(insights.find((insight) => insight.id === 'low-involvement-p4')).toBeUndefined();
+    expect(text).not.toMatch(/asist/i);
   });
 });
