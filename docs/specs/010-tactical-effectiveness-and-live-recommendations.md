@@ -407,6 +407,40 @@ Sugerencias:
 - No inferir ubicaciones desde jugador.
 - `punto en contra` y `punto en contra rival` siguen fuera de mapas de ubicacion.
 
+### K. Precision visual del mapa de cancha
+
+Estado: implementado el 2026-06-20; QA visual en dispositivos pendiente.
+
+- Las areas de ambos marcos se amplian visualmente como semicirculos aproximados para facilitar taps precisos.
+- `CourtMapInput` muestra referencias sutiles de `0°`, `45°` y `90°` en ambos lados de cada marco.
+- Live y resumenes reutilizan la misma cancha ampliada, pero omiten labels angulares para evitar ruido en mapas pequenos.
+- La referencia visual conserva la geometria tactica actual: `0°` junto a los bordes superior/inferior, `45°` a un cuarto/tres cuartos y `90°` en el eje central.
+- No cambian `CourtLocation`, la normalizacion de taps ni el almacenamiento `x/y`; eventos actuales y legacy conservan su posicion relativa.
+- La derivacion de sectores sigue limitada a `0°-90°` y mantiene marco/lado espejados desde el centro de la cancha.
+
+QA manual:
+
+- Verificar mapa de input en telefono portrait y tablet landscape, incluyendo botones inferiores.
+- Marcar ambos lados de ambos marcos cerca de `0°`, `45°` y `90°` y comprobar las bandas tacticas resultantes.
+- Revisar mapas live, resumen de tiempo y resumen final sin solapamientos ni ruido visual.
+
+#### Polish de guias angulares
+
+Estado: implementado el 2026-06-20; QA visual en telefono pendiente.
+
+- Se reemplazan los labels angulares repetidos dentro de la cancha por marcas cortas y neutras junto al arco.
+- `CourtMapInput` explica la escala una sola vez con una leyenda compacta: `0° fondo · 45° intermedio · 90° centro del área`.
+- Se preservan los semicirculos ampliados y las guias siguen siendo exclusivas del input.
+- No cambian coordenadas normalizadas, math tactico, eventos ni exportacion.
+
+#### Ajuste fino de altura del semicirculo
+
+Estado: implementado el 2026-06-20; QA visual en dispositivos pendiente.
+
+- Se conserva el ancho ampliado del area, pero se reduce moderadamente su altura visual.
+- El margen superior e inferior aumenta para separar mejor fondo/laterales del arco y facilitar marcas cercanas a 0°.
+- Ticks y leyenda compacta permanecen sin cambios; coordenadas y sectores tacticos no se modifican.
+
 ## Requisitos No Funcionales
 
 - Offline-first.

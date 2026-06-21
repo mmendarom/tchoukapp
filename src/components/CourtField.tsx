@@ -4,12 +4,13 @@ import { LayoutChangeEvent, StyleProp, StyleSheet, Text, View, ViewStyle } from 
 type CourtFieldProps = {
   children?: ReactNode;
   onLayout?: (event: LayoutChangeEvent) => void;
+  showDegreeGuides?: boolean;
   showLabels?: boolean;
   style?: StyleProp<ViewStyle>;
 };
 
 export const CourtField = forwardRef<View, CourtFieldProps>(function CourtField(
-  { children, onLayout, showLabels = false, style },
+  { children, onLayout, showDegreeGuides = false, showLabels = false, style },
   ref,
 ) {
   return (
@@ -30,6 +31,13 @@ export const CourtField = forwardRef<View, CourtFieldProps>(function CourtField(
         <View style={[styles.forbiddenArea, styles.leftForbidden]} />
         <View style={[styles.forbiddenArea, styles.rightForbidden]} />
 
+        {showDegreeGuides && (
+          <>
+            <DegreeGuides side="left" />
+            <DegreeGuides side="right" />
+          </>
+        )}
+
         {showLabels && (
           <>
             <Text style={[styles.zoneLabel, styles.leftZoneLabel]}>Izquierda</Text>
@@ -44,6 +52,19 @@ export const CourtField = forwardRef<View, CourtFieldProps>(function CourtField(
     </View>
   );
 });
+
+function DegreeGuides({ side }: { side: 'left' | 'right' }) {
+  const sideStyle = side === 'left' ? styles.leftDegreeGuides : styles.rightDegreeGuides;
+  const tickSideStyle = side === 'left' ? styles.leftDegreeTick : styles.rightDegreeTick;
+
+  return (
+    <View style={[styles.degreeGuides, sideStyle]}>
+      <View style={[styles.degreeTick, tickSideStyle, styles.degreeUpperMid]} />
+      <View style={[styles.degreeTick, tickSideStyle, styles.degreeCenter]} />
+      <View style={[styles.degreeTick, tickSideStyle, styles.degreeLowerMid]} />
+    </View>
+  );
+}
 
 const styles = StyleSheet.create({
   court: {
@@ -115,7 +136,7 @@ const styles = StyleSheet.create({
   },
   frameArea: {
     position: 'absolute',
-    width: '12%',
+    width: '18%',
     top: 0,
     bottom: 0,
     backgroundColor: 'rgba(11, 107, 203, 0.07)',
@@ -132,19 +153,55 @@ const styles = StyleSheet.create({
   },
   forbiddenArea: {
     position: 'absolute',
-    top: '16%',
-    width: '32%',
-    height: '68%',
+    top: '10%',
+    width: '52%',
+    height: '80%',
     borderRadius: 999,
     borderWidth: 2,
     borderColor: 'rgba(180, 35, 24, 0.45)',
     backgroundColor: 'rgba(180, 35, 24, 0.06)',
   },
   leftForbidden: {
-    left: '-16%',
+    left: '-26%',
   },
   rightForbidden: {
-    right: '-16%',
+    right: '-26%',
+  },
+  degreeGuides: {
+    position: 'absolute',
+    top: 0,
+    bottom: 0,
+    width: '27%',
+  },
+  leftDegreeGuides: {
+    left: 0,
+  },
+  rightDegreeGuides: {
+    right: 0,
+  },
+  degreeTick: {
+    position: 'absolute',
+    width: 12,
+    height: 1,
+    borderRadius: 1,
+    backgroundColor: 'rgba(11, 31, 51, 0.22)',
+  },
+  leftDegreeTick: {
+    right: 1,
+  },
+  rightDegreeTick: {
+    left: 1,
+  },
+  degreeUpperMid: {
+    top: '25%',
+  },
+  degreeCenter: {
+    top: '50%',
+    height: 2,
+    backgroundColor: 'rgba(11, 31, 51, 0.3)',
+  },
+  degreeLowerMid: {
+    top: '75%',
   },
   zoneLabel: {
     position: 'absolute',
