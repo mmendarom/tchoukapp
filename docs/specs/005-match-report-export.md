@@ -398,14 +398,14 @@ No incluir una lista cruda completa como seccion principal en v2.
 
 ### Mapas/heatmaps en PDF
 
-Enfoque elegido: inline SVG dentro del HTML del PDF.
+Enfoque actual: cancha HTML/CSS print-safe dentro del HTML del PDF.
 
 Motivos:
 
-- Funciona dentro de HTML generado para `expo-print`.
+- Evita depender del soporte de SVG de `expo-print`, que puede renderizar mapas invisibles o recortados en algunos PDFs.
 - No depende de componentes React Native.
 - No requiere dependencias nuevas.
-- Permite dibujar cancha, marcos y puntos desde coordenadas normalizadas.
+- Permite dibujar cancha, marcos y puntos desde coordenadas normalizadas con contenedores HTML de alto fijo.
 - Es testeable como string HTML.
 
 Reglas:
@@ -418,13 +418,15 @@ Reglas:
 - Renderizar mapas por tiempo y mapas totales.
 - Usar puntos con tamano/opacidad por densidad cercana como primer heatmap liviano.
 
-Implementado en `src/export/reportHtml.ts` con SVG inline:
+Implementado en `src/export/reportHtml.ts` con HTML/CSS:
 
 - Mapa `Donde hicimos los puntos`.
 - Mapa `Donde nos hicieron puntos`.
 - Mapa `Donde nos defendieron`.
 - Mapas por tiempo y mapas totales.
 - Fallback visible `Sin ubicaciones registradas`.
+- Contenedor `report-court-map` con alto fijo, fondo, borde, linea central, areas laterales y frames.
+- Marcadores `report-map-point` con `data-normalized-x/y`, posicionados por porcentaje y diferenciados por color.
 - Sin dependencias nuevas.
 - El HTML declara `UTF-8` y el fallback textual usa strings UTF-8 normales para evitar mojibake en acentos.
 
@@ -432,13 +434,14 @@ Refinamiento de legibilidad PDF:
 
 - Los mapas del PDF se renderizan como bloques grandes de ancho completo, uno por fila.
 - Se reemplazo el layout anterior de tres mapas pequenos en una fila.
-- Cada cancha SVG usa un viewBox mas grande y una altura de render cercana a 260px.
+- Cada cancha usa altura fija cercana a 260px para evitar contenedores colapsados en PDF.
 - Los marcadores son mas visibles, mantienen forma circular y usan colores por tipo:
   - azul para puntos de Uruguay;
   - rojo para puntos del rival;
   - violeta para defensas del rival.
 - Las secciones `Mapas del tiempo` y `Mapas totales` usan reglas CSS para evitar titulos huerfanos y cortes internos de tarjetas.
 - El modelo de coordenadas normalizadas no cambia.
+- Los mapas de la app (`CourtMapInput`, `CourtMapSummary`, `CourtLocationMap`) no cambian.
 
 Limitaciones:
 

@@ -179,6 +179,29 @@ Estado: Implemented.
   - no usa la clase vieja `map-grid`;
   - no genera `NaN` ni `undefined` en coordenadas.
 
+#### Refinamiento - mapas PDF print-safe
+
+Estado: Implemented.
+
+- [x] Reemplazar el renderer SVG inline por una cancha HTML/CSS especifica para reporte.
+- [x] Usar `report-court-map` con ancho 100%, alto fijo y `min-height`.
+- [x] Dibujar cancha con CSS:
+  - fondo visible;
+  - borde;
+  - linea central;
+  - areas laterales aproximadas;
+  - frames izquierdo/derecho.
+- [x] Renderizar marcadores como `report-map-point` con posicion absoluta.
+- [x] Guardar coordenadas normalizadas en `data-normalized-x/y` para test/debug.
+- [x] Mantener colores print-safe y `print-color-adjust: exact`.
+- [x] Mantener intactos `landingLocation`, `defenseLocation`, mapas de app y sectores tacticos.
+- [x] Tests de HTML:
+  - contiene `report-court-map`;
+  - contiene `report-map-point`;
+  - contiene coordenadas normalizadas;
+  - no depende de `<svg`;
+  - muestra `Sin ubicaciones registradas.` cuando no hay datos.
+
 ### Stage 4 - Fallback textual v2
 
 - [x] Evolucionar `buildMatchReportText`.

@@ -1,5 +1,26 @@
 # Implementation Log
 
+## 2026-06-21 - PDF report map rendering fix
+
+Se corrigio el render de mapas en reportes PDF sin cambiar modelos de eventos, scoring, tracking, coordenadas normalizadas, sectores tacticos ni mapas de la app.
+
+- `src/export/reportHtml.ts` reemplaza el mapa SVG inline por una cancha HTML/CSS print-safe.
+- La cancha del reporte usa `report-court-map` con alto fijo, `min-height`, fondo, borde, linea central, areas laterales aproximadas y frames.
+- Los puntos se renderizan como `report-map-point` con `position: absolute`, coordenadas porcentuales y atributos `data-normalized-x/y`.
+- Los colores usan `print-color-adjust: exact` para mejorar visibilidad en Expo Print/PDF.
+- Los mapas vacios muestran `Sin ubicaciones registradas.`
+- `CourtMapInput`, `CourtMapSummary`, `CourtLocationMap`, `landingLocation`, `defenseLocation` y la matematica de sectores no cambian.
+
+QA manual recomendado:
+
+- Exportar un partido con puntos Uruguay, puntos rivales y defensas rivales con ubicacion.
+- Abrir el PDF generado.
+- Confirmar que `Mapas del tiempo` y `Mapas totales` muestran cancha visible.
+- Confirmar que los puntos son visibles y no quedan recortados en bordes.
+- Confirmar que mapas sin datos muestran `Sin ubicaciones registradas.`
+- Confirmar que no aparecen guias de grados dentro del mapa.
+- Confirmar que las tablas de sectores tacticos siguen coincidiendo con las ubicaciones.
+
 ## 2026-06-20 - Plantel default Femenino
 
 Se agrego un tercer plantel fijo sin cambiar score, tracking, eventos, mapas, snapshots historicos ni backup/import.
@@ -220,7 +241,6 @@ QA manual recomendado:
 - Registrar 3 o mas defensas rivales con mapa en la misma area y confirmar el mismo formato tactico, sin texto generico.
 - Finalizar el tiempo y confirmar que `Lectura del tiempo` mantiene los sectores tacticos.
 - Finalizar el partido y confirmar que el resumen final sigue funcionando.
-
 ## 2026-06-19 - Tactical angle sectors and final report propagation
 
 Se agregaron sectores tacticos por angulo sin cambiar modelos de eventos, scoring, tracking, coordenadas normalizadas, mapas ni dependencias.

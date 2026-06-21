@@ -250,9 +250,9 @@ const densityForLocation = (location: CourtLocation, locations: CourtLocation[])
   locations.filter((other) => Math.hypot(location.x - other.x, location.y - other.y) <= 0.08).length;
 
 const markerStyles = {
-  uruguay: { fill: '#0b6bcb', stroke: '#073f78' },
-  opponent: { fill: '#e84f3d', stroke: '#7a1f14' },
-  opponentDefense: { fill: '#7c3aed', stroke: '#4c1d95' },
+  uruguay: { fill: '#0b6bcb', stroke: '#073f78', label: 'Punto Uruguay' },
+  opponent: { fill: '#e84f3d', stroke: '#7a1f14', label: 'Punto rival' },
+  opponentDefense: { fill: '#7c3aed', stroke: '#4c1d95', label: 'Defensa rival' },
 };
 
 export const renderReportCourtMap = (
@@ -260,22 +260,26 @@ export const renderReportCourtMap = (
   locations: CourtLocation[],
   markerVariant: keyof typeof markerStyles = 'uruguay',
 ) => {
-  const width = 640;
-  const height = 360;
-  const margin = 24;
-  const innerWidth = width - margin * 2;
-  const innerHeight = height - margin * 2;
   const markerStyle = markerStyles[markerVariant];
 
   const markers = locations
     .map((location, index) => {
-      const x = margin + Math.min(Math.max(location.x, 0), 1) * innerWidth;
-      const y = margin + Math.min(Math.max(location.y, 0), 1) * innerHeight;
+      const normalizedX = Math.min(Math.max(location.x, 0), 1);
+      const normalizedY = Math.min(Math.max(location.y, 0), 1);
+      const x = 4 + normalizedX * 92;
+      const y = 6 + normalizedY * 88;
       const density = densityForLocation(location, locations);
-      const radius = Math.min(5.5 + density * 1.6, 13);
-      const opacity = Math.min(0.52 + density * 0.11, 0.94);
+      const size = Math.min(11 + density * 3, 25);
+      const opacity = Math.min(0.66 + density * 0.08, 0.96);
 
-      return `<circle data-map-point="${index}" cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${radius.toFixed(1)}" fill="${markerStyle.fill}" fill-opacity="${opacity.toFixed(2)}" stroke="${markerStyle.stroke}" stroke-width="1.2" />`;
+      return `<span
+        class="report-map-point"
+        data-map-point="${index}"
+        data-normalized-x="${normalizedX.toFixed(3)}"
+        data-normalized-y="${normalizedY.toFixed(3)}"
+        aria-label="${escapeHtml(markerStyle.label)} ${index + 1}"
+        style="left:${x.toFixed(2)}%; top:${y.toFixed(2)}%; width:${size.toFixed(1)}px; height:${size.toFixed(1)}px; margin-left:${(-size / 2).toFixed(1)}px; margin-top:${(-size / 2).toFixed(1)}px; background:${markerStyle.fill}; border-color:${markerStyle.stroke}; opacity:${opacity.toFixed(2)};"
+      ></span>`;
     })
     .join('');
 
@@ -284,14 +288,15 @@ export const renderReportCourtMap = (
       <h4>${escapeHtml(title)}</h4>
       ${
         locations.length === 0
-          ? '<div class="empty-map">Sin ubicaciones registradas</div>'
-          : `<svg class="court-map" viewBox="0 0 ${width} ${height}" role="img" aria-label="${escapeHtml(title)}">
-              <rect x="${margin}" y="${margin}" width="${innerWidth}" height="${innerHeight}" rx="8" fill="#fbfdf8" stroke="#1f6b4d" stroke-width="2" />
-              <line x1="${width / 2}" y1="${margin}" x2="${width / 2}" y2="${height - margin}" stroke="#9cb7aa" stroke-width="1.5" stroke-dasharray="5 5" />
-              <path d="M ${margin} ${height / 2 - 88} A 92 92 0 0 1 ${margin} ${height / 2 + 88}" fill="none" stroke="#9cb7aa" stroke-width="1.5" />
-              <path d="M ${width - margin} ${height / 2 - 88} A 92 92 0 0 0 ${width - margin} ${height / 2 + 88}" fill="none" stroke="#9cb7aa" stroke-width="1.5" />
+          ? '<div class="empty-map">Sin ubicaciones registradas.</div>'
+          : `<div class="report-court-map" role="img" aria-label="${escapeHtml(title)}">
+              <div class="report-court-center-line"></div>
+              <div class="report-court-area report-court-area-left"></div>
+              <div class="report-court-area report-court-area-right"></div>
+              <div class="report-court-frame report-court-frame-left"></div>
+              <div class="report-court-frame report-court-frame-right"></div>
               ${markers}
-            </svg>`
+            </div>`
       }
     </div>
   `;
@@ -414,9 +419,17 @@ export function buildMatchReportHtml(report: MatchReportData) {
     .report-map-section { break-inside: avoid; page-break-inside: avoid; margin-top: 14px; }
     .report-map-section h3 { break-after: avoid; page-break-after: avoid; margin-top: 18px; }
     .map-stack { display: block; margin-top: 8px; }
-    .map-card { border: 1px solid #dbe4ef; border-radius: 8px; padding: 14px; background: #f7fafc; break-inside: avoid; page-break-inside: avoid; margin: 0 0 16px; }
+    .map-card { border: 1px solid #dbe4ef; border-radius: 8px; padding: 14px; background: #f7fafc; break-inside: avoid; page-break-inside: avoid; margin: 0 0 16px; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
     .map-card h4 { font-size: 15px; margin-bottom: 10px; }
-    .court-map { width: 100%; height: 260px; display: block; }
+    .report-court-map { position: relative; width: 100%; height: 260px; min-height: 260px; display: block; overflow: hidden; border: 2px solid #1f6b4d; border-radius: 8px; background: #fbfdf8; box-sizing: border-box; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    .report-court-center-line { position: absolute; top: 0; bottom: 0; left: 50%; width: 0; border-left: 2px dashed #9cb7aa; }
+    .report-court-area { position: absolute; top: 50%; width: 110px; height: 170px; margin-top: -85px; border: 2px solid #9cb7aa; background: rgba(156, 183, 170, 0.08); }
+    .report-court-area-left { left: -58px; border-radius: 0 100px 100px 0; }
+    .report-court-area-right { right: -58px; border-radius: 100px 0 0 100px; }
+    .report-court-frame { position: absolute; top: 50%; width: 12px; height: 72px; margin-top: -36px; background: #19344d; border-radius: 8px; }
+    .report-court-frame-left { left: 7px; }
+    .report-court-frame-right { right: 7px; }
+    .report-map-point { position: absolute; z-index: 4; display: block; border: 2px solid; border-radius: 999px; box-shadow: 0 0 0 3px rgba(255,255,255,0.72); box-sizing: border-box; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
     .empty-map { height: 220px; border: 1px dashed #b7c5d3; border-radius: 8px; display: flex; align-items: center; justify-content: center; color: #5d6b7a; font-size: 13px; text-align: center; padding: 12px; }
     .muted { color: #5d6b7a; }
     section { break-inside: auto; margin-bottom: 14px; }
