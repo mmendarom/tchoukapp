@@ -253,3 +253,36 @@ Estado: Implemented.
 - La UI de resumen final queda demasiado cargada.
 - El HTML SVG no se renderiza bien en `expo-print` en algun dispositivo.
 - El reporte se vuelve demasiado largo para compartir.
+
+## Stage 6 - Report Export v3.1 visual digest
+
+Estado: implementado el 2026-06-20; QA de PDF nativo pendiente.
+
+1. Reemplazar las barras absolutas por pistas simples print-safe con altura, fondo y anchos inline explicitos.
+2. Ordenar y limitar visualmente ataque/defensa a 7 filas, manteniendo fallback textual y contador de filas restantes.
+3. Crear helpers puros de presentacion en `reportHtml.ts` para priorizar y compactar lecturas sin modificar recomendaciones live.
+4. Limitar highlights a 3 ejecutivos, 5 por tiempo y 6 finales; relegar baja participacion cuando haya alertas mas utiles.
+5. Renderizar sectores top 5 con barras de conteo y counts alineados.
+6. Reequilibrar resumen ejecutivo y aplicar reglas de paginacion print-safe.
+7. Compactar texto compartible a score, tops, efectividad y sectores principales.
+8. Actualizar tests de HTML/texto, documentar QA manual y validar `npm test`, `npx tsc --noEmit`, `git diff --check`.
+
+## Stage 6.1 - Categoria y ranking consistente
+
+Estado: implementado el 2026-06-20; QA manual de PDF pendiente.
+
+1. Derivar nombre visible Uruguay + plantel en `reportData` y usarlo en `matchLabel`/resultado ejecutivo.
+2. Corregir ranking de efectividad a goles, intentos, efectividad, menos errados y nombre.
+3. Entregar `performance.rows` en orden ofensivo principal y ordenar la tarjeta defensiva por defensas/share.
+4. Normalizar listas de stats negativas y sectores a conteo descendente.
+5. Cubrir categoria/fallback y casos `8/11` vs `1/1` en tests.
+
+## Stage 6.2 - Nombre visible del equipo propio
+
+Estado: implementado el 2026-06-20; QA manual de PDF nativo pendiente.
+
+1. Crear helper puro `getOwnTeamDisplayName`/`getMatchupDisplayName` con fallback `Equipo`.
+2. Agregar `ownTeamName` a `MatchReportData` sin cambiar datos persistidos.
+3. Parametrizar scores, stats y vacios del HTML/texto con el nombre propio.
+4. Cubrir `Mayores`, `+40` y match legacy sin `teamPoolName`.
+5. Reutilizar el helper en pantallas de partido y usar labels genericos en acciones compactas.

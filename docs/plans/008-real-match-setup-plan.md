@@ -255,7 +255,7 @@ Estado: Implemented.
 ### Cambios implementados
 
 1. `Crear partido` lista los planteles persistidos del store.
-2. `Mayores`, `+40` y planteles creados por el usuario pueden seleccionarse.
+2. `Mayores`, `+40`, `Femenino` y planteles creados por el usuario pueden seleccionarse.
 3. Al cambiar de plantel se limpian titulares para evitar mezclar jugadores de otro pool.
 4. La seleccion de titulares muestra solo jugadores del plantel elegido.
 5. El partido se crea con `teamPoolId`, `teamPoolName` y `availablePlayerIds` del pool seleccionado.
@@ -409,3 +409,22 @@ Estado: Implemented.
 - `docs/specs/008-real-match-setup.md`
 - `docs/implementation-log.md`
 - `docs/decisions/*` si se decide nombre/campo persistido final para convocados o presets.
+
+## Ajuste de identidad visible
+
+Estado: implementado el 2026-06-20; QA manual en telefono pendiente.
+
+1. Centralizar el nombre visible desde el snapshot `teamPoolName` del partido.
+2. Reemplazar matchup, score y cards visibles que asumen Uruguay.
+3. Mantener branding institucional separado de la identidad competitiva del partido.
+4. Validar planteles `Mayores`, `+40`, clubes y fallback legacy `Equipo`.
+
+## Plantel default Femenino
+
+Estado: implementado el 2026-06-20; QA manual pendiente.
+
+1. Definir 16 jugadores default con ids estables `femenino-*`, numeros 1-16 y metadata valida.
+2. Agregar `femeninoPlayerIds` y el pool fijo `femenino` sin modificar los rosters de `Mayores` ni `+40`.
+3. Subir la persistencia a v9 para mergear jugadores faltantes por id y asegurar defaults sin duplicar ni borrar datos locales.
+4. Cubrir normalizacion, reset y creacion de partido con tests de dominio/store.
+5. Documentar QA manual y validar tests, TypeScript y diff.

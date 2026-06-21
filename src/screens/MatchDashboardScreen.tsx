@@ -6,6 +6,7 @@ import { Screen } from '../components/Screen';
 import { StatCard } from '../components/StatCard';
 import { createTacticalInsights } from '../domain/insights';
 import { normalizeOpponentName } from '../domain/opponent';
+import { getOwnTeamDisplayName } from '../domain/teamLabels';
 import {
   calculateScore,
   getDefensesByPlayer,
@@ -47,6 +48,7 @@ export function MatchDashboardScreen({ navigation, route }: Props) {
   };
   const score = calculateScore(match.events);
   const opponentName = normalizeOpponentName(match.opponent);
+  const ownTeamName = getOwnTeamDisplayName(match);
   const topScorers = getTopScorers(match.events);
   const errorsByPlayer = getErrorsByPlayer(match.events);
   const errorBreakdown = getErrorsByTypeByPlayer(match.events);
@@ -67,13 +69,13 @@ export function MatchDashboardScreen({ navigation, route }: Props) {
     <Screen>
       <View style={styles.header}>
         <Text style={styles.kicker}>{statusLabel[match.status].toUpperCase()}</Text>
-        <Text style={styles.title}>Uruguay {score.uruguay} - {score.opponent} {opponentName}</Text>
+        <Text style={styles.title}>{ownTeamName} {score.uruguay} - {score.opponent} {opponentName}</Text>
       </View>
 
       <View style={styles.statsRow}>
         <StatCard label="Acciones" value={match.events.length} />
         <StatCard label="Set" value={match.clock.period} />
-        <StatCard label="Puntos Uruguay" value={score.uruguay} />
+        <StatCard label={`Puntos ${ownTeamName}`} value={score.uruguay} />
         <StatCard label="Puntos rival" value={score.opponent} />
         <StatCard label="En contra rival" value={opponentOwnPoints} />
         <StatCard label="Def. rival" value={opponentDefenses.length} />
@@ -89,7 +91,7 @@ export function MatchDashboardScreen({ navigation, route }: Props) {
           ))}
         </View>
         <View style={[styles.panel, isPhone && styles.panelPhone]}>
-          <Text style={styles.sectionTitle}>Defensas Uruguay</Text>
+          <Text style={styles.sectionTitle}>Defensas {ownTeamName}</Text>
           {defensesByPlayer.map((stat) => (
             <Text key={stat.playerId} style={styles.metric}>
               {playerLabel(stat.playerId)}: {stat.total}

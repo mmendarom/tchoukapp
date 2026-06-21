@@ -11,6 +11,7 @@ import { normalizeOpponentName } from '../domain/opponent';
 import { groupOpponentDefensesByTacticalSector, groupOpponentPointsByTacticalSector, groupPointsByZone } from '../domain/court';
 import { buildPlayerPerformance } from '../domain/playerPerformance';
 import { buildMatchReportData } from '../domain/reportData';
+import { getOwnTeamDisplayName } from '../domain/teamLabels';
 import { exportMatchReportPdf } from '../export/exportMatchReport';
 import { buildMatchReportText } from '../export/reportHtml';
 import {
@@ -91,6 +92,7 @@ export function FinalSummaryScreen({ navigation, route }: Props) {
   };
   const totalScore = calculateTotalScore(match.events);
   const opponentName = normalizeOpponentName(match.opponent);
+  const ownTeamName = getOwnTeamDisplayName(match);
   const scoreByPeriod = getScoreByPeriod(match.events);
   const scorers = getPointsByPlayer(match.events);
   const errors = getErrorsByPlayer(match.events);
@@ -117,10 +119,10 @@ export function FinalSummaryScreen({ navigation, route }: Props) {
     <Screen>
       <View style={styles.hero}>
         <Text style={styles.heroEyebrow}>Resumen final del partido</Text>
-        <Text style={styles.heroScore}>Uruguay {totalScore.uruguay} - {totalScore.opponent} {opponentName}</Text>
+        <Text style={styles.heroScore}>{ownTeamName} {totalScore.uruguay} - {totalScore.opponent} {opponentName}</Text>
       </View>
       <View style={[styles.statGrid, isWide && styles.statGridWide]}>
-        <SummaryStatCard accentColor="#0b6bcb" label="Ataque" value={`${attackTotal}`} detail="puntos Uruguay" />
+        <SummaryStatCard accentColor="#0b6bcb" label="Ataque" value={`${attackTotal}`} detail={`puntos ${ownTeamName}`} />
         <SummaryStatCard accentColor="#0f766e" label="Defensa" value={`${defenseTotal}`} detail="defensas" />
         <SummaryStatCard accentColor="#b45309" label="Errores" value={`${errorsTotal}`} detail="propios" />
         <SummaryStatCard accentColor="#6d28d9" label="Efectividad" value={teamEffectiveness} detail={`${teamGoals}/${teamShotAttempts} en tiros`} />
@@ -129,7 +131,7 @@ export function FinalSummaryScreen({ navigation, route }: Props) {
         <Text style={styles.sectionTitle}>Resultado por tiempos</Text>
         {scoreByPeriod.map((item) => (
           <Text key={item.periodNumber} style={styles.metric}>
-            Tiempo {item.periodNumber}: Uruguay {item.score.uruguay} - {item.score.opponent}
+            Tiempo {item.periodNumber}: {ownTeamName} {item.score.uruguay} - {item.score.opponent}
           </Text>
         ))}
       </View>
@@ -146,7 +148,7 @@ export function FinalSummaryScreen({ navigation, route }: Props) {
         <Text style={styles.sectionTitle}>Efectividad ofensiva total</Text>
         {effectivenessRows.length === 0 ? <Text style={styles.metric}>Sin tiros registrados.</Text> : effectivenessRows.map((row) => (
           <Text key={row.playerId} style={styles.metric}>
-            {row.playerName}: {row.goals}/{row.shotAttempts} tiros · {Math.round(row.effectiveness * 100)}% · {row.rivalDefendedShots} atajados
+            {row.playerName}: {row.goals}/{row.shotAttempts} tiros · {Math.round(row.effectiveness * 100)}% · {row.rivalDefendedShots} atajados · {row.ownPointsAgainst} errados
           </Text>
         ))}
       </View>
@@ -158,7 +160,7 @@ export function FinalSummaryScreen({ navigation, route }: Props) {
         {scorers.map((stat) => <Text key={stat.playerId} style={styles.metric}>{playerName(stat.playerId)}: {stat.total}</Text>)}
       </View>
       <View style={styles.card}>
-        <Text style={styles.sectionTitle}>Defensas Uruguay</Text>
+        <Text style={styles.sectionTitle}>Defensas {ownTeamName}</Text>
         {defenses.length === 0 ? <Text style={styles.metric}>Sin defensas registradas.</Text> : defenses.map((stat) => (
           <Text key={stat.playerId} style={styles.metric}>{playerName(stat.playerId)}: {stat.total}</Text>
         ))}

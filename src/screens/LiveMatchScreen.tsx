@@ -18,6 +18,7 @@ import { buildLivePlayerPerformance } from '../domain/playerPerformance';
 import { calculateTotalScore, formatPeriodName, formatTimer, getEventsByPeriod } from '../domain/periodStats';
 import { getCurrentLineup } from '../domain/stats';
 import { CourtLocation, MatchEvent, Player } from '../domain/types';
+import { getOwnTeamDisplayName } from '../domain/teamLabels';
 import { useMatchStore } from '../store/useMatchStore';
 import { eventKindLabel, safeErrorLabel, statusLabel, zoneLabel } from '../utils/labels';
 import { RootStackParamList } from '../utils/navigation';
@@ -40,7 +41,7 @@ const describeEvent = (event: MatchEvent, players: Player[]) => {
   switch (event.kind) {
     case 'point':
       if (event.pointSource === 'opponent_own_point') {
-        return 'Punto en contra rival (+1 Uruguay)';
+        return 'Punto en contra rival (+1 propio)';
       }
 
       return `${eventKindLabel(event)} - ${getPlayerName(players, event.playerId)} - ${zoneLabel[event.zone]}`;
@@ -66,6 +67,7 @@ const describeEvent = (event: MatchEvent, players: Player[]) => {
 export function LiveMatchScreen({ navigation, route }: Props) {
   const { height, width } = useWindowDimensions();
   const isPhone = width < 768;
+  const isCompactHeader = width < 430;
   const isTabletLandscape = width >= 900 && width > height;
   const [selectedPlayerId, setSelectedPlayerId] = useState<string | undefined>();
   const [changeModeActive, setChangeModeActive] = useState(false);
@@ -220,9 +222,11 @@ export function LiveMatchScreen({ navigation, route }: Props) {
 
   const score = useMemo(() => calculateTotalScore(match.events), [match.events]);
   const canRecord = match.status === 'live' && currentPeriodState?.status === 'live';
+  const canChangeLineup = Boolean(currentLineup) && match.status !== 'finished' && match.status !== 'cancelled';
   const recentActionLimit = isTabletLandscape ? 10 : 5;
   const recentEvents = useMemo(() => match.events.slice(0, recentActionLimit), [match.events, recentActionLimit]);
   const opponentName = normalizeOpponentName(match.opponent);
+  const ownTeamName = getOwnTeamDisplayName(match);
   const timerText = currentPeriodState?.remainingSeconds === 0 ? 'Tiempo cumplido' : formatTimer(currentPeriodState?.remainingSeconds ?? 0);
   const shouldShowLiveMaps = match.status === 'live';
   const toggleLiveMapsExpanded = useCallback(() => setLiveMapsExpanded((current) => !current), []);
@@ -428,7 +432,7 @@ export function LiveMatchScreen({ navigation, route }: Props) {
     setErrorModalVisible(false);
     setSelectedErrorPlayerId(undefined);
     recordOpponentOwnPoint();
-    setFeedbackMessage('Punto en contra rival (+1 Uruguay)');
+    setFeedbackMessage('Punto en contra rival (+1 propio)');
   };
 
   const confirmError = (errorType: 'falta' | 'punto_en_contra') => {
@@ -454,8 +458,8 @@ export function LiveMatchScreen({ navigation, route }: Props) {
   };
 
   const prepareSubstitutionAction = () => {
-    if (!canRecord) {
-      setFeedbackMessage('Iniciá el tiempo para registrar cambios.');
+    if (!canChangeLineup) {
+      setFeedbackMessage('No se puede modificar la formación de este partido.');
       return false;
     }
 
@@ -576,13 +580,9 @@ export function LiveMatchScreen({ navigation, route }: Props) {
 
           <View style={styles.scoreboardScoreRow}>
           <View style={styles.scoreBlock}>
-            <Text numberOfLines={1} adjustsFontSizeToFit style={styles.teamLabel}>URU</Text>
-            <Text style={styles.score}>{score.uruguay}</Text>
+            <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.5} style={styles.teamLabel}>{ownTeamName}</Text>
+            <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.45} style={[styles.score, isCompactHeader && styles.scoreCompact]}>{score.uruguay}</Text>
           </View>
-
-          {match.teamPoolName && (
-            <Text numberOfLines={1} style={styles.poolLabel}>Plantel: {match.teamPoolName}</Text>
-          )}
 
           <View style={styles.matchMeta}>
             <Text numberOfLines={1} adjustsFontSizeToFit style={styles.matchTitle}>vs {opponentName}</Text>
@@ -590,7 +590,7 @@ export function LiveMatchScreen({ navigation, route }: Props) {
 
           <View style={styles.scoreBlock}>
             <Text numberOfLines={1} adjustsFontSizeToFit style={styles.teamLabel}>RIVAL</Text>
-            <Text style={styles.score}>{score.opponent}</Text>
+            <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.45} style={[styles.score, isCompactHeader && styles.scoreCompact]}>{score.opponent}</Text>
           </View>
         </View>
 
@@ -717,7 +717,7 @@ export function LiveMatchScreen({ navigation, route }: Props) {
                 onPress={openUruguayPointFlow}
                 style={({ pressed }) => [styles.actionCard, styles.uruguayButton, !canRecord && styles.disabledButton, pressed && styles.pressed]}
               >
-                <Text numberOfLines={2} adjustsFontSizeToFit style={styles.actionButtonLabel}>Punto Uruguay</Text>
+                <Text numberOfLines={2} adjustsFontSizeToFit style={styles.actionButtonLabel}>Punto nuestro</Text>
                 <Text numberOfLines={1} adjustsFontSizeToFit style={styles.actionButtonHint}>{getPlayerName(players, selectedPlayerId)}</Text>
               </Pressable>
 
@@ -788,7 +788,7 @@ export function LiveMatchScreen({ navigation, route }: Props) {
                 ]}
               >
                 <Text numberOfLines={2} adjustsFontSizeToFit style={styles.actionButtonLabel}>En contra rival</Text>
-                <Text numberOfLines={1} adjustsFontSizeToFit style={styles.actionButtonHint}>+1 Uruguay</Text>
+                <Text numberOfLines={1} adjustsFontSizeToFit style={styles.actionButtonHint}>+1 propio</Text>
               </Pressable>
             </View>
 
@@ -862,7 +862,12 @@ export function LiveMatchScreen({ navigation, route }: Props) {
                 </Pressable>
               </View>
             ) : (
-              <ActionButton label="Cambiar jugadores" onPress={startChangeMode} variant="secondary" />
+              canChangeLineup && (
+                <>
+                  {!canRecord && <Text style={styles.sectionLabel}>Podés ajustar la formación antes de iniciar el tiempo.</Text>}
+                  <ActionButton label="Cambiar jugadores" onPress={startChangeMode} variant="secondary" />
+                </>
+              )
             )}
           </View>
 
@@ -966,12 +971,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    gap: spacing.sm,
+    gap: spacing.xs,
     marginTop: spacing.xs,
   },
   scoreBlock: {
-    flex: 1,
-    minWidth: 64,
+    flex: 0.85,
+    minWidth: 0,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -985,15 +990,22 @@ const styles = StyleSheet.create({
   },
   score: {
     color: '#ffffff',
+    width: '100%',
     fontSize: 54,
     fontWeight: '900',
     lineHeight: 56,
+    textAlign: 'center',
+  },
+  scoreCompact: {
+    fontSize: 46,
+    lineHeight: 48,
   },
   matchMeta: {
-    flex: 1.25,
-    minWidth: 96,
+    flex: 1.3,
+    minWidth: 0,
     alignItems: 'center',
     justifyContent: 'center',
+    gap: 2,
   },
   setIndicator: {
     borderRadius: 8,
@@ -1028,7 +1040,7 @@ const styles = StyleSheet.create({
     fontWeight: '900',
   },
   poolLabel: {
-    alignSelf: 'center',
+    alignSelf: 'stretch',
     borderRadius: 8,
     backgroundColor: 'rgba(139, 211, 255, 0.16)',
     color: '#d7e5f2',
@@ -1039,6 +1051,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.sm,
     paddingVertical: 3,
     textAlign: 'center',
+  },
+  poolLabelCompact: {
+    fontSize: fontSize.tiny,
+    paddingHorizontal: spacing.xs,
   },
   mainGrid: {
     flexDirection: 'row',

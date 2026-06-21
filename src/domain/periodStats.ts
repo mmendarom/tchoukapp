@@ -343,7 +343,7 @@ export function generatePeriodInsights(match: Match, periodNumber: MatchPeriod, 
     insights.push({
       severity: puntosEnContraTotal >= 4 ? 'critical' : 'warning',
       title: 'Puntos regalados',
-      description: `Uruguay entrego ${puntosEnContraTotal} puntos en contra en este tiempo.`,
+      description: `El equipo entregó ${puntosEnContraTotal} puntos en contra en este tiempo.`,
       suggestedAction: 'Bajar riesgo en los tiros y priorizar seguridad.',
     });
   }
@@ -370,7 +370,7 @@ export function generatePeriodInsights(match: Match, periodNumber: MatchPeriod, 
     insights.push({
       severity: 'info',
       title: 'Zona efectiva',
-      description: `Uruguay convirtio ${uruguayZone.total} puntos hacia ${uruguayZone.label.toLowerCase()}.`,
+      description: `El equipo convirtió ${uruguayZone.total} puntos hacia ${uruguayZone.label.toLowerCase()}.`,
       suggestedAction: 'Seguir explotando esa zona si el rival no ajusta.',
     });
   }
@@ -390,7 +390,7 @@ export function generatePeriodInsights(match: Match, periodNumber: MatchPeriod, 
     insights.push({
       severity: difference <= -4 ? 'critical' : 'warning',
       title: 'Tiempo desfavorable',
-      description: `Uruguay perdio este tiempo por ${Math.abs(difference)} puntos.`,
+      description: `El equipo perdió este tiempo por ${Math.abs(difference)} puntos.`,
       suggestedAction: 'Revisar errores propios, zonas vulnerables y formacion inicial del proximo tiempo.',
     });
   }
@@ -399,7 +399,7 @@ export function generatePeriodInsights(match: Match, periodNumber: MatchPeriod, 
     insights.push({
       severity: 'info',
       title: 'Tiempo positivo',
-      description: `Uruguay gano este tiempo por ${difference} puntos.`,
+      description: `El equipo ganó este tiempo por ${difference} puntos.`,
       suggestedAction: 'Mantener las decisiones que funcionaron y controlar la fatiga.',
     });
   }

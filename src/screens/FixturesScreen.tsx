@@ -14,7 +14,7 @@ export function FixturesScreen() {
       {fixtures.map((fixture) => (
         <View key={fixture.id} style={styles.card}>
           <Text style={styles.competition}>{fixture.competition}</Text>
-          <Text style={styles.opponent}>Uruguay vs {fixture.opponent}</Text>
+          <Text style={styles.opponent}>Equipo vs {fixture.opponent}</Text>
           <Text style={styles.meta}>{formatMatchDate(fixture.startsAt)} - {fixture.venue}</Text>
         </View>
       ))}

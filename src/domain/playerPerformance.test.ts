@@ -58,6 +58,20 @@ const opponentDefense = (overrides: Partial<MatchEvent> = {}): MatchEvent => ({
   ...overrides,
 } as MatchEvent);
 
+const ownPointAgainst = (overrides: Partial<MatchEvent> = {}): MatchEvent => ({
+  id: `own-point-${Math.random()}`,
+  matchId: 'match-1',
+  kind: 'error',
+  periodNumber: 1,
+  timestamp: '2026-01-01T00:00:00.000Z',
+  clock: { period: 1, secondsElapsed: 1 },
+  team: 'uruguay',
+  playerId: 'p1',
+  errorType: 'punto_en_contra',
+  pointAwardedTo: 'opponent',
+  ...overrides,
+} as MatchEvent);
+
 describe('playerPerformance', () => {
   const repeat = (count: number, createEvent: (index: number) => MatchEvent) =>
     Array.from({ length: count }, (_, index) => createEvent(index));
@@ -160,6 +174,32 @@ describe('playerPerformance', () => {
     });
   });
 
+  it('counts a Uruguay own point with playerId as a missed attack attempt', () => {
+    const data = buildPlayerPerformance([
+      ...repeat(8, (index) => point({ id: `goal-${index}`, playerId: 'p1' })),
+      ...repeat(2, (index) => opponentDefense({ id: `defended-${index}`, playerId: 'p1' })),
+      ownPointAgainst({ id: 'own-point', playerId: 'p1' }),
+    ], players);
+
+    expect(data.rows.find((row) => row.playerId === 'p1')).toMatchObject({
+      points: 8,
+      rivalDefensesAgainst: 2,
+      ownPointsAgainst: 1,
+      shotAttempts: 11,
+      effectiveness: 8 / 11,
+    });
+  });
+
+  it('does not attribute rival or playerless own points as individual attempts', () => {
+    const data = buildPlayerPerformance([
+      ownPointAgainst({ id: 'rival-own-point', team: 'opponent', playerId: 'p1' }),
+      ownPointAgainst({ id: 'playerless-own-point', playerId: undefined }),
+      point({ id: 'rival-point', scoringTeam: 'opponent', playerId: 'p1' }),
+    ], players);
+
+    expect(data.rows).toEqual([]);
+  });
+
   it('excludes legacy rival defenses without playerId from player effectiveness', () => {
     const data = buildPlayerPerformance([
       opponentDefense({ id: 'legacy-defense', playerId: undefined }),
@@ -251,6 +291,7 @@ describe('playerPerformance', () => {
       ...repeat(6, (index) => point({ id: `p1-goal-${index}`, playerId: 'p1' })),
       ...repeat(2, (index) => opponentDefense({ id: `p1-defended-${index}`, playerId: 'p1' })),
       point({ id: 'p2-goal', playerId: 'p2' }),
+      ...repeat(10, (index) => ownPointAgainst({ id: `p2-own-point-${index}`, playerId: 'p2' })),
       ...repeat(3, (index) => point({ id: `p3-goal-${index}`, playerId: 'p3' })),
       ...repeat(2, (index) => opponentDefense({ id: `p3-defended-${index}`, playerId: 'p3' })),
       ...repeat(2, (index) => point({ id: `p4-goal-${index}`, playerId: 'p4' })),
@@ -260,7 +301,7 @@ describe('playerPerformance', () => {
 
     expect(sorted.map((row) => row.playerId)).toEqual(['p1', 'p3', 'p4', 'p2', 'p5']);
     expect(sorted.find((row) => row.playerId === 'p1')).toMatchObject({ points: 6, shotAttempts: 8, effectiveness: 0.75 });
-    expect(sorted.find((row) => row.playerId === 'p2')).toMatchObject({ points: 1, shotAttempts: 1, effectiveness: 1 });
+    expect(sorted.find((row) => row.playerId === 'p2')).toMatchObject({ points: 1, ownPointsAgainst: 10, shotAttempts: 11, effectiveness: 1 / 11 });
   });
 
   it('uses attempts and effectiveness only after points tie in attack contribution', () => {

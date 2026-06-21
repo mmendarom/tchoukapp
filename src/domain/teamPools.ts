@@ -16,7 +16,9 @@ export function createDefaultTeamPool(players: Player[]): TeamPool {
   return {
     id: DEFAULT_TEAM_POOL_ID,
     name: 'Mayores',
-    playerIds: players.filter((player) => !player.id.startsWith('plus40-')).map((player) => player.id),
+    playerIds: players
+      .filter((player) => !player.id.startsWith('plus40-') && !player.id.startsWith('femenino-'))
+      .map((player) => player.id),
   };
 }
 

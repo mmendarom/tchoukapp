@@ -1,5 +1,135 @@
 # Implementation Log
 
+## 2026-06-20 - Plantel default Femenino
+
+Se agrego un tercer plantel fijo sin cambiar score, tracking, eventos, mapas, snapshots historicos ni backup/import.
+
+- Se incorporaron 16 jugadoras con ids estables `femenino-*`: Kari, Fio, Mori, Vicky, Larre, Aly, Flaca, Ile, Cami, Karen, Juli, Pau, Romi, Ede, Maca y Mariana.
+- Usan dorsales temporales 1-16, posicion `Wing`, mano `Right`, zonas habituales rotadas y estadisticas iniciales en cero.
+- El pool fijo `femenino` referencia exclusivamente `femeninoPlayerIds`; `Mayores` y `+40` no reciben esos ids.
+- La persistencia sube de v8 a v9 para que instalaciones existentes ejecuten el merge aditivo de jugadores por id y reciban el pool faltante.
+- La normalizacion fija los rosters de los tres defaults, conserva planteles custom y evita pools duplicados.
+- `resetDemoData` conserva jugadores/planteles locales y vuelve a asegurar jugadores y pools default faltantes.
+- Crear un partido con `Femenino` guarda `teamPoolId: femenino`, `teamPoolName: Femenino` y el roster completo en `availablePlayerIds`.
+
+QA manual recomendado:
+
+- Revisar las 16 jugadoras en `Gestionar planteles` y confirmar que no aparecen en `Mayores` ni `+40` salvo una edicion manual futura.
+- Crear partido con `Femenino`, seleccionar siete titulares y comprobar banco, live y reporte.
+- Verificar una instalacion existente tras hidratar v9 y confirmar que conserva jugadores y planteles custom.
+
+Validacion:
+
+- `npm test`: 17 archivos y 213 tests aprobados.
+- `npx tsc --noEmit`: aprobado.
+- `git diff --check`: aprobado; solo avisos esperados de normalizacion CRLF.
+
+## 2026-06-20 - Identidad visible del equipo propio
+
+Se separo la identidad competitiva visible de los identificadores internos, sin cambiar eventos, score, tracking, persistencia ni backup/import.
+
+- `getOwnTeamDisplayName` toma el snapshot `teamPoolName` del partido, lo normaliza y usa `Equipo` como fallback seguro para partidos historicos.
+- `getMatchupDisplayName` centraliza `{Plantel} vs {Rival}`; `MatchReportData` expone `ownTeamName` para que el HTML no reconstruya la identidad.
+- PDF y texto compartible usan el plantel en matchup, score final y parcial, tarjetas de puntos/defensas y estados vacios.
+- Live, dashboard, resumen de tiempo, resumen final y listado de partidos muestran el plantel real. Las acciones compactas usan textos genericos como `Punto nuestro` para evitar desbordes.
+- Fixtures sin snapshot de plantel usan `Equipo`; Players usa lenguaje generico de planteles.
+- Los enums, sides, helpers y eventos internos `uruguay` permanecen sin cambios para conservar compatibilidad. El branding institucional de Home y el nombre de aplicacion en backups siguen siendo Uruguay deliberadamente.
+
+QA manual recomendado:
+
+- Crear partidos con `Mayores` y `+40`; revisar score live, resumenes, listado, PDF y texto compartible.
+- Confirmar matchup, scores, `Puntos {Plantel}`, `Defensas {Plantel}` y vacios con el nombre correcto.
+- Revisar en telefono que el nombre ajusta dentro del header y que `Punto nuestro` mantiene el layout.
+- Abrir un partido historico sin `teamPoolName` y confirmar fallback `Equipo`.
+
+Validacion:
+
+- `npm test`: 17 archivos y 210 tests aprobados.
+- `npx tsc --noEmit`: aprobado.
+- `git diff --check`: aprobado; solo avisos esperados de normalizacion CRLF.
+
+## 2026-06-20 - Field fixes: cambios fuera de tiempo, categoria PDF y rankings
+
+Se implementaron tres ajustes de campo sin cambiar score, puntos, defensas, errores, mapas, sectores tacticos, modelo persistido ni backup/import.
+
+- `substitutePlayer` y `swapLineupPlayers` usan un guard propio de alineacion y ya no dependen de un periodo live.
+- Se permiten cambios en borrador, antes de iniciar un periodo, en entretiempo y durante juego; `finished`/`cancelled` siguen bloqueados.
+- Fuera de juego activo el snapshot/evento usa reloj `0`. En entretiempo posterior a un periodo terminado se asocia al proximo periodo; en live conserva periodo y reloj actuales.
+- Se preservan validaciones de roster disponible, slots, duplicados, banco y undo basado en evento + snapshot.
+- `LiveMatchScreen` muestra `Cambiar jugadores` siempre que exista alineacion y el partido sea modificable, con ayuda pre-tiempo.
+- `matchLabel` ahora usa `Uruguay {Plantel} vs {Rival}` y conserva `Uruguay vs {Rival}` como fallback; el resultado ejecutivo usa el mismo nombre de equipo.
+- Rendimiento ofensivo y efectividad ordenan por goles, intentos, efectividad, menos errados y fallback estable; `8/11` queda por encima de `1/1`.
+- Defensa ordena por defensas/share; errores, puntos en contra y sectores ordenan por conteo descendente.
+
+QA manual recomendado:
+
+- Cambiar un jugador en borrador y antes del primer tiempo; iniciar y confirmar alineacion.
+- Finalizar un tiempo, cambiar durante entretiempo, iniciar el siguiente y confirmar alineacion.
+- Finalizar partido y confirmar que no admite cambios.
+- Exportar PDF y confirmar `Uruguay {Plantel} vs {Rival}` y listas ataque/defensa best-to-worst.
+
+Validacion:
+
+- `npm test`: 16 archivos y 207 tests aprobados.
+- `npx tsc --noEmit`: aprobado.
+- `git diff --check`: aprobado; solo avisos esperados de normalizacion CRLF.
+
+## 2026-06-20 - Report Export v3.1 visual digest
+
+Se pulio exclusivamente la presentacion HTML/texto del reporte; no cambiaron eventos, score, tracking, mapas, persistencia, backup/import ni pantallas de la app.
+
+- Las barras anteriores usaban capas absolutas y anchos contra el total del equipo, por lo que filas individuales podian quedar visualmente muy cortas o perder contraste al imprimir.
+- Ataque ahora usa una pista clara al 100% para los intentos del jugador y una barra fuerte `goles/intentos`, con altura, fondo, ancho y color inline.
+- Defensa usa una pista contrastada y barra de contribucion `defensas/defensas del equipo` con ancho inline.
+- Se agrego `print-color-adjust: exact`, bordes y alturas de 12 px para mejorar compatibilidad con Expo Print.
+- Las filas muestran fallback textual: `goles/intentos`, efectividad, atajados y errados; la formula conserva `goals + rivalDefendedShots + ownPointsAgainst`.
+- Rendimiento limita cada tarjeta a 7 jugadores y avisa `+N jugadores mas`; efectividad aplica el mismo limite visual.
+- Lecturas tacticas usan cards con titulo y detalle factual. Se eliminan del PDF las frases genericas repetidas de `suggestedAction`.
+- Se priorizan 3 claves ejecutivas, 5 por tiempo y 6 finales. `Baja participacion` se omite cuando hay lecturas de mayor valor.
+- Sectores tacticos muestran top 5 con barras de conteo y labels `marco · lado · 0°-90°`.
+- Resumen ejecutivo, tarjetas, filas, sectores y mapas agregan reglas de corte de pagina.
+- El texto compartible queda reducido a score, top ataque, top defensa, efectividad total, zona vulnerable, zona bloqueada y notas.
+
+Validacion automatizada:
+
+- `npm test`: 16 archivos y 200 tests aprobados.
+- `npx tsc --noEmit`: aprobado.
+- `git diff --check`: aprobado; solo se informan avisos esperados de normalizacion CRLF.
+
+QA manual pendiente:
+
+- Generar partido con varios goleadores, atajadas rivales, punto en contra con jugador, defensas Uruguay, sectores repetidos y errores repetidos.
+- Confirmar barras claras/oscuras visibles, errados correctos, lecturas compactas y sectores sin labels genericos ni angulos mayores a 90°.
+- Revisar cortes de pagina y fondos en PDF real de Android/iOS.
+- Confirmar que el texto compartible permanece corto.
+
+## 2026-06-20 - Field testing: intentos errados y header live responsive
+
+Se cerraron dos correcciones detectadas en cancha sin cambiar eventos, score, mapas, backup/import ni persistencia.
+
+- `punto_en_contra` de Uruguay con `playerId` ahora suma `ownPointsAgainst` y cuenta como intento ofensivo errado.
+- La formula pasa a `shotAttempts = goals + rivalDefensesAgainst + ownPointsAgainst`; la efectividad sigue siendo `goals / shotAttempts`.
+- Puntos en contra sin jugador, puntos rivales y puntos en contra del rival no se atribuyen como intentos individuales.
+- Las barras live, resumenes por tiempo/final y report data usan los intentos corregidos; las filas muestran atajados y errados.
+- PDF y texto compartible incluyen una columna/lectura de errados, sin duplicar ni cambiar el conteo de puntos en contra.
+- El header live usa tres columnas flexibles, scores en una linea con autoajuste y variante compacta bajo 430 px.
+- `Plantel: X` se movio al bloque central junto al rival, con ancho acotado, centrado y elipsis para nombres largos.
+
+Validacion automatizada:
+
+- `npm test -- --run`: 16 archivos, 199 tests aprobados.
+- `npx tsc --noEmit`: aprobado.
+
+QA manual pendiente en dispositivo/browser:
+
+- Telefono portrait: `0-0`, `9-9`, `21-15` y `100-99` sin clipping.
+- Telefono portrait: nombre de plantel largo centrado y truncado sin solapar scores.
+- Tablet landscape: `21-15`, plantel y rival centrados.
+- Timer en `Tiempo cumplido`, boton pausa/reanudar y boton fin de tiempo visibles.
+- Comparar barras live, resumen de tiempo, resumen final y PDF con un jugador de `8 goles + 2 atajados + 1 errado = 8/11 (73%)`.
+
+Limitacion: el navegador integrado no estuvo disponible para ejecutar la inspeccion visual automatizada; la matriz anterior queda como QA manual obligatorio.
+
 ## 2026-06-19 - Report Export v3
 
 Se actualizo el PDF y el texto compartible para acercarlos a `PeriodSummaryScreen` y `FinalSummaryScreen` sin cambiar eventos, scoring, tracking, mapas ni backups.

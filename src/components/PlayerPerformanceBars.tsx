@@ -168,6 +168,9 @@ function PerformanceRow({
       ? `${row.points}/${row.shotAttempts} tiros · ${formatEffectiveness(row.effectiveness)}`
       : 'Sin tiros'
     : `${total} ${countLabel} · ${formatPercent(share)}`;
+  const attackBreakdown = mode === 'attack' && row.shotAttempts > 0
+    ? `${row.rivalDefensesAgainst} atajados · ${row.ownPointsAgainst} errados`
+    : undefined;
 
   return (
     <View style={[styles.row, isTop && { borderColor: accentColor, backgroundColor: '#ffffff' }]}>
@@ -178,6 +181,7 @@ function PerformanceRow({
         </View>
         <Text numberOfLines={1} adjustsFontSizeToFit style={styles.countText}>{detailText}</Text>
       </View>
+      {attackBreakdown && <Text numberOfLines={1} adjustsFontSizeToFit style={styles.attackBreakdown}>{attackBreakdown}</Text>}
       <View style={[styles.track, { backgroundColor: trackColor }]}>
         {mode === 'attack' && <View style={[styles.attemptBar, { width: attemptBarWidth }]} />}
         <View style={[styles.bar, isTop && styles.topBar, { backgroundColor: accentColor, width: barWidth }]} />
@@ -277,6 +281,12 @@ const styles = StyleSheet.create({
     color: '#5d6b7a',
     fontSize: fontSize.tiny,
     fontWeight: '900',
+  },
+  attackBreakdown: {
+    color: '#7c4a03',
+    fontSize: fontSize.tiny,
+    fontWeight: '800',
+    textAlign: 'right',
   },
   track: {
     height: 8,

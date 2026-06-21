@@ -60,7 +60,7 @@ No existe hoy:
 ### A. Encabezado
 
 - `Reporte del partido`
-- `Uruguay vs {opponent}`
+- `{teamPoolName | Equipo} vs {opponent}`
 - Fecha
 - Sede si existe
 - Resultado final
@@ -79,7 +79,7 @@ No existe hoy:
 Por cada tiempo:
 
 - Score del tiempo.
-- Puntos Uruguay.
+- Puntos del equipo propio, con su nombre visible.
 - Puntos rival.
 - Puntos en contra.
 - Puntos en contra del rival.
@@ -322,7 +322,7 @@ Derived stats:
 #### A. Header / portada
 
 - `Reporte del partido`.
-- `Uruguay vs {rival}`.
+- `{teamPoolName | Equipo} vs {rival}`.
 - Fecha.
 - Sede.
 - Competencia/tipo si existe; fallback `Sin competencia registrada`.
@@ -349,12 +349,12 @@ Seccion corta, arriba del PDF:
 Para `1er tiempo`, `2do tiempo`, `3er tiempo`:
 
 - Score del tiempo.
-- Puntos Uruguay.
+- Puntos del equipo propio, con su nombre visible.
 - Puntos rival.
 - Puntos en contra.
 - Puntos en contra rival.
 - Goleadores del tiempo.
-- Defensas Uruguay del tiempo.
+- Defensas propias del tiempo, con nombre visible cuando corresponde.
 - Defensas rival del tiempo.
 - Faltas del tiempo.
 - Puntos en contra por jugador.
@@ -371,7 +371,7 @@ Para `1er tiempo`, `2do tiempo`, `3er tiempo`:
 - Resultado final.
 - Resultado por tiempos.
 - Goleadores totales.
-- Defensas Uruguay totales.
+- Defensas propias totales, con nombre visible cuando corresponde.
 - Defensas rival totales.
 - Faltas totales.
 - Puntos en contra totales.
@@ -538,3 +538,71 @@ El resumen para WhatsApp debe ser mas corto que el PDF:
 - Confirmar que el PDF es legible en telefono.
 - Probar compartir por WhatsApp/mail/Drive si esta disponible.
 - Probar un partido con pocos datos y confirmar que no crashea.
+
+## Ajuste de efectividad ofensiva - 2026-06-20
+
+- Las filas de rendimiento y efectividad exportadas incluyen `ownPointsAgainst`.
+- Los tiros totales suman goles, tiros atajados por el rival y puntos en contra Uruguay con jugador.
+- HTML y texto muestran los intentos errados/en contra sin alterar el score ni duplicar el conteo existente de `Puntos en contra`.
+- Ese ajuste de formula no incluyo por si solo el posterior rediseño visual Report Export v3.1.
+
+## Report Export v3.1 - Visual digest polish
+
+Estado: implementado el 2026-06-20; QA de PDF nativo pendiente.
+
+### Objetivo
+
+Convertir el PDF data-rich de v3 en un digest tactico escaneable, preservando la misma informacion derivada y sin cambiar eventos, score, tracking, mapas, backup/import ni pantallas de la app.
+
+### Reglas visuales
+
+- `Rendimiento del tiempo` y `Rendimiento total` usan dos tarjetas compactas: `Ataque` y `Defensa`.
+- Ataque muestra hasta 7 jugadores, `goles/intentos`, efectividad, atajados y errados; la pista clara representa todos los intentos del jugador y la barra fuerte representa goles/intentos.
+- Defensa muestra hasta 7 jugadores, defensas y una barra de contribucion sobre defensas totales.
+- Las barras usan `div`, alturas explicitas, colores print-safe, anchos inline y `print-color-adjust: exact` para Expo Print.
+- Si existen mas filas se informa `+N jugadores mas`; no se elimina el dato del modelo.
+- Las lecturas tacticas se renderizan como tarjetas con titulo y detalle factual, sin `suggestedAction` generico repetido.
+- Limites PDF: 3 highlights ejecutivos, 5 por tiempo y 6 finales. `Baja participacion` queda relegada si existen alertas de mayor valor.
+- Sectores muestran hasta 5 filas con barra de conteo y conservan labels tacticos de marco, lado y bandas `0°-30°`, `30°-60°`, `60°-90°`.
+- Se agregan reglas `break-inside/page-break-inside` a tarjetas, filas, mapas y bloques tacticos.
+
+### Formula preservada
+
+- `attempts = goals + rivalDefendedShots + ownPointsAgainst`.
+- `effectiveness = goals / attempts`.
+- `ownPointsAgainst` se presenta como `errados`; no cambia scoring ni se duplica el conteo de puntos en contra.
+
+### Texto compartible
+
+- Incluye score final, top ataque, top defensa, efectividad total, principal zona vulnerable y principal zona bloqueada.
+- No incluye prosa generica de recomendaciones.
+
+### QA manual v3.1
+
+- Generar un partido con varios goleadores, tiros atajados, puntos en contra con jugador, defensas Uruguay, sectores rivales repetidos y errores repetidos.
+- Confirmar barras de intentos/convertidos y defensa visibles en Android/iOS.
+- Confirmar errados en filas de ataque y formula correcta.
+- Confirmar lecturas compactas, sectores sin labels genericos ni angulos mayores a 90° y cortes de pagina aceptables.
+- Confirmar que el texto compartible sigue compacto.
+
+## Field fix - categoria y ranking del reporte
+
+Estado: implementado el 2026-06-20; QA manual de PDF pendiente.
+
+- `matchLabel` usa `{teamPoolName} vs {opponent}` cuando existe plantel y `Equipo vs {opponent}` como fallback.
+- El label se reutiliza en header PDF y texto compartible; el resumen ejecutivo repite el nombre visible del equipo.
+- Ataque ordena por goles, intentos, efectividad, menos errados y fallback estable.
+- Efectividad usa goles antes que volumen/porcentaje para que `8/11` quede por encima de `1/1`.
+- Defensa ordena por defensas, share y nombre/orden estable.
+- Errores, puntos en contra y sectores quedan descendentes por conteo.
+- No cambia ningun dato derivado, scoring, tracking ni compatibilidad historica.
+
+## Field fix - nombre visible del equipo propio
+
+Estado: implementado el 2026-06-20; QA manual de PDF nativo pendiente.
+
+- El reporte recibe `ownTeamName` derivado desde `match.teamPoolName` y usa `Equipo` como fallback seguro.
+- Matchup, score final/parcial, cards `Puntos/Defensas`, vacios y texto compartible dejan de hardcodear `Uruguay`.
+- Ejemplos: `Mayores vs Etsy`, `+40 0 - 0 Etsy`, `Puntos Bohemios`.
+- `team: 'uruguay'` y `scoringTeam: 'uruguay'` permanecen como identificadores internos compatibles.
+- No se modifica el modelo persistido, eventos, scoring, tracking ni backup/import.

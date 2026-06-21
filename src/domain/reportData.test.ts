@@ -99,15 +99,16 @@ describe('buildMatchReportData', () => {
     expect(report.totals.totalErrors).toEqual([{ label: '#2 Marcelo', total: 2 }]);
     expect(report.totals.opponentOwnPoints).toBe(1);
     expect(report.periods[0].effectiveness).toEqual([
-      { playerId: 'p1', playerName: '#1 Mauro', goals: 2, rivalDefendedShots: 1, shotAttempts: 3, effectiveness: 2 / 3 },
+      { playerId: 'p1', playerName: '#1 Mauro', goals: 2, rivalDefendedShots: 1, ownPointsAgainst: 0, shotAttempts: 3, effectiveness: 2 / 3 },
+      { playerId: 'p2', playerName: '#2 Marcelo', goals: 0, rivalDefendedShots: 0, ownPointsAgainst: 1, shotAttempts: 1, effectiveness: 0 },
     ]);
     expect(report.periods[0].legacyOpponentDefensesWithoutPlayer).toBe(2);
     expect(report.periods[1].effectiveness).toEqual([
-      { playerId: 'p2', playerName: '#2 Marcelo', goals: 1, rivalDefendedShots: 1, shotAttempts: 2, effectiveness: 1 / 2 },
+      { playerId: 'p2', playerName: '#2 Marcelo', goals: 1, rivalDefendedShots: 1, ownPointsAgainst: 0, shotAttempts: 2, effectiveness: 1 / 2 },
     ]);
     expect(report.totals.effectiveness).toEqual([
-      { playerId: 'p1', playerName: '#1 Mauro', goals: 2, rivalDefendedShots: 1, shotAttempts: 3, effectiveness: 2 / 3 },
-      { playerId: 'p2', playerName: '#2 Marcelo', goals: 1, rivalDefendedShots: 1, shotAttempts: 2, effectiveness: 1 / 2 },
+      { playerId: 'p1', playerName: '#1 Mauro', goals: 2, rivalDefendedShots: 1, ownPointsAgainst: 0, shotAttempts: 3, effectiveness: 2 / 3 },
+      { playerId: 'p2', playerName: '#2 Marcelo', goals: 1, rivalDefendedShots: 1, ownPointsAgainst: 1, shotAttempts: 3, effectiveness: 1 / 3 },
     ]);
     expect(report.totals.legacyOpponentDefensesWithoutPlayer).toBe(2);
     expect(report.totals.substitutions).toEqual(
@@ -122,20 +123,21 @@ describe('buildMatchReportData', () => {
     expect(report.zones.against[0]).toMatchObject({ label: 'marco izquierdo · lado derecho · 60°-90°', total: 1 });
     expect(report.zones.defended[0]).toMatchObject({ label: 'marco derecho · lado izquierdo · 30°-60°', total: 3 });
     expect(report.periods[0].opponentScoringZones[0]).toMatchObject({ label: 'marco izquierdo · lado derecho · 60°-90°', total: 1 });
-    expect(report.periods[0].performance).toMatchObject({ totalGoals: 2, totalShotAttempts: 3, totalDefenses: 1 });
+    expect(report.periods[0].performance).toMatchObject({ totalGoals: 2, totalShotAttempts: 4, totalDefenses: 1 });
     expect(report.periods[0].performance.rows).toEqual(expect.arrayContaining([
-      expect.objectContaining({ playerId: 'p1', goals: 2, rivalDefendedShots: 1, shotAttempts: 3, effectiveness: 2 / 3, defenses: 1 }),
+      expect.objectContaining({ playerId: 'p1', goals: 2, rivalDefendedShots: 1, ownPointsAgainst: 0, shotAttempts: 3, effectiveness: 2 / 3, defenses: 1 }),
+      expect.objectContaining({ playerId: 'p2', goals: 0, rivalDefendedShots: 0, ownPointsAgainst: 1, shotAttempts: 1, effectiveness: 0 }),
     ]));
-    expect(report.totals.performance).toMatchObject({ totalGoals: 3, totalShotAttempts: 5, totalDefenses: 1 });
+    expect(report.totals.performance).toMatchObject({ totalGoals: 3, totalShotAttempts: 6, totalDefenses: 1 });
     expect(report.totals.performance.topAttack[0]).toMatchObject({ playerId: 'p1', goals: 2, shotAttempts: 3 });
     expect(report.totals.performance.topDefense[0]).toMatchObject({ playerId: 'p1', defenses: 1 });
     expect(report.executiveSummary).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ label: 'Resultado final', value: 'Uruguay 4 - 2 Argentina' }),
+        expect.objectContaining({ label: 'Resultado final', value: 'Equipo 4 - 2 Argentina' }),
         expect.objectContaining({ label: 'Puntos en contra del rival', value: '1' }),
         expect.objectContaining({ label: 'Top ataque', value: '#1 Mauro 2/3 (67%)' }),
         expect.objectContaining({ label: 'Top defensa', value: '#1 Mauro (1)' }),
-        expect.objectContaining({ label: 'Efectividad ofensiva total', value: '3/5 (60%)' }),
+        expect.objectContaining({ label: 'Efectividad ofensiva total', value: '3/6 (50%)' }),
         expect.objectContaining({ label: 'Sector vulnerable', value: 'marco izquierdo · lado derecho · 60°-90° (1)' }),
         expect.objectContaining({ label: 'Sector donde mas nos defendieron', value: 'marco derecho · lado izquierdo · 30°-60° (3)' }),
       ]),
@@ -178,7 +180,7 @@ describe('buildMatchReportData', () => {
     expect(report.totalMaps.uruguayPoints).toEqual([]);
     expect(report.totalMaps.opponentPoints).toEqual([]);
     expect(report.totalMaps.opponentDefenses).toEqual([]);
-    expect(report.totals.effectiveness).toEqual([{ playerId: 'p1', playerName: '#1 Mauro', goals: 1, rivalDefendedShots: 0, shotAttempts: 1, effectiveness: 1 }]);
+    expect(report.totals.effectiveness).toEqual([{ playerId: 'p1', playerName: '#1 Mauro', goals: 1, rivalDefendedShots: 0, ownPointsAgainst: 0, shotAttempts: 1, effectiveness: 1 }]);
     expect(report.totals.legacyOpponentDefensesWithoutPlayer).toBe(0);
     expect(report.totals.performance.rows).toEqual([
       expect.objectContaining({ playerId: 'p1', goals: 1, rivalDefendedShots: 0, shotAttempts: 1 }),
@@ -213,19 +215,64 @@ describe('buildMatchReportData', () => {
   it('uses custom rival name in report labels', () => {
     const report = buildMatchReportData({ ...match(), opponent: 'Brasil' }, players);
 
-    expect(report.matchLabel).toBe('Uruguay vs Brasil');
+    expect(report.ownTeamName).toBe('Equipo');
+    expect(report.matchLabel).toBe('Equipo vs Brasil');
     expect(report.opponent).toBe('Brasil');
     expect(report.executiveSummary).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ label: 'Resultado final', value: 'Uruguay 0 - 0 Brasil' }),
+        expect.objectContaining({ label: 'Resultado final', value: 'Equipo 0 - 0 Brasil' }),
       ]),
     );
+  });
+
+  it('includes the team pool category in matchup and executive score labels', () => {
+    const report = buildMatchReportData({ ...match(), opponent: 'Brasil', teamPoolName: 'Mayores' }, players);
+
+    expect(report.ownTeamName).toBe('Mayores');
+    expect(report.matchLabel).toBe('Mayores vs Brasil');
+    expect(report.executiveSummary).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ label: 'Resultado final', value: 'Mayores 0 - 0 Brasil' }),
+      ]),
+    );
+  });
+
+  it('sorts report performance, negative stats and sectors best-to-worst', () => {
+    const repeat = (count: number, createEvent: (index: number) => MatchEvent) =>
+      Array.from({ length: count }, (_, index) => createEvent(index));
+    const report = buildMatchReportData(
+      match([
+        ...repeat(8, (index) => point({ id: `p1-goal-${index}`, playerId: 'p1' })),
+        ...repeat(2, (index) => point({ id: `p1-blocked-${index}`, kind: 'opponent_defense', team: 'opponent', playerId: 'p1', defenseLocation: { x: 0.7, y: 0.3 } } as Partial<MatchEvent>)),
+        point({ id: 'p1-own', kind: 'error', team: 'uruguay', playerId: 'p1', errorType: 'punto_en_contra' } as Partial<MatchEvent>),
+        point({ id: 'p2-goal', playerId: 'p2' }),
+        ...repeat(3, (index) => point({ id: `p2-defense-${index}`, kind: 'defense', team: 'uruguay', playerId: 'p2' } as Partial<MatchEvent>)),
+        point({ id: 'p1-defense', kind: 'defense', team: 'uruguay', playerId: 'p1' } as Partial<MatchEvent>),
+        ...repeat(3, (index) => point({ id: `p2-error-${index}`, kind: 'error', team: 'uruguay', playerId: 'p2', errorType: 'falta' } as Partial<MatchEvent>)),
+        ...repeat(2, (index) => point({ id: `p3-own-${index}`, kind: 'error', team: 'uruguay', playerId: 'p3', errorType: 'punto_en_contra' } as Partial<MatchEvent>)),
+        ...repeat(3, (index) => point({ id: `opponent-sector-a-${index}`, scoringTeam: 'opponent', playerId: undefined, landingLocation: { x: 0.2, y: 0.2 } })),
+        point({ id: 'opponent-sector-b', scoringTeam: 'opponent', playerId: undefined, landingLocation: { x: 0.8, y: 0.8 } }),
+      ]),
+      players,
+    );
+
+    expect(report.totals.performance.rows.slice(0, 2).map((row) => row.playerId)).toEqual(['p1', 'p2']);
+    expect(report.totals.effectiveness.slice(0, 2)).toEqual([
+      expect.objectContaining({ playerId: 'p1', goals: 8, shotAttempts: 11, effectiveness: 8 / 11 }),
+      expect.objectContaining({ playerId: 'p2', goals: 1, shotAttempts: 1, effectiveness: 1 }),
+    ]);
+    expect(report.totals.defenses.map((row) => row.total)).toEqual([3, 1]);
+    expect(report.totals.totalErrors.map((row) => row.total)).toEqual([3, 2, 1]);
+    expect(report.totals.ownPointsByPlayer.map((row) => row.total)).toEqual([2, 1]);
+    expect(report.zones.against.map((row) => row.total)).toEqual([3, 1]);
   });
 
   it('includes stored team pool name when available', () => {
     const report = buildMatchReportData({ ...match(), teamPoolName: '+40' }, players);
 
     expect(report.teamPoolName).toBe('+40');
+    expect(report.ownTeamName).toBe('+40');
+    expect(report.matchLabel).toBe('+40 vs Argentina');
     expect(report.executiveSummary).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ label: 'Plantel', value: '+40' }),
@@ -236,11 +283,11 @@ describe('buildMatchReportData', () => {
   it('uses Rival fallback when old matches have no opponent', () => {
     const report = buildMatchReportData({ ...match(), opponent: undefined } as unknown as Match, players);
 
-    expect(report.matchLabel).toBe('Uruguay vs Rival');
+    expect(report.matchLabel).toBe('Equipo vs Rival');
     expect(report.opponent).toBe('Rival');
     expect(report.executiveSummary).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ label: 'Resultado final', value: 'Uruguay 0 - 0 Rival' }),
+        expect.objectContaining({ label: 'Resultado final', value: 'Equipo 0 - 0 Rival' }),
       ]),
     );
   });

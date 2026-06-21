@@ -42,6 +42,7 @@ import {
   PeriodInsight,
 } from './periodStats';
 import { CourtLocation, LineupSwapEvent, Match, MatchEvent, MatchPeriod, Player, Score, SubstitutionEvent } from './types';
+import { getMatchupDisplayName, getOwnTeamDisplayName } from './teamLabels';
 
 export type ReportStat = {
   label: string;
@@ -74,6 +75,7 @@ export type ReportEffectivenessRow = {
   playerName: string;
   goals: number;
   rivalDefendedShots: number;
+  ownPointsAgainst: number;
   shotAttempts: number;
   effectiveness: number;
 };
@@ -83,6 +85,7 @@ export type ReportPlayerPerformanceRow = {
   playerName: string;
   goals: number;
   rivalDefendedShots: number;
+  ownPointsAgainst: number;
   shotAttempts: number;
   effectiveness?: number;
   defenses: number;
@@ -126,6 +129,7 @@ export type PeriodReportData = {
 export type MatchReportData = {
   title: string;
   matchLabel: string;
+  ownTeamName: string;
   opponent: string;
   teamPoolName?: string;
   dateLabel: string;
@@ -214,10 +218,13 @@ const createPlayerLabeler = (players: Player[]) => {
   };
 };
 
+const sortReportStats = <T extends { label: string; total: number }>(items: T[]) =>
+  [...items].sort((a, b) => b.total - a.total || a.label.localeCompare(b.label));
+
 const mapPlayerStats = (
   stats: Array<{ playerId: string; total: number }>,
   getPlayerLabel: (playerId: string | undefined) => string,
-): ReportStat[] => stats.map((stat) => ({ label: getPlayerLabel(stat.playerId), total: stat.total }));
+): ReportStat[] => sortReportStats(stats.map((stat) => ({ label: getPlayerLabel(stat.playerId), total: stat.total })));
 
 const mapFaltas = (
   stats: Array<{ playerId: string; faltas: number }>,
@@ -225,7 +232,8 @@ const mapFaltas = (
 ): ReportStat[] =>
   stats
     .filter((stat) => stat.faltas > 0)
-    .map((stat) => ({ label: getPlayerLabel(stat.playerId), total: stat.faltas }));
+    .map((stat) => ({ label: getPlayerLabel(stat.playerId), total: stat.faltas }))
+    .sort((a, b) => b.total - a.total || a.label.localeCompare(b.label));
 
 const mapOwnPointsByPlayer = (
   stats: Array<{ playerId: string; puntosEnContra: number }>,
@@ -233,7 +241,8 @@ const mapOwnPointsByPlayer = (
 ): ReportStat[] =>
   stats
     .filter((stat) => stat.puntosEnContra > 0)
-    .map((stat) => ({ label: getPlayerLabel(stat.playerId), total: stat.puntosEnContra }));
+    .map((stat) => ({ label: getPlayerLabel(stat.playerId), total: stat.puntosEnContra }))
+    .sort((a, b) => b.total - a.total || a.label.localeCompare(b.label));
 
 const mapLineupActions = (
   lineupActions: Array<SubstitutionEvent | LineupSwapEvent>,
@@ -288,13 +297,15 @@ const mapEffectivenessRows = (rows: PlayerPerformanceRow[]): ReportEffectiveness
       playerName: row.playerName,
       goals: row.points,
       rivalDefendedShots: row.rivalDefensesAgainst,
+      ownPointsAgainst: row.ownPointsAgainst,
       shotAttempts: row.shotAttempts,
       effectiveness: row.effectiveness ?? 0,
     }))
     .sort((a, b) =>
-      b.shotAttempts - a.shotAttempts ||
       b.goals - a.goals ||
+      b.shotAttempts - a.shotAttempts ||
       b.effectiveness - a.effectiveness ||
+      a.ownPointsAgainst - b.ownPointsAgainst ||
       a.playerName.localeCompare(b.playerName),
     );
 
@@ -306,6 +317,7 @@ const mapPerformanceRow = (row: PlayerPerformanceRow): ReportPlayerPerformanceRo
   playerName: row.playerName,
   goals: row.points,
   rivalDefendedShots: row.rivalDefensesAgainst,
+  ownPointsAgainst: row.ownPointsAgainst,
   shotAttempts: row.shotAttempts,
   effectiveness: row.effectiveness,
   defenses: row.defenses,
@@ -319,7 +331,7 @@ const buildReportPerformance = (data: PlayerPerformanceData): ReportPlayerPerfor
   const defenseRows = sortPlayerPerformanceRows(relevantRows, 'defenses', 'contribution');
   const topAttackIds = getTopAttackPlayerIds(attackRows, 1);
   const topDefenseIds = getTopDefensePlayerIds(defenseRows, 1);
-  const rows = relevantRows.map(mapPerformanceRow);
+  const rows = attackRows.map(mapPerformanceRow);
 
   return {
     rows,
@@ -390,9 +402,9 @@ export function buildMatchReportData(match: Match, players: Player[]): MatchRepo
   const initialLineup = match.lineupSnapshots.find((lineup) => lineup.team === 'uruguay');
   const finalLineup = [...match.lineupSnapshots].reverse().find((lineup) => lineup.team === 'uruguay');
   const totalErrorBreakdown = getErrorsByTypeByPlayer(match.events);
-  const attackZones = groupPointsByTacticalSector(match.events, 'uruguay');
-  const againstZones = groupOpponentPointsByTacticalSector(match.events);
-  const defendedZones = groupOpponentDefensesByTacticalSector(match.events);
+  const attackZones = sortReportStats(groupPointsByTacticalSector(match.events, 'uruguay'));
+  const againstZones = sortReportStats(groupOpponentPointsByTacticalSector(match.events));
+  const defendedZones = sortReportStats(groupOpponentDefensesByTacticalSector(match.events));
   const periods = periodNumbers.map((periodNumber): PeriodReportData => {
     const periodEvents = getEventsByPeriod(match.events, periodNumber);
     const periodScore = calculatePeriodScore(match.events, periodNumber);
@@ -413,8 +425,8 @@ export function buildMatchReportData(match: Match, players: Player[]): MatchRepo
       topScorers: mapPlayerStats(getTopScorersByPeriod(match.events, periodNumber), getPlayerLabel),
       defenses: mapPlayerStats(getDefensesByPlayerByPeriod(match.events, periodNumber), getPlayerLabel),
       opponentDefenses: getOpponentDefensesByPeriod(match.events, periodNumber).length,
-      opponentScoringZones: groupOpponentPointsByTacticalSector(periodEvents),
-      opponentDefenseZones: groupOpponentDefensesByTacticalSector(periodEvents),
+      opponentScoringZones: sortReportStats(groupOpponentPointsByTacticalSector(periodEvents)),
+      opponentDefenseZones: sortReportStats(groupOpponentDefensesByTacticalSector(periodEvents)),
       faltas: mapFaltas(errorBreakdown, getPlayerLabel),
       ownPointsByPlayer: mapOwnPointsByPlayer(errorBreakdown, getPlayerLabel),
       totalErrors: mapPlayerStats(getErrorsByPlayerByPeriod(match.events, periodNumber), getPlayerLabel),
@@ -441,20 +453,22 @@ export function buildMatchReportData(match: Match, players: Player[]): MatchRepo
   const legacyOpponentDefensesWithoutPlayer = match.events.filter(isLegacyOpponentDefenseWithoutPlayer).length;
   const totalErrorCount = totalErrors.reduce((sum, stat) => sum + stat.total, 0);
   const totalRecommendations = buildRecommendationInsights(match.events, players, getLineupPlayerIdsForEvents(match), 12);
+  const ownTeamName = getOwnTeamDisplayName(match);
 
   return {
     title: 'Reporte del partido',
-    matchLabel: `Uruguay vs ${opponentName}`,
+    matchLabel: getMatchupDisplayName(match),
+    ownTeamName,
     opponent: opponentName,
     teamPoolName,
     dateLabel: formatMatchDateTime(match.startsAt),
     venueLabel: match.venue || 'Sin sede registrada',
     competitionLabel: 'Sin competencia registrada',
     executiveSummary: [
-      { label: 'Resultado final', value: `Uruguay ${finalScore.uruguay} - ${finalScore.opponent} ${opponentName}` },
+      { label: 'Resultado final', value: `${ownTeamName} ${finalScore.uruguay} - ${finalScore.opponent} ${opponentName}` },
       ...(teamPoolName ? [{ label: 'Plantel', value: teamPoolName }] : []),
       { label: 'Mejor goleador', value: topScorers[0] ? `${topScorers[0].label} (${topScorers[0].total})` : emptyLabel },
-      { label: 'Mas defensas Uruguay', value: defenses[0] ? `${defenses[0].label} (${defenses[0].total})` : emptyLabel },
+      { label: `Más defensas ${ownTeamName}`, value: defenses[0] ? `${defenses[0].label} (${defenses[0].total})` : emptyLabel },
       {
         label: 'Top ataque',
         value: performance.topAttack[0]

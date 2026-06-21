@@ -4,7 +4,7 @@ import { Modal, Pressable, SafeAreaView, ScrollView, StyleSheet, Text, TextInput
 
 import { ActionButton } from '../components/ActionButton';
 import { Screen } from '../components/Screen';
-import { normalizeOpponentName } from '../domain/opponent';
+import { getMatchupDisplayName } from '../domain/teamLabels';
 import { calculateScore } from '../domain/stats';
 import { useMatchStore } from '../store/useMatchStore';
 import { formatMatchDate } from '../utils/date';
@@ -229,8 +229,6 @@ export function MatchesScreen({ navigation, route }: Props) {
       </Modal>
       {visibleMatches.map((match) => {
         const score = calculateScore(match.events);
-        const opponentName = normalizeOpponentName(match.opponent);
-
         return (
           <Pressable
             key={match.id}
@@ -238,7 +236,7 @@ export function MatchesScreen({ navigation, route }: Props) {
             style={({ pressed }) => [styles.card, pressed && styles.pressed]}
           >
             <View style={styles.cardHeader}>
-              <Text style={styles.opponent}>Uruguay vs {opponentName}</Text>
+              <Text style={styles.opponent}>{getMatchupDisplayName(match)}</Text>
               <Text style={[styles.status, styles.statusText]}>{statusLabel[match.status].toUpperCase()}</Text>
             </View>
             <Text style={styles.meta}>{formatMatchDate(match.startsAt)} - {match.venue}</Text>

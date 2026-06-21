@@ -68,11 +68,11 @@ export const eventKindLabel = (event: MatchEvent) => {
         return 'Punto en contra rival';
       }
 
-      return event.scoringTeam === 'uruguay' ? 'Punto Uruguay' : 'Punto rival';
+      return event.scoringTeam === 'uruguay' ? 'Punto propio' : 'Punto rival';
     case 'error':
       return event.team === 'uruguay' ? safeErrorLabel(event.errorType) : 'Error rival';
     case 'defense':
-      return 'Defensa Uruguay';
+      return 'Defensa propia';
     case 'opponent_defense':
       return 'Defensa rival';
     case 'substitution':

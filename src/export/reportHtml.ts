@@ -19,12 +19,21 @@ const escapeHtml = (value: string | number) =>
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#039;');
 
-const scoreText = (uruguay: number, opponent: number, opponentName = 'Rival') =>
-  `Uruguay ${uruguay} - ${opponent} ${opponentName}`;
+const scoreText = (ownTeamName: string, ownScore: number, opponentScore: number, opponentName = 'Rival') =>
+  `${ownTeamName} ${ownScore} - ${opponentScore} ${opponentName}`;
 
-const topItems = (items: ReportStat[], limit = 3) => items.slice(0, limit);
 const formatPercent = (value: number) => `${Math.round(value * 100)}%`;
 const clampPercent = (value: number) => Math.max(0, Math.min(100, value));
+const formatCount = (value: number, singular: string, plural: string) => `${value} ${value === 1 ? singular : plural}`;
+const PERFORMANCE_ROW_LIMIT = 7;
+const SECTOR_ROW_LIMIT = 5;
+
+type ReportInsightItem = {
+  severity?: string;
+  title: string;
+  description: string;
+  suggestedAction: string;
+};
 
 const statListHtml = (items: ReportStat[], emptyText = reportEmptyLabel) =>
   items.length === 0
@@ -32,6 +41,23 @@ const statListHtml = (items: ReportStat[], emptyText = reportEmptyLabel) =>
     : `<table><tbody>${items
         .map((item) => `<tr><td>${escapeHtml(item.label)}</td><td class="number">${item.total}</td></tr>`)
         .join('')}</tbody></table>`;
+
+const sectorStatsHtml = (items: ReportStat[], emptyText = reportEmptyLabel, limit = SECTOR_ROW_LIMIT) => {
+  const visibleItems = items.slice(0, limit);
+  const maxTotal = visibleItems[0]?.total ?? 0;
+
+  if (visibleItems.length === 0) {
+    return `<p class="muted">${escapeHtml(emptyText)}</p>`;
+  }
+
+  return `<div class="sector-list">${visibleItems.map((item) => {
+    const width = maxTotal > 0 ? clampPercent((item.total / maxTotal) * 100) : 0;
+    return `<div class="sector-row">
+      <div class="sector-meta"><span>${escapeHtml(item.label)}</span><strong>${item.total}</strong></div>
+      <div class="sector-track" style="height:7px;background-color:#e1e9f0;"><div class="sector-bar" style="width:${width.toFixed(1)}%;height:7px;background-color:#577c9d;">&nbsp;</div></div>
+    </div>`;
+  }).join('')}${items.length > limit ? `<p class="more-rows">+${items.length - limit} sectores más</p>` : ''}</div>`;
+};
 
 const stringListHtml = (items: string[]) =>
   items.length === 0
@@ -53,16 +79,18 @@ const effectivenessHtml = (items: ReportEffectivenessRow[], legacyOpponentDefens
               <th>Jugador</th>
               <th>Puntos convertidos</th>
               <th>Tiros atajados</th>
+              <th>Errados</th>
               <th>Tiros generados</th>
               <th>Efectividad</th>
             </tr>
           </thead>
           <tbody>
-            ${items
+            ${items.slice(0, PERFORMANCE_ROW_LIMIT)
               .map((item) => `<tr>
                 <td>${escapeHtml(item.playerName)}</td>
                 <td class="number">${item.goals}</td>
                 <td class="number">${item.rivalDefendedShots}</td>
+                <td class="number">${item.ownPointsAgainst}</td>
                 <td class="number">${item.shotAttempts}</td>
                 <td class="number">${escapeHtml(formatPercent(item.effectiveness))}</td>
               </tr>`)
@@ -70,21 +98,22 @@ const effectivenessHtml = (items: ReportEffectivenessRow[], legacyOpponentDefens
           </tbody>
         </table>`
   }
+  ${items.length > PERFORMANCE_ROW_LIMIT ? `<p class="more-rows">+${items.length - PERFORMANCE_ROW_LIMIT} jugadores más</p>` : ''}
   ${legacyEffectivenessNoteHtml(legacyOpponentDefensesWithoutPlayer)}
 `;
 
-const attackPerformanceRowHtml = (item: ReportPlayerPerformanceRow, totalAttempts: number) => {
-  const attemptWidth = totalAttempts > 0 ? clampPercent((item.shotAttempts / totalAttempts) * 100) : 0;
-  const convertedWidth = totalAttempts > 0 ? clampPercent((item.goals / totalAttempts) * 100) : 0;
+const attackPerformanceRowHtml = (item: ReportPlayerPerformanceRow) => {
+  const convertedWidth = item.shotAttempts > 0 ? clampPercent((item.goals / item.shotAttempts) * 100) : 0;
   const effectiveness = typeof item.effectiveness === 'number' ? formatPercent(item.effectiveness) : 'Sin tiros';
 
   return `<div class="performance-row">
     <div class="performance-meta"><strong>${escapeHtml(item.playerName)}</strong><span>${item.goals}/${item.shotAttempts} tiros · ${escapeHtml(effectiveness)}</span></div>
-    <div class="performance-track attack-track">
-      <div class="attempt-bar" style="width:${attemptWidth.toFixed(1)}%"></div>
-      <div class="converted-bar" style="width:${convertedWidth.toFixed(1)}%"></div>
+    <div class="performance-track attack-track" style="height:12px;background-color:#d8ecf8;">
+      <div class="attempt-bar" style="width:100%;height:12px;background-color:#9dcff0;">
+        <div class="converted-bar" style="width:${convertedWidth.toFixed(1)}%;height:12px;background-color:#075ca8;">&nbsp;</div>
+      </div>
     </div>
-    <small>${item.rivalDefendedShots} tiros atajados</small>
+    <small>${formatCount(item.rivalDefendedShots, 'atajado', 'atajados')} · ${formatCount(item.ownPointsAgainst, 'errado', 'errados')}</small>
   </div>`;
 };
 
@@ -92,24 +121,39 @@ const defensePerformanceRowHtml = (item: ReportPlayerPerformanceRow, totalDefens
   const width = totalDefenses > 0 ? clampPercent((item.defenses / totalDefenses) * 100) : 0;
 
   return `<div class="performance-row">
-    <div class="performance-meta"><strong>${escapeHtml(item.playerName)}</strong><span>${item.defenses} defensas</span></div>
-    <div class="performance-track defense-track"><div class="defense-bar" style="width:${width.toFixed(1)}%"></div></div>
+    <div class="performance-meta"><strong>${escapeHtml(item.playerName)}</strong><span>${formatCount(item.defenses, 'defensa', 'defensas')}</span></div>
+    <div class="performance-track defense-track" style="height:12px;background-color:#cce8e3;"><div class="defense-bar" style="width:${width.toFixed(1)}%;height:12px;background-color:#0b6b61;">&nbsp;</div></div>
   </div>`;
 };
 
 const performanceHtml = (performance: ReportPlayerPerformance) => {
-  const attackRows = performance.rows.filter((row) => row.shotAttempts > 0);
-  const defenseRows = performance.rows.filter((row) => row.defenses > 0);
+  const attackRows = performance.rows
+    .filter((row) => row.shotAttempts > 0)
+    .sort((a, b) =>
+      b.goals - a.goals ||
+      b.shotAttempts - a.shotAttempts ||
+      (b.effectiveness ?? 0) - (a.effectiveness ?? 0) ||
+      a.ownPointsAgainst - b.ownPointsAgainst ||
+      a.playerName.localeCompare(b.playerName),
+    );
+  const defenseRows = performance.rows
+    .filter((row) => row.defenses > 0)
+    .sort((a, b) => b.defenses - a.defenses || b.defenseShare - a.defenseShare || a.playerName.localeCompare(b.playerName));
+  const visibleAttackRows = attackRows.slice(0, PERFORMANCE_ROW_LIMIT);
+  const visibleDefenseRows = defenseRows.slice(0, PERFORMANCE_ROW_LIMIT);
 
   return `<div class="performance-grid">
-    <div class="performance-column">
+    <div class="performance-column attack-performance-card">
       <h4>Ataque</h4>
-      <p class="performance-legend">Rendimiento ofensivo · Tiros generados <span class="legend-attempt"></span> Puntos convertidos <span class="legend-converted"></span></p>
-      ${attackRows.length === 0 ? '<p class="muted">Sin tiros registrados.</p>' : attackRows.map((row) => attackPerformanceRowHtml(row, performance.totalShotAttempts)).join('')}
+      <p class="performance-legend">Rendimiento ofensivo · <span class="legend-attempt"></span> Tiros generados <span class="legend-converted"></span> Puntos convertidos</p>
+      ${attackRows.length === 0 ? '<p class="muted">Sin tiros registrados.</p>' : visibleAttackRows.map(attackPerformanceRowHtml).join('')}
+      ${attackRows.length > PERFORMANCE_ROW_LIMIT ? `<p class="more-rows">+${attackRows.length - PERFORMANCE_ROW_LIMIT} jugadores más</p>` : ''}
     </div>
-    <div class="performance-column">
+    <div class="performance-column defense-performance-card">
       <h4>Defensa</h4>
-      ${defenseRows.length === 0 ? '<p class="muted">Sin defensas registradas.</p>' : defenseRows.map((row) => defensePerformanceRowHtml(row, performance.totalDefenses)).join('')}
+      <p class="performance-legend"><span class="legend-defense"></span> Contribución defensiva</p>
+      ${defenseRows.length === 0 ? '<p class="muted">Sin defensas registradas.</p>' : visibleDefenseRows.map((row) => defensePerformanceRowHtml(row, performance.totalDefenses)).join('')}
+      ${defenseRows.length > PERFORMANCE_ROW_LIMIT ? `<p class="more-rows">+${defenseRows.length - PERFORMANCE_ROW_LIMIT} jugadores más</p>` : ''}
     </div>
   </div>`;
 };
@@ -125,14 +169,81 @@ const substitutionsHtml = (items: ReportSubstitution[]) =>
         )
         .join('')}</ul>`;
 
-const insightsHtml = (items: Array<{ title: string; description: string; suggestedAction: string }>, limit?: number) => {
-  const visibleItems = typeof limit === 'number' ? items.slice(0, limit) : items;
+const insightPriority: Record<string, number> = {
+  'Puntos regalados': 10,
+  'Errores repetidos': 20,
+  'Lo están anulando': 30,
+  'Baja efectividad': 40,
+  'Zona vulnerable': 50,
+  'Zona bloqueada': 60,
+  'Aporte defensivo': 70,
+  'Buen rendimiento ofensivo': 80,
+  'Baja participación': 100,
+};
+
+const compactInsightDetail = (item: ReportInsightItem, zoneStats: ReportStat[] = []) => {
+  const description = item.description.trim().replace(/\.$/, '');
+  const repeatedErrors = description.match(/^(.+?) acumula (\d+) errores$/i);
+  const blockedPlayer = description.match(/^A (.+?) le defendieron (\d+) tiros y lleva (\d+\/\d+)$/i);
+  const shootingStat = description.match(/^(.+?): (\d+\/\d+) en tiros \((\d+%)\)$/i);
+  const strongDefense = description.match(/^(.+?) sostiene defensa con (\d+) defensas$/i);
+  const ownPoints = description.match(/(\d+) puntos en contra/i);
+  const matchingZone = zoneStats.find((zone) => description.includes(zone.label));
+
+  if (item.title === 'Errores repetidos' && repeatedErrors) {
+    return `${repeatedErrors[1]} · ${repeatedErrors[2]} errores`;
+  }
+
+  if (item.title === 'Lo están anulando' && blockedPlayer) {
+    return `${blockedPlayer[1]} · ${blockedPlayer[3]} tiros · ${formatCount(Number(blockedPlayer[2]), 'atajado', 'atajados')}`;
+  }
+
+  if ((item.title === 'Baja efectividad' || item.title === 'Buen rendimiento ofensivo') && shootingStat) {
+    return `${shootingStat[1]} · ${shootingStat[2]} tiros · ${shootingStat[3]}`;
+  }
+
+  if (item.title === 'Aporte defensivo' && strongDefense) {
+    return `${strongDefense[1]} · ${strongDefense[2]} defensas`;
+  }
+
+  if (item.title === 'Puntos regalados' && ownPoints) {
+    return `${ownPoints[1]} puntos en contra`;
+  }
+
+  if ((item.title === 'Zona vulnerable' || item.title === 'Zona bloqueada') && matchingZone) {
+    const unit = item.title === 'Zona vulnerable' ? 'puntos' : 'atajadas';
+    return `${matchingZone.label} · ${formatCount(matchingZone.total, item.title === 'Zona vulnerable' ? 'punto' : 'atajada', unit)}`;
+  }
+
+  return description;
+};
+
+const prioritizedInsights = (items: ReportInsightItem[], limit: number) => {
+  const indexed = items.map((item, index) => ({ item, index }));
+  const withoutLowInvolvement = indexed.filter(({ item }) => item.title !== 'Baja participación');
+  const candidates = withoutLowInvolvement.length > 0 ? withoutLowInvolvement : indexed;
+  const seen = new Set<string>();
+
+  return candidates
+    .filter(({ item }) => {
+      const key = `${item.title}|${item.description}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    })
+    .sort((a, b) => (insightPriority[a.item.title] ?? 90) - (insightPriority[b.item.title] ?? 90) || a.index - b.index)
+    .slice(0, limit)
+    .map(({ item }) => item);
+};
+
+const insightsHtml = (items: ReportInsightItem[], limit: number, zoneStats: ReportStat[] = []) => {
+  const visibleItems = prioritizedInsights(items, limit);
 
   return visibleItems.length === 0
     ? '<p class="muted">Sin alertas tácticas.</p>'
-    : `<ul>${visibleItems
-        .map((item) => `<li><strong>${escapeHtml(item.title)}:</strong> ${escapeHtml(item.description)} <em>${escapeHtml(item.suggestedAction)}</em></li>`)
-        .join('')}</ul>`;
+    : `<div class="insight-grid">${visibleItems
+        .map((item) => `<div class="insight-card insight-${escapeHtml(item.severity ?? 'info')}"><strong>${escapeHtml(item.title)}</strong><span>${escapeHtml(compactInsightDetail(item, zoneStats))}</span></div>`)
+        .join('')}</div>`;
 };
 
 const densityForLocation = (location: CourtLocation, locations: CourtLocation[]) =>
@@ -194,28 +305,42 @@ const renderMapStack = (maps: ReportLocationMaps) => `
   </div>
 `;
 
-const summaryCardsHtml = (report: MatchReportData) => `
-  <section>
+const summaryCardsHtml = (report: MatchReportData) => {
+  const preferredLabels = [
+    'Top ataque',
+    'Top defensa',
+    'Efectividad ofensiva total',
+    'Puntos en contra',
+    'Sector vulnerable',
+    'Sector donde mas nos defendieron',
+  ];
+  const cards = preferredLabels
+    .map((label) => report.executiveSummary.find((item) => item.label === label))
+    .filter((item): item is NonNullable<typeof item> => Boolean(item));
+
+  return `
+  <section class="executive-section">
     <h2>Resumen ejecutivo</h2>
     <div class="summary-grid">
-      ${report.executiveSummary.map((item) => `<div><strong>${escapeHtml(item.label)}</strong><span>${escapeHtml(item.value)}</span></div>`).join('')}
+      ${cards.map((item) => `<div class="summary-card"><strong>${escapeHtml(item.label)}</strong><span>${escapeHtml(item.value)}</span></div>`).join('')}
     </div>
-    <h3>Lectura táctica principal</h3>
-    ${insightsHtml(report.totals.insights, 3)}
+    <h3>Claves tácticas</h3>
+    ${insightsHtml(report.totals.insights, 3, [...report.zones.against, ...report.zones.defended])}
   </section>
 `;
+};
 
-const periodHtml = (period: PeriodReportData, opponentName: string) => `
+const periodHtml = (period: PeriodReportData, ownTeamName: string, opponentName: string) => `
   <section class="period-section">
     <h2>${escapeHtml(period.periodLabel)}</h2>
-    <p class="score">${escapeHtml(scoreText(period.score.uruguay, period.score.opponent, opponentName))}</p>
+    <p class="score">${escapeHtml(scoreText(ownTeamName, period.score.uruguay, period.score.opponent, opponentName))}</p>
     <div class="grid">
-      <div><strong>Puntos Uruguay</strong><span>${period.uruguayPoints}</span></div>
+      <div><strong>Puntos ${escapeHtml(ownTeamName)}</strong><span>${period.uruguayPoints}</span></div>
       <div><strong>Puntos rival</strong><span>${period.opponentPoints}</span></div>
       <div><strong>Puntos en contra</strong><span>${period.ownPoints}</span></div>
       <div><strong>Puntos en contra del rival</strong><span>${period.opponentOwnPoints}</span></div>
       <div><strong>Defensas del rival</strong><span>${period.opponentDefenses}</span></div>
-      <div><strong>Defensas Uruguay</strong><span>${period.performance.totalDefenses}</span></div>
+      <div><strong>Defensas ${escapeHtml(ownTeamName)}</strong><span>${period.performance.totalDefenses}</span></div>
       <div><strong>Errores</strong><span>${period.totalErrors.reduce((sum, item) => sum + item.total, 0)}</span></div>
     </div>
     <h3>Rendimiento del tiempo</h3>
@@ -223,7 +348,7 @@ const periodHtml = (period: PeriodReportData, opponentName: string) => `
     <div class="two-col">
       <div>
         <h3>Goleadores</h3>
-        ${statListHtml(period.topScorers, 'Sin puntos de Uruguay.')}
+        ${statListHtml(period.topScorers, `Sin puntos de ${ownTeamName}.`)}
         <h3>Defensas</h3>
         ${statListHtml(period.defenses, 'Sin defensas registradas.')}
         <h3>Efectividad ofensiva</h3>
@@ -241,10 +366,10 @@ const periodHtml = (period: PeriodReportData, opponentName: string) => `
     <h3>Cambios</h3>
     ${substitutionsHtml(period.substitutions)}
     <h3>Lectura del tiempo</h3>
-    ${insightsHtml(period.insights)}
+    ${insightsHtml(period.insights, 5, [...period.opponentScoringZones, ...period.opponentDefenseZones])}
     <div class="two-col tactical-sectors">
-      <div><h3>Zonas donde nos entraron</h3>${statListHtml(period.opponentScoringZones, 'Sin ubicaciones registradas.')}</div>
-      <div><h3>Zonas donde nos defendieron</h3>${statListHtml(period.opponentDefenseZones, 'Sin ubicaciones registradas.')}</div>
+      <div class="sector-card"><h3>Zonas donde nos entraron</h3>${sectorStatsHtml(period.opponentScoringZones, 'Sin ubicaciones registradas.')}</div>
+      <div class="sector-card"><h3>Zonas donde nos defendieron</h3>${sectorStatsHtml(period.opponentDefenseZones, 'Sin ubicaciones registradas.')}</div>
     </div>
     <div class="report-map-section">
       <h3>Mapas del tiempo</h3>
@@ -260,9 +385,10 @@ export function buildMatchReportHtml(report: MatchReportData) {
   <meta charset="UTF-8" />
   <title>${escapeHtml(report.title)}</title>
   <style>
+    * { box-sizing: border-box; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
     body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; color: #102033; margin: 24px; line-height: 1.35; }
     h1 { font-size: 28px; margin: 0 0 6px; }
-    h2 { font-size: 20px; margin: 22px 0 8px; border-bottom: 2px solid #dbe4ef; padding-bottom: 5px; }
+    h2 { font-size: 20px; margin: 22px 0 8px; border-bottom: 2px solid #dbe4ef; padding-bottom: 5px; break-after: avoid; page-break-after: avoid; }
     h3 { font-size: 15px; margin: 14px 0 5px; color: #19344d; }
     h4 { font-size: 12px; margin: 0 0 6px; color: #19344d; }
     p { margin: 4px 0; }
@@ -272,9 +398,10 @@ export function buildMatchReportHtml(report: MatchReportData) {
     td { border-bottom: 1px solid #e3ebf4; padding: 5px 3px; font-size: 12px; }
     th { border-bottom: 2px solid #dbe4ef; color: #5d6b7a; font-size: 10px; padding: 5px 3px; text-align: left; text-transform: uppercase; }
     .number { font-weight: 900; text-align: right; }
-    .hero { background: #102033; color: white; padding: 18px; border-radius: 8px; margin-bottom: 16px; }
+    .hero { background: #102033; color: white; padding: 18px; border-radius: 8px; margin-bottom: 16px; break-inside: avoid; page-break-inside: avoid; }
     .hero p { color: #d9e6f2; }
     .score { font-size: 18px; font-weight: 900; }
+    .hero .score { color: #ffffff; font-size: 28px; letter-spacing: .3px; margin-top: 10px; }
     .grid, .summary-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin: 10px 0; }
     .summary-grid { grid-template-columns: repeat(3, 1fr); }
     .grid div, .summary-grid div { border: 1px solid #dbe4ef; border-radius: 8px; padding: 8px; background: #f7fafc; }
@@ -282,6 +409,8 @@ export function buildMatchReportHtml(report: MatchReportData) {
     .grid span, .summary-grid span { display: block; font-size: 17px; font-weight: 900; margin-top: 3px; }
     .summary-grid span { font-size: 13px; }
     .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+    .executive-section, .summary-card { break-inside: avoid; page-break-inside: avoid; }
+    .summary-card { border-top: 4px solid #0b6bcb !important; min-height: 62px; }
     .report-map-section { break-inside: avoid; page-break-inside: avoid; margin-top: 14px; }
     .report-map-section h3 { break-after: avoid; page-break-after: avoid; margin-top: 18px; }
     .map-stack { display: block; margin-top: 8px; }
@@ -290,25 +419,46 @@ export function buildMatchReportHtml(report: MatchReportData) {
     .court-map { width: 100%; height: 260px; display: block; }
     .empty-map { height: 220px; border: 1px dashed #b7c5d3; border-radius: 8px; display: flex; align-items: center; justify-content: center; color: #5d6b7a; font-size: 13px; text-align: center; padding: 12px; }
     .muted { color: #5d6b7a; }
-    section { break-inside: avoid; margin-bottom: 14px; }
-    .period-section { break-inside: auto; }
+    section { break-inside: auto; margin-bottom: 14px; }
+    .period-section { break-inside: auto; page-break-inside: auto; }
     .note { background: #f4f7fb; border-left: 4px solid #0b6bcb; padding: 8px; border-radius: 6px; }
     .effectiveness-table { margin-top: 4px; }
-    .performance-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 8px 0 12px; }
-    .performance-column { background: #f7fafc; border: 1px solid #dbe4ef; border-radius: 8px; padding: 9px; }
-    .performance-row { margin: 7px 0; break-inside: avoid; }
+    .performance-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 8px 0 12px; break-inside: avoid; page-break-inside: avoid; }
+    .performance-column { background: #f7fafc; border: 1px solid #c7d6e5; border-radius: 8px; padding: 10px; break-inside: avoid; page-break-inside: avoid; }
+    .attack-performance-card { border-top: 5px solid #075ca8; }
+    .defense-performance-card { border-top: 5px solid #0b6b61; }
+    .performance-row { margin: 8px 0; break-inside: avoid; page-break-inside: avoid; }
     .performance-meta { display: flex; justify-content: space-between; gap: 8px; font-size: 11px; }
     .performance-meta span, .performance-row small { color: #5d6b7a; }
-    .performance-track { position: relative; height: 9px; border-radius: 99px; overflow: hidden; margin: 3px 0; background: #dbe4ef; }
-    .attempt-bar, .converted-bar, .defense-bar { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 99px; }
-    .attempt-bar { background: #8bd3ff; }
-    .converted-bar { background: #0b6bcb; }
-    .defense-bar { background: #0f766e; }
+    .performance-track { height: 12px; border: 1px solid #9fb4c8; border-radius: 6px; overflow: hidden; margin: 4px 0; background-color: #dbe4ef; }
+    .attempt-bar, .converted-bar, .defense-bar { display: block; min-height: 12px; border-radius: 5px; }
+    .attempt-bar { background-color: #9dcff0; }
+    .converted-bar { background-color: #075ca8; }
+    .defense-bar { background-color: #0b6b61; }
     .performance-legend { color: #5d6b7a; font-size: 9px; }
-    .legend-attempt, .legend-converted { display: inline-block; width: 10px; height: 6px; margin: 0 5px 0 2px; }
-    .legend-attempt { background: #8bd3ff; }
-    .legend-converted { background: #0b6bcb; }
-    .tactical-sectors { break-inside: avoid; }
+    .legend-attempt, .legend-converted, .legend-defense { display: inline-block; width: 12px; height: 7px; margin: 0 4px 0 2px; border: 1px solid #7890a5; }
+    .legend-attempt { background-color: #9dcff0; }
+    .legend-converted { background-color: #075ca8; }
+    .legend-defense { background-color: #0b6b61; }
+    .more-rows { color: #5d6b7a; font-size: 10px; font-weight: 800; margin-top: 6px; }
+    .insight-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 7px; margin: 6px 0 10px; }
+    .insight-card { background: #f7fafc; border: 1px solid #dbe4ef; border-left: 5px solid #5d7f9d; border-radius: 7px; padding: 8px; break-inside: avoid; page-break-inside: avoid; }
+    .insight-card strong, .insight-card span { display: block; }
+    .insight-card strong { color: #19344d; font-size: 11px; }
+    .insight-card span { color: #43576b; font-size: 10px; margin-top: 2px; }
+    .insight-warning { border-left-color: #b42318; background: #fff6f4; }
+    .tactical-sectors { break-inside: avoid; page-break-inside: avoid; }
+    .sector-card { border: 1px solid #dbe4ef; border-radius: 8px; padding: 9px; background: #f9fbfd; break-inside: avoid; page-break-inside: avoid; }
+    .sector-row { margin: 7px 0; break-inside: avoid; page-break-inside: avoid; }
+    .sector-meta { display: grid; grid-template-columns: 1fr auto; gap: 8px; font-size: 10px; }
+    .sector-meta strong { text-align: right; }
+    .sector-track { border-radius: 4px; overflow: hidden; margin-top: 3px; }
+    .sector-bar { display: block; border-radius: 4px; }
+    .three-col { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+    @media print {
+      .performance-grid, .performance-column, .performance-row, .insight-card, .sector-card, .sector-row, .map-card { break-inside: avoid; page-break-inside: avoid; }
+      .report-map-section h3, h2, h3 { break-after: avoid; page-break-after: avoid; }
+    }
   </style>
 </head>
 <body>
@@ -318,7 +468,7 @@ export function buildMatchReportHtml(report: MatchReportData) {
     ${report.teamPoolName ? `<p>Plantel: ${escapeHtml(report.teamPoolName)}</p>` : ''}
     <p>${escapeHtml(report.dateLabel)} - ${escapeHtml(report.venueLabel)}</p>
     <p>${escapeHtml(report.competitionLabel)}</p>
-    <p class="score">${escapeHtml(scoreText(report.finalScore.uruguay, report.finalScore.opponent, report.opponent))}</p>
+    <p class="score">${escapeHtml(scoreText(report.ownTeamName, report.finalScore.uruguay, report.finalScore.opponent, report.opponent))}</p>
   </div>
 
   ${summaryCardsHtml(report)}
@@ -326,21 +476,21 @@ export function buildMatchReportHtml(report: MatchReportData) {
   <section>
     <h2>Resultado por tiempos</h2>
     <ul>
-      ${report.scoreByPeriod.map((item) => `<li>${escapeHtml(item.periodLabel)}: ${escapeHtml(scoreText(item.score.uruguay, item.score.opponent, report.opponent))}</li>`).join('')}
+      ${report.scoreByPeriod.map((item) => `<li>${escapeHtml(item.periodLabel)}: ${escapeHtml(scoreText(report.ownTeamName, item.score.uruguay, item.score.opponent, report.opponent))}</li>`).join('')}
     </ul>
   </section>
 
-  ${report.periods.map((period) => periodHtml(period, report.opponent)).join('')}
+  ${report.periods.map((period) => periodHtml(period, report.ownTeamName, report.opponent)).join('')}
 
   <section>
     <h2>Totales del partido</h2>
-    <p class="score">${escapeHtml(scoreText(report.finalScore.uruguay, report.finalScore.opponent, report.opponent))}</p>
+    <p class="score">${escapeHtml(scoreText(report.ownTeamName, report.finalScore.uruguay, report.finalScore.opponent, report.opponent))}</p>
     <h3>Rendimiento total</h3>
     ${performanceHtml(report.totals.performance)}
     <div class="two-col">
       <div>
         <h3>Goleadores</h3>
-        ${statListHtml(report.totals.topScorers, 'Sin puntos de Uruguay.')}
+        ${statListHtml(report.totals.topScorers, `Sin puntos de ${report.ownTeamName}.`)}
         <h3>Defensas</h3>
         ${statListHtml(report.totals.defenses, 'Sin defensas registradas.')}
         <p><strong>Defensas del rival:</strong> ${report.totals.opponentDefenses}</p>
@@ -355,10 +505,10 @@ export function buildMatchReportHtml(report: MatchReportData) {
         <p><strong>Puntos en contra del rival:</strong> ${report.totals.opponentOwnPoints}</p>
         <h3>Errores totales</h3>
         ${statListHtml(report.totals.totalErrors, 'Sin errores registrados.')}
-        <h3>Lectura final</h3>
-        ${insightsHtml(report.totals.insights)}
       </div>
     </div>
+    <h3>Lectura final</h3>
+    ${insightsHtml(report.totals.insights, 6, [...report.zones.against, ...report.zones.defended])}
     <h3>Cambios</h3>
     ${substitutionsHtml(report.totals.substitutions)}
     <h3>Intercambios en cancha</h3>
@@ -372,12 +522,9 @@ export function buildMatchReportHtml(report: MatchReportData) {
   <section>
     <h2>Sectores tácticos principales</h2>
     <div class="three-col">
-      <h3>Zonas donde hicimos puntos</h3>
-      ${statListHtml(report.zones.attack, 'Sin ubicación registrada.')}
-      <h3>Zonas vulnerables del partido</h3>
-      ${statListHtml(report.zones.against, 'Sin ubicación registrada.')}
-      <h3>Zonas donde el rival nos defendió</h3>
-      ${statListHtml(report.zones.defended, 'Sin ubicaciones registradas.')}
+      <div class="sector-card"><h3>Zonas donde hicimos puntos</h3>${sectorStatsHtml(report.zones.attack, 'Sin ubicación registrada.')}</div>
+      <div class="sector-card"><h3>Zonas vulnerables</h3>${sectorStatsHtml(report.zones.against, 'Sin ubicación registrada.')}</div>
+      <div class="sector-card"><h3>Zonas donde el rival nos defendió</h3>${sectorStatsHtml(report.zones.defended, 'Sin ubicaciones registradas.')}</div>
     </div>
   </section>
 
@@ -397,32 +544,24 @@ export function buildMatchReportHtml(report: MatchReportData) {
 </html>`;
 }
 
-const statLines = (title: string, items: ReportStat[], emptyText: string, limit = 3) => [
-  title,
-  ...(items.length === 0 ? [`- ${emptyText}`] : topItems(items, limit).map((item) => `- ${item.label}: ${item.total}`)),
-];
-
 const topZoneLine = (title: string, items: ReportStat[]) => `${title}: ${items[0] ? `${items[0].label} (${items[0].total})` : 'Sin ubicaciones registradas.'}`;
-
-const effectivenessTextLine = (items: ReportEffectivenessRow[]) =>
-  items.length === 0
-    ? 'Efectividad: Sin tiros registrados.'
-    : `Efectividad: ${items
-        .slice(0, 3)
-        .map((item) => `${item.playerName} ${item.goals}/${item.shotAttempts} (${formatPercent(item.effectiveness)})`)
-        .join(', ')}.`;
 
 const topAttackText = (performance: ReportPlayerPerformance) => {
   const player = performance.topAttack[0];
   return player
-    ? `Top ataque: ${player.playerName} ${player.goals}/${player.shotAttempts} (${formatPercent(player.effectiveness ?? 0)}).`
+    ? `Top ataque: ${player.playerName} · ${player.goals}/${player.shotAttempts} tiros · ${formatPercent(player.effectiveness ?? 0)} · ${formatCount(player.rivalDefendedShots, 'atajado', 'atajados')} · ${formatCount(player.ownPointsAgainst, 'errado', 'errados')}.`
     : 'Top ataque: Sin tiros registrados.';
 };
 
 const topDefenseText = (performance: ReportPlayerPerformance) => {
   const player = performance.topDefense[0];
-  return player ? `Top defensa: ${player.playerName} ${player.defenses} defensas.` : 'Top defensa: Sin defensas registradas.';
+  return player ? `Top defensa: ${player.playerName} ${formatCount(player.defenses, 'defensa', 'defensas')}.` : 'Top defensa: Sin defensas registradas.';
 };
+
+const totalEffectivenessText = (performance: ReportPlayerPerformance) =>
+  performance.totalShotAttempts > 0
+    ? `Efectividad total: ${performance.totalGoals}/${performance.totalShotAttempts} tiros · ${formatPercent(performance.totalGoals / performance.totalShotAttempts)}.`
+    : 'Efectividad total: Sin tiros registrados.';
 
 export function buildMatchReportText(report: MatchReportData) {
   const lines = [
@@ -430,38 +569,15 @@ export function buildMatchReportText(report: MatchReportData) {
     report.matchLabel,
     ...(report.teamPoolName ? [`Plantel: ${report.teamPoolName}`] : []),
     `${report.dateLabel} - ${report.venueLabel}`,
-    scoreText(report.finalScore.uruguay, report.finalScore.opponent, report.opponent),
+    scoreText(report.ownTeamName, report.finalScore.uruguay, report.finalScore.opponent, report.opponent),
     topAttackText(report.totals.performance),
     topDefenseText(report.totals.performance),
-    '',
-    'Resultado por tiempos',
-    ...report.scoreByPeriod.map((item) => `- ${item.periodLabel}: ${scoreText(item.score.uruguay, item.score.opponent, report.opponent)}`),
-    '',
-    ...statLines('Top 3 goleadores', report.totals.topScorers, 'Sin puntos de Uruguay.'),
-    '',
-    ...statLines('Top defensas', report.totals.defenses, 'Sin defensas registradas.'),
-    '',
-    effectivenessTextLine(report.totals.effectiveness),
+    totalEffectivenessText(report.totals.performance),
+    topZoneLine('Zona vulnerable', report.zones.against),
+    topZoneLine('Zona bloqueada', report.zones.defended),
     ...(report.totals.legacyOpponentDefensesWithoutPlayer > 0
       ? ['Nota: algunas defensas rivales antiguas no tienen jugador asociado y no cuentan para la efectividad individual.']
       : []),
-    '',
-    ...statLines('Faltas', report.totals.faltas, 'Sin faltas registradas.'),
-    '',
-    ...statLines('Puntos en contra', report.totals.ownPointsByPlayer, 'Sin puntos en contra.'),
-    '',
-    `Puntos en contra del rival: ${report.totals.opponentOwnPoints}`,
-    `Defensas del rival: ${report.totals.opponentDefenses}`,
-    '',
-    'Sectores tácticos principales',
-    `- ${topZoneLine('Donde hicimos puntos', report.zones.attack)}`,
-    `- ${topZoneLine('Zona vulnerable', report.zones.against)}`,
-    `- ${topZoneLine('Zona donde el rival nos defendio', report.zones.defended)}`,
-    '',
-    'Lectura táctica',
-    ...(report.totals.insights.length === 0
-      ? ['- Sin alertas tácticas.']
-      : report.totals.insights.slice(0, 3).map((item) => `- ${item.title}: ${item.description}`)),
     '',
     'Notas',
     report.notes,

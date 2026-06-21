@@ -105,6 +105,17 @@ Status: implemented as a stability fix.
 - Keep button-based mode as fallback.
 - Consider optional player photos later; do not require them now.
 
+## Stage 2.1 - Cambios pre-periodo y entretiempo
+
+Estado: implementado el 2026-06-20; QA manual pendiente.
+
+1. Separar el guard de cambios de alineacion del guard de registro tactico live.
+2. Permitir cambios para `draft`, `live` y `period_break`; bloquear `finished`/`cancelled`.
+3. Derivar un reloj seguro: periodo actual en live; periodo 1/actual no iniciado a `0`; siguiente periodo a `0` cuando el actual ya termino.
+4. Mantener validaciones de roster, duplicados, slots y snapshot/evento existentes.
+5. Habilitar el modo de cambio en `LiveMatchScreen` con texto de ayuda fuera del tiempo activo.
+6. Agregar regresiones de draft, pre-periodo, entretiempo, roster, banco, finished y flujo live.
+
 ## Validation
 
 - `npm test`

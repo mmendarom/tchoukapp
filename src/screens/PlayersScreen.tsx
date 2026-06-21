@@ -12,7 +12,7 @@ export function PlayersScreen() {
     <Screen>
       <View style={styles.header}>
         <Text style={styles.title}>Plantel</Text>
-        <Text style={styles.subtitle}>Plantel de Uruguay listo para probar sin conexion.</Text>
+        <Text style={styles.subtitle}>Jugadores disponibles para armar tus planteles sin conexión.</Text>
       </View>
       {players.map((player) => (
         <PlayerCard key={player.id} player={player} />

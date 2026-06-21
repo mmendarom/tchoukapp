@@ -1,4 +1,4 @@
-import { DefenseEvent, MatchEvent, MatchPeriod, OpponentDefenseEvent, Player, PointEvent } from './types';
+import { DefenseEvent, ErrorEvent, MatchEvent, MatchPeriod, OpponentDefenseEvent, Player, PointEvent } from './types';
 
 export type PlayerPerformanceRow = {
   playerId: string;
@@ -6,6 +6,7 @@ export type PlayerPerformanceRow = {
   points: number;
   pointShare: number;
   rivalDefensesAgainst: number;
+  ownPointsAgainst: number;
   shotAttempts: number;
   effectiveness: number | undefined;
   defenses: number;
@@ -24,6 +25,7 @@ export type PlayerPerformanceField = 'points' | 'defenses';
 const isPointEvent = (event: MatchEvent): event is PointEvent => event.kind === 'point';
 const isDefenseEvent = (event: MatchEvent): event is DefenseEvent => event.kind === 'defense';
 const isOpponentDefenseEvent = (event: MatchEvent): event is OpponentDefenseEvent => event.kind === 'opponent_defense';
+const isErrorEvent = (event: MatchEvent): event is ErrorEvent => event.kind === 'error';
 const getEventPeriod = (event: MatchEvent): MatchPeriod => event.periodNumber ?? event.clock.period;
 
 const getPlayerLabel = (players: Player[], playerId: string) => {
@@ -54,6 +56,14 @@ const getUruguayDefensePlayerId = (event: MatchEvent) => {
 
 const getOpponentDefenseShooterId = (event: MatchEvent) => {
   if (!isOpponentDefenseEvent(event) || event.team !== 'opponent') {
+    return undefined;
+  }
+
+  return event.playerId;
+};
+
+const getUruguayOwnPointShooterId = (event: MatchEvent) => {
+  if (!isErrorEvent(event) || event.team !== 'uruguay' || event.errorType !== 'punto_en_contra') {
     return undefined;
   }
 
@@ -92,20 +102,23 @@ export function buildPlayerPerformance(
   const pointsByPlayer = new Map<string, number>();
   const defensesByPlayer = new Map<string, number>();
   const rivalDefensesByPlayer = new Map<string, number>();
+  const ownPointsAgainstByPlayer = new Map<string, number>();
 
   events.forEach((event) => {
     increment(pointsByPlayer, getNormalUruguayPointPlayerId(event));
     increment(defensesByPlayer, getUruguayDefensePlayerId(event));
     increment(rivalDefensesByPlayer, getOpponentDefenseShooterId(event));
+    increment(ownPointsAgainstByPlayer, getUruguayOwnPointShooterId(event));
   });
 
   const totalTeamPoints = Array.from(pointsByPlayer.values()).reduce((sum, total) => sum + total, 0);
   const totalTeamDefenses = Array.from(defensesByPlayer.values()).reduce((sum, total) => sum + total, 0);
   const statPlayerIds = uniqueIds([
-    ...players.map((player) => player.id).filter((playerId) => pointsByPlayer.has(playerId) || defensesByPlayer.has(playerId) || rivalDefensesByPlayer.has(playerId)),
+    ...players.map((player) => player.id).filter((playerId) => pointsByPlayer.has(playerId) || defensesByPlayer.has(playerId) || rivalDefensesByPlayer.has(playerId) || ownPointsAgainstByPlayer.has(playerId)),
     ...Array.from(pointsByPlayer.keys()),
     ...Array.from(defensesByPlayer.keys()),
     ...Array.from(rivalDefensesByPlayer.keys()),
+    ...Array.from(ownPointsAgainstByPlayer.keys()),
   ]);
   const rowPlayerIds = uniqueIds([...includedPlayerIds, ...statPlayerIds]);
 
@@ -116,7 +129,8 @@ export function buildPlayerPerformance(
       const points = pointsByPlayer.get(playerId) ?? 0;
       const defenses = defensesByPlayer.get(playerId) ?? 0;
       const rivalDefensesAgainst = rivalDefensesByPlayer.get(playerId) ?? 0;
-      const shotAttempts = points + rivalDefensesAgainst;
+      const ownPointsAgainst = ownPointsAgainstByPlayer.get(playerId) ?? 0;
+      const shotAttempts = points + rivalDefensesAgainst + ownPointsAgainst;
 
       return {
         playerId,
@@ -124,6 +138,7 @@ export function buildPlayerPerformance(
         points,
         pointShare: totalTeamPoints > 0 ? points / totalTeamPoints : 0,
         rivalDefensesAgainst,
+        ownPointsAgainst,
         shotAttempts,
         effectiveness: shotAttempts > 0 ? points / shotAttempts : undefined,
         defenses,
@@ -178,6 +193,7 @@ export function sortPlayerPerformanceRows(
           b.row.points - a.row.points ||
           b.row.shotAttempts - a.row.shotAttempts ||
           bEffectiveness - aEffectiveness ||
+          a.row.ownPointsAgainst - b.row.ownPointsAgainst ||
           a.index - b.index
         );
       })

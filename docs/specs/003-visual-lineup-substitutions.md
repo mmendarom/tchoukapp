@@ -298,3 +298,16 @@ See `docs/plans/003-visual-lineup-substitutions-plan.md`.
 - [x] Point recording, court map, timer, undo, cancel, period summaries, and final summaries still work.
 - [x] `npm test` passes.
 - [x] `npx tsc --noEmit` passes.
+
+## Field fix - cambios fuera del tiempo activo
+
+Estado: implementado el 2026-06-20; QA manual pendiente.
+
+- `Cambiar jugadores` queda disponible con alineacion existente mientras el partido no este finalizado ni cancelado.
+- Se permiten sustituciones e intercambios en borrador, antes de iniciar un tiempo, durante entretiempo y durante un tiempo live.
+- En borrador o antes del primer tiempo, snapshot y evento se asocian al tiempo 1 con reloj `0`.
+- En entretiempo, si el tiempo actual ya termino, snapshot y evento se asocian al proximo tiempo con reloj `0`.
+- Durante un tiempo live se conserva el periodo/reloj actual.
+- El cambio crea el mismo evento `substitution`/`lineup_swap` y el mismo `LineupSnapshot`; no cambia el modelo persistido ni undo.
+- Se mantienen guards de plantel disponible, slot valido y jugadores no duplicados.
+- Partidos finalizados/cancelados siguen inmutables.

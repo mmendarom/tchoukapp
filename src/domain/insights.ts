@@ -239,7 +239,7 @@ const createTypedErrorInsights = (
       id: 'team-puntos-regalados',
       severity: puntosEnContraTotal >= 4 ? 'critical' : 'warning',
       title: 'Puntos regalados',
-      description: `Uruguay entrego ${puntosEnContraTotal} puntos en contra en la secuencia reciente.`,
+      description: `El equipo entregó ${puntosEnContraTotal} puntos en contra en la secuencia reciente.`,
       suggestedAction: 'Bajar riesgo en los tiros y priorizar seguridad.',
     });
   }

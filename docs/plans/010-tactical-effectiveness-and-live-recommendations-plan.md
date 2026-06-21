@@ -215,16 +215,17 @@ type PlayerEffectivenessStat = {
 
 - `goals = puntos Uruguay normales con playerId`.
 - `rivalDefensesAgainst = opponent_defense con playerId`.
-- `shotAttempts = goals + rivalDefensesAgainst`.
+- `ownPointsAgainst = punto_en_contra Uruguay con playerId`.
+- `shotAttempts = goals + rivalDefensesAgainst + ownPointsAgainst`.
 - `effectiveness = goals / shotAttempts`.
-- Excluir `opponent_own_point`, `punto_en_contra` y eventos legacy sin `playerId`.
+- Excluir `opponent_own_point`, puntos rivales y eventos sin `playerId`; incluir `punto_en_contra` Uruguay con jugador como intento errado.
 
 ### Tests
 
 - Goles e intentos correctos.
 - Tiros defendidos por jugador correctos.
 - `opponent_own_point` excluido.
-- `punto_en_contra` excluido.
+- `punto_en_contra` Uruguay con jugador incluido como intento errado.
 - Legacy `opponent_defense` sin `playerId` excluido.
 - `shotAttempts === 0` produce `effectiveness: undefined`.
 - Period filtering correcto.
@@ -579,3 +580,14 @@ Cada etapa de implementacion debe correr:
 - `npx tsc --noEmit`
 
 Para etapas con UI, agregar QA manual en `docs/implementation-log.md`.
+
+## Field-testing fixes finales - 2026-06-20
+
+Estado: implementado el 2026-06-20; QA visual manual pendiente.
+
+1. Actualizar `playerPerformance` y tests con `ownPointsAgainst`, manteniendo ranking por goles y top groups.
+2. Propagar el campo a `reportData`, HTML y texto; actualizar fixtures y regresiones de periodo/total.
+3. Mostrar `atajados` y `errados` en las filas de ataque sin cambiar la estructura estable de barras.
+4. Reorganizar el score header en tres columnas flexibles, con numeros autoajustables y metadata central centrada/truncable.
+5. Documentar QA manual para telefono portrait y tablet landscape.
+6. Validar con `npm test`, `npx tsc --noEmit` y `git diff --check`.

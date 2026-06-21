@@ -28,6 +28,7 @@ import {
   getOpponentDefensesByPeriod,
 } from '../domain/periodStats';
 import { buildPlayerPerformanceForPeriod } from '../domain/playerPerformance';
+import { getOwnTeamDisplayName } from '../domain/teamLabels';
 import { useMatchStore } from '../store/useMatchStore';
 import { RootStackParamList } from '../utils/navigation';
 import { fontSize, spacing } from '../utils/responsive';
@@ -60,6 +61,7 @@ export function PeriodSummaryScreen({ navigation, route }: Props) {
   const periodScore = calculatePeriodScore(match.events, periodNumber);
   const totalScore = calculateTotalScore(match.events);
   const opponentName = normalizeOpponentName(match.opponent);
+  const ownTeamName = getOwnTeamDisplayName(match);
   const scorers = getTopScorersByPeriod(match.events, periodNumber);
   const errors = getErrorsByPlayerByPeriod(match.events, periodNumber);
   const errorBreakdown = getErrorsByTypeByPlayerByPeriod(match.events, periodNumber);
@@ -106,12 +108,12 @@ export function PeriodSummaryScreen({ navigation, route }: Props) {
           <Text style={styles.resultPill}>{resultLabel}</Text>
         </View>
         <Text style={styles.heroTitle}>{formatPeriodName(periodNumber)}</Text>
-        <Text style={styles.heroScore}>Uruguay {periodScore.uruguay} - {periodScore.opponent} {opponentName}</Text>
-        <Text style={styles.heroMeta}>Global: Uruguay {totalScore.uruguay} - {totalScore.opponent} {opponentName}</Text>
+        <Text style={styles.heroScore}>{ownTeamName} {periodScore.uruguay} - {periodScore.opponent} {opponentName}</Text>
+        <Text style={styles.heroMeta}>Global: {ownTeamName} {totalScore.uruguay} - {totalScore.opponent} {opponentName}</Text>
       </View>
 
       <View style={[styles.statGrid, isWide && styles.statGridWide]}>
-        <SummaryStatCard accentColor="#0b6bcb" surfaceColor="#f0f7ff" label="Ataque" value={`${attackTotal}`} detail="puntos Uruguay" />
+        <SummaryStatCard accentColor="#0b6bcb" surfaceColor="#f0f7ff" label="Ataque" value={`${attackTotal}`} detail={`puntos ${ownTeamName}`} />
         <SummaryStatCard accentColor="#0f766e" surfaceColor="#f0fdfa" label="Defensa" value={`${defenseTotal}`} detail="defensas" />
         <SummaryStatCard accentColor="#b45309" surfaceColor="#fff7ed" label="Errores" value={`${currentErrors}`} detail="propios" />
         <SummaryStatCard accentColor="#6d28d9" surfaceColor="#f5f3ff" label="Efectividad" value={teamEffectiveness} detail={`${teamGoals}/${teamShotAttempts} en tiros`} />
@@ -135,13 +137,13 @@ export function PeriodSummaryScreen({ navigation, route }: Props) {
 
       <View style={styles.card}>
         <Text style={styles.sectionTitle}>Goleadores del tiempo</Text>
-        {scorers.length === 0 ? <Text style={styles.metric}>Sin puntos de Uruguay.</Text> : scorers.map((stat) => (
+        {scorers.length === 0 ? <Text style={styles.metric}>Sin puntos de {ownTeamName}.</Text> : scorers.map((stat) => (
           <Text key={stat.playerId} style={styles.metric}>{playerName(stat.playerId)}: {stat.total}</Text>
         ))}
       </View>
 
       <View style={styles.card}>
-        <Text style={styles.sectionTitle}>Defensas Uruguay</Text>
+        <Text style={styles.sectionTitle}>Defensas {ownTeamName}</Text>
         {defenses.length === 0 ? <Text style={styles.metric}>Sin defensas registradas.</Text> : defenses.map((stat) => (
           <Text key={stat.playerId} style={styles.metric}>{playerName(stat.playerId)}: {stat.total}</Text>
         ))}

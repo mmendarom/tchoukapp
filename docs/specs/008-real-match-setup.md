@@ -118,7 +118,7 @@ Hoy la app decide titulares de forma automatica desde el orden del roster, lo qu
   - la creacion de partido sigue usando `Mayores` hasta Stage 2C.
 - Stage 2C implementado:
   - `Crear partido` permite elegir cualquier plantel persistido;
-  - `Mayores`, `+40` y planteles creados por el usuario son seleccionables;
+  - `Mayores`, `+40`, `Femenino` y planteles creados por el usuario son seleccionables;
   - la lista de titulares se arma solo con jugadores del plantel seleccionado;
   - el partido guarda `teamPoolId`, `teamPoolName` y `availablePlayerIds` como snapshot historico;
   - editar un plantel despues de crear un partido no muta el roster historico de ese partido.
@@ -462,6 +462,7 @@ Resumen por etapas:
 - [x] No se inventan jugadores para `Sub 18`; `+40` usa lista real cargada.
 - [x] `Mayores` usa ids explicitos y no incluye automaticamente jugadores `plus40-*`.
 - [x] `+40` existe como plantel default separado en `Gestionar planteles`.
+- [x] `Femenino` existe como plantel default separado con 16 jugadoras e ids dedicados.
 - [x] Jugadores compartidos entre `Mayores` y `+40` se referencian por el mismo `id`, sin duplicados.
 - [x] Estados persistidos con `Mayores` contaminado se normalizan sin mutar snapshots de partidos.
 - [x] Modal `Planteles` tiene cierre claro y accion `Cancelar` separada del cierre.
@@ -497,3 +498,30 @@ Resumen por etapas:
 - [x] Match creation guarda snapshot historico de `availablePlayerIds`.
 - [x] Delete de pools sigue diferido.
 - [x] Player CRUD sigue diferido.
+
+## Field fix - identidad visible desde Plantel
+
+Estado: implementado el 2026-06-20; QA manual en telefono pendiente.
+
+- `teamPoolName` pasa a ser la fuente del nombre visible del lado propio en partidos, resumenes y reportes.
+- Sin `teamPoolName`, partidos historicos muestran `Equipo`.
+- La identidad institucional de Home puede seguir diciendo Uruguay; los labels competitivos del partido usan el plantel/club real.
+- Los enums internos `uruguay/opponent` no cambian y siguen siendo compatibles con backups existentes.
+
+## Plantel default Femenino
+
+Estado: implementado el 2026-06-20; QA manual pendiente.
+
+- Se agrega el plantel fijo `Femenino` con 16 jugadoras y ids dedicados `femenino-*`.
+- `Mayores`, `+40` y `Femenino` mantienen rosters explicitos e independientes; no se agregan jugadoras de Femenino a los otros defaults.
+- Nuevas instalaciones reciben jugadores y plantel desde los defaults.
+- Instalaciones existentes reciben los jugadores faltantes y el plantel mediante migracion persistida v9, sin reemplazar jugadores locales con el mismo id ni borrar planteles custom.
+- `resetDemoData` preserva jugadores y planteles creados por el usuario y vuelve a asegurar los tres defaults.
+- Los partidos creados con `Femenino` guardan `teamPoolId`, `teamPoolName` y `availablePlayerIds` como snapshot historico.
+- No cambian score, tracking, eventos, mapas ni backup/import.
+
+QA manual:
+
+- Confirmar `Femenino` y sus 16 jugadoras en `Gestionar planteles`.
+- Confirmar que `Mayores` y `+40` no contienen ids `femenino-*`.
+- Crear un partido con `Femenino`, elegir siete titulares y revisar banco, live y reporte.

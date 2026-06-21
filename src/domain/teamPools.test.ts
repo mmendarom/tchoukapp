@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { buildTeamPool, ensureDefaultTeamPool, filterExistingPlayerIds, normalizeTeamPoolName } from './teamPools';
-import { mayoresPlayerIds, plus40PlayerIds, teamPools, uruguayPlayers } from './mockData';
+import { femeninoPlayerIds, femeninoPlayers, mayoresPlayerIds, plus40PlayerIds, teamPools, uruguayPlayers } from './mockData';
 
 describe('team pool helpers', () => {
   it('normalizes pool names', () => {
@@ -21,6 +21,51 @@ describe('team pool helpers', () => {
     expect(defaultOnly[0].playerIds).toEqual(mayoresPlayerIds);
     expect(defaultOnly[0].playerIds.some((playerId) => playerId.startsWith('plus40-'))).toBe(false);
     expect(withDefaultAgain.filter((pool) => pool.id === 'mayores')).toHaveLength(1);
+  });
+
+  it('defines Femenino as a separate fixed default pool', () => {
+    const femenino = teamPools.find((pool) => pool.id === 'femenino');
+
+    expect(teamPools.map((pool) => pool.id)).toEqual(['mayores', 'plus40', 'femenino']);
+    expect(femenino).toEqual({ id: 'femenino', name: 'Femenino', playerIds: femeninoPlayerIds });
+    expect(femeninoPlayerIds).toEqual([
+      'femenino-kari',
+      'femenino-fio',
+      'femenino-mori',
+      'femenino-vicky',
+      'femenino-larre',
+      'femenino-aly',
+      'femenino-flaca',
+      'femenino-ile',
+      'femenino-cami',
+      'femenino-karen',
+      'femenino-juli',
+      'femenino-pau',
+      'femenino-romi',
+      'femenino-ede',
+      'femenino-maca',
+      'femenino-mariana',
+    ]);
+    expect(mayoresPlayerIds.some((playerId) => playerId.startsWith('femenino-'))).toBe(false);
+    expect(plus40PlayerIds.some((playerId) => playerId.startsWith('femenino-'))).toBe(false);
+    expect(femeninoPlayers).toHaveLength(16);
+    expect(femeninoPlayers.map((player) => player.number)).toEqual(Array.from({ length: 16 }, (_, index) => index + 1));
+    expect(femeninoPlayers.every((player) => player.position === 'Wing' && player.dominantHand === 'Right')).toBe(true);
+    expect(femeninoPlayers.every((player) => player.caps === 0 && player.goals === 0 && player.blocks === 0)).toBe(true);
+  });
+
+  it('adds missing fixed pools once while preserving custom pools', () => {
+    const existingPools = [
+      teamPools.find((pool) => pool.id === 'mayores')!,
+      teamPools.find((pool) => pool.id === 'plus40')!,
+      { id: 'custom', name: 'Club', playerIds: ['mauro'] },
+    ];
+    const normalized = ensureDefaultTeamPool(existingPools, uruguayPlayers, teamPools);
+    const normalizedAgain = ensureDefaultTeamPool(normalized, uruguayPlayers, teamPools);
+
+    expect(normalized.find((pool) => pool.id === 'femenino')?.playerIds).toEqual(femeninoPlayerIds);
+    expect(normalized.find((pool) => pool.id === 'custom')).toEqual(existingPools[2]);
+    expect(normalizedAgain.filter((pool) => pool.id === 'femenino')).toHaveLength(1);
   });
 
   it('normalizes default pools and preserves custom pools', () => {

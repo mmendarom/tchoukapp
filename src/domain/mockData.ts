@@ -6,7 +6,7 @@ const createInitialPeriods = () => [
   { number: 3 as const, status: 'not_started' as const, durationSeconds: 900, remainingSeconds: 900, timerRunning: false },
 ];
 
-export const uruguayPlayers: Player[] = [
+const existingDefaultPlayers: Player[] = [
   { id: 'mauro', firstName: 'Mauro', lastName: '', number: 1, position: 'Wing', usualPlayingZone: 'izquierda', dominantHand: 'Right', caps: 0, goals: 0, blocks: 0 },
   { id: 'marcelo', firstName: 'Marcelo', lastName: '', number: 2, position: 'Center', usualPlayingZone: 'central', dominantHand: 'Right', caps: 0, goals: 0, blocks: 0 },
   { id: 'nicolas', firstName: 'Nicolas', lastName: '', number: 3, position: 'Wing', usualPlayingZone: 'derecha', dominantHand: 'Right', caps: 0, goals: 0, blocks: 0 },
@@ -44,6 +44,27 @@ export const uruguayPlayers: Player[] = [
   { id: 'plus40-jonathan', firstName: 'Jonathan', lastName: '', number: 35, position: 'Wing', usualPlayingZone: 'derecha', dominantHand: 'Right', caps: 0, goals: 0, blocks: 0 },
   { id: 'plus40-milena', firstName: 'Milena', lastName: '', number: 36, position: 'Wing', usualPlayingZone: 'izquierda', dominantHand: 'Right', caps: 0, goals: 0, blocks: 0 },
 ];
+
+export const femeninoPlayers: Player[] = [
+  { id: 'femenino-kari', firstName: 'Kari', lastName: '', number: 1, position: 'Wing', usualPlayingZone: 'izquierda', dominantHand: 'Right', caps: 0, goals: 0, blocks: 0 },
+  { id: 'femenino-fio', firstName: 'Fio', lastName: '', number: 2, position: 'Wing', usualPlayingZone: 'central', dominantHand: 'Right', caps: 0, goals: 0, blocks: 0 },
+  { id: 'femenino-mori', firstName: 'Mori', lastName: '', number: 3, position: 'Wing', usualPlayingZone: 'derecha', dominantHand: 'Right', caps: 0, goals: 0, blocks: 0 },
+  { id: 'femenino-vicky', firstName: 'Vicky', lastName: '', number: 4, position: 'Wing', usualPlayingZone: 'izquierda', dominantHand: 'Right', caps: 0, goals: 0, blocks: 0 },
+  { id: 'femenino-larre', firstName: 'Larre', lastName: '', number: 5, position: 'Wing', usualPlayingZone: 'central', dominantHand: 'Right', caps: 0, goals: 0, blocks: 0 },
+  { id: 'femenino-aly', firstName: 'Aly', lastName: '', number: 6, position: 'Wing', usualPlayingZone: 'derecha', dominantHand: 'Right', caps: 0, goals: 0, blocks: 0 },
+  { id: 'femenino-flaca', firstName: 'Flaca', lastName: '', number: 7, position: 'Wing', usualPlayingZone: 'izquierda', dominantHand: 'Right', caps: 0, goals: 0, blocks: 0 },
+  { id: 'femenino-ile', firstName: 'Ile', lastName: '', number: 8, position: 'Wing', usualPlayingZone: 'central', dominantHand: 'Right', caps: 0, goals: 0, blocks: 0 },
+  { id: 'femenino-cami', firstName: 'Cami', lastName: '', number: 9, position: 'Wing', usualPlayingZone: 'derecha', dominantHand: 'Right', caps: 0, goals: 0, blocks: 0 },
+  { id: 'femenino-karen', firstName: 'Karen', lastName: '', number: 10, position: 'Wing', usualPlayingZone: 'izquierda', dominantHand: 'Right', caps: 0, goals: 0, blocks: 0 },
+  { id: 'femenino-juli', firstName: 'Juli', lastName: '', number: 11, position: 'Wing', usualPlayingZone: 'central', dominantHand: 'Right', caps: 0, goals: 0, blocks: 0 },
+  { id: 'femenino-pau', firstName: 'Pau', lastName: '', number: 12, position: 'Wing', usualPlayingZone: 'derecha', dominantHand: 'Right', caps: 0, goals: 0, blocks: 0 },
+  { id: 'femenino-romi', firstName: 'Romi', lastName: '', number: 13, position: 'Wing', usualPlayingZone: 'izquierda', dominantHand: 'Right', caps: 0, goals: 0, blocks: 0 },
+  { id: 'femenino-ede', firstName: 'Ede', lastName: '', number: 14, position: 'Wing', usualPlayingZone: 'central', dominantHand: 'Right', caps: 0, goals: 0, blocks: 0 },
+  { id: 'femenino-maca', firstName: 'Maca', lastName: '', number: 15, position: 'Wing', usualPlayingZone: 'derecha', dominantHand: 'Right', caps: 0, goals: 0, blocks: 0 },
+  { id: 'femenino-mariana', firstName: 'Mariana', lastName: '', number: 16, position: 'Wing', usualPlayingZone: 'izquierda', dominantHand: 'Right', caps: 0, goals: 0, blocks: 0 },
+];
+
+export const uruguayPlayers: Player[] = [...existingDefaultPlayers, ...femeninoPlayers];
 
 export const mayoresPlayerIds = [
   'mauro',
@@ -89,6 +110,8 @@ export const plus40PlayerIds = [
   'plus40-milena',
 ];
 
+export const femeninoPlayerIds = femeninoPlayers.map((player) => player.id);
+
 export const teamPools: TeamPool[] = [
   {
     id: 'mayores',
@@ -99,6 +122,11 @@ export const teamPools: TeamPool[] = [
     id: 'plus40',
     name: '+40',
     playerIds: plus40PlayerIds,
+  },
+  {
+    id: 'femenino',
+    name: 'Femenino',
+    playerIds: femeninoPlayerIds,
   },
 ];
 

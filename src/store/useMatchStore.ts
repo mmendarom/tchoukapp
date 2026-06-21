@@ -29,7 +29,7 @@ import { appStorage, STORAGE_KEYS } from '../storage/asyncStorage';
 type LiveEventAction = 'goal' | 'miss' | 'block' | 'fault' | 'turnover';
 type TrackableErrorType = 'falta' | 'punto_en_contra';
 
-export const STORE_DATA_VERSION = 8;
+export const STORE_DATA_VERSION = 9;
 
 type MatchState = {
   hasHydrated: boolean;
@@ -199,6 +199,22 @@ const getCurrentPeriod = (match: Match) =>
 
 const canRecordInMatch = (match: Match) =>
   match.status === 'live' && getCurrentPeriod(match)?.status === 'live';
+
+const canChangeLineupInMatch = (match: Match) =>
+  match.status !== 'finished' && match.status !== 'cancelled';
+
+const getLineupChangeClock = (match: Match) => {
+  const currentPeriod = getCurrentPeriod(match);
+  const isBetweenFinishedPeriods =
+    match.status === 'period_break' && currentPeriod?.status === 'finished' && match.currentPeriod < 3;
+  const period = isBetweenFinishedPeriods ? (match.currentPeriod + 1) as MatchPeriod : match.currentPeriod;
+  const isActivePeriod = match.status === 'live' && currentPeriod?.status === 'live';
+
+  return {
+    period,
+    secondsElapsed: isActivePeriod ? match.clock.secondsElapsed : 0,
+  };
+};
 
 const isPlayerOnCourt = (match: Match, playerId?: string) => {
   if (!playerId) {
@@ -817,7 +833,7 @@ export const useMatchStore = create<MatchState>()(
           matches: state.matches.map((match) => {
             const normalized = normalizeMatch(match);
 
-            if (normalized.id !== activeMatchId || !canRecordInMatch(normalized)) {
+            if (normalized.id !== activeMatchId || !canChangeLineupInMatch(normalized)) {
               return match;
             }
 
@@ -844,24 +860,25 @@ export const useMatchStore = create<MatchState>()(
             }
 
             const nextLineupId = createId();
+            const changeClock = getLineupChangeClock(normalized);
             const nextLineup = {
               ...currentLineup,
               id: nextLineupId,
               capturedAt: new Date().toISOString(),
-              clock: { ...normalized.clock, period: normalized.currentPeriod },
+              clock: changeClock,
               playerIds: replaceLineupSlotPlayer(currentLineup.playerIds, targetSlotIndex, playerInId),
             };
             const event: MatchEvent = {
               id: createId(),
               matchId: normalized.id,
-              periodNumber: normalized.currentPeriod,
+              periodNumber: changeClock.period,
               kind: 'substitution',
               team: 'uruguay',
               playerOutId: currentPlayerOutId || playerOutId,
               playerInId,
               lineupSnapshotId: nextLineupId,
               timestamp: nextLineup.capturedAt,
-              clock: { ...normalized.clock, period: normalized.currentPeriod },
+              clock: changeClock,
             };
 
             return {
@@ -883,7 +900,7 @@ export const useMatchStore = create<MatchState>()(
           matches: state.matches.map((match) => {
             const normalized = normalizeMatch(match);
 
-            if (normalized.id !== activeMatchId || !canRecordInMatch(normalized)) {
+            if (normalized.id !== activeMatchId || !canChangeLineupInMatch(normalized)) {
               return match;
             }
 
@@ -912,17 +929,18 @@ export const useMatchStore = create<MatchState>()(
 
             const nextLineupId = createId();
             const capturedAt = new Date().toISOString();
+            const changeClock = getLineupChangeClock(normalized);
             const nextLineup = {
               ...currentLineup,
               id: nextLineupId,
               capturedAt,
-              clock: { ...normalized.clock, period: normalized.currentPeriod },
+              clock: changeClock,
               playerIds: swapLineupSlotPlayers(currentLineup.playerIds, fromSlotIndex, toSlotIndex),
             };
             const event: MatchEvent = {
               id: createId(),
               matchId: normalized.id,
-              periodNumber: normalized.currentPeriod,
+              periodNumber: changeClock.period,
               kind: 'lineup_swap',
               team: 'uruguay',
               playerAId,
@@ -931,7 +949,7 @@ export const useMatchStore = create<MatchState>()(
               toSlotIndex,
               lineupSnapshotId: nextLineupId,
               timestamp: capturedAt,
-              clock: { ...normalized.clock, period: normalized.currentPeriod },
+              clock: changeClock,
             };
 
             return {

@@ -131,11 +131,13 @@ Reglas:
 
 - `goals`: puntos Uruguay normales con `playerId`.
 - `rivalDefensesAgainst`: `opponent_defense` con `playerId`.
-- `shotAttempts = goals + rivalDefensesAgainst`.
+- `ownPointsAgainst`: errores Uruguay `punto_en_contra` con `playerId`.
+- `shotAttempts = goals + rivalDefensesAgainst + ownPointsAgainst`.
 - `effectiveness = goals / shotAttempts`.
 - `shotAttempts === 0`: `effectiveness` debe ser `undefined` y UI debe mostrar `Sin tiros` o `-`.
 - Excluir `pointSource: 'opponent_own_point'`.
-- Excluir `punto_en_contra`.
+- Incluir `punto_en_contra` de Uruguay con `playerId` como intento errado.
+- Excluir `punto_en_contra` sin `playerId` de la atribucion individual.
 - Excluir `opponent_defense` sin `playerId`.
 - No inferir datos faltantes.
 
@@ -672,7 +674,7 @@ Estado parcial: limpieza de baja participacion implementada en el polish posteri
 - [x] Eventos viejos sin `playerId` no entran en efectividad.
 - [x] Efectividad calcula goles, tiros defendidos, tiros y porcentaje.
 - [x] `opponent_own_point` no cuenta como tiro.
-- [x] `punto_en_contra` no cuenta como tiro.
+- [x] `punto_en_contra` de Uruguay con jugador cuenta como tiro errado y reduce la efectividad.
 - [x] Resumen por tiempo muestra efectividad.
 - [x] Resumen final muestra efectividad.
 - [x] PDF/text report muestra efectividad.
@@ -686,3 +688,22 @@ Estado parcial: limpieza de baja participacion implementada en el polish posteri
 - [ ] `landingLocation` y `defenseLocation` siguen siendo fuente de verdad para ubicaciones.
 - [ ] `npm test` pasa.
 - [ ] `npx tsc --noEmit` pasa.
+
+## Ajuste final de field testing - 2026-06-20
+
+### Punto en contra como intento ofensivo errado
+
+- Un error Uruguay `punto_en_contra` con `playerId` representa un ataque ejecutado que otorgo el punto al rival.
+- La fila individual expone `ownPointsAgainst`.
+- La formula queda `shotAttempts = goals + rivalDefensesAgainst + ownPointsAgainst` y `effectiveness = goals / shotAttempts`.
+- El evento sigue siendo un error y conserva exactamente su comportamiento de score, undo, resumen y persistencia.
+- Un punto en contra del rival, un punto rival normal o un punto en contra Uruguay sin jugador no se atribuyen como intento individual.
+- Barras live, resumen por tiempo, resumen final, report data y PDF/texto deben usar los intentos corregidos y mostrar los tiros errados/en contra de forma compacta.
+
+### Header live responsive
+
+- Puntajes de uno, dos y tres digitos deben permanecer dentro de la tarjeta en telefono portrait y tablet landscape.
+- Las columnas de score pueden encogerse (`flex`, `minWidth: 0`) y los numeros usan una sola linea con ajuste de fuente.
+- La informacion central agrupa plantel y rival en una columna centrada, acotada y truncable para evitar que un badge lateral desplace visualmente el encabezado.
+- Se preservan pausa/reanudar, fin de tiempo, periodo y timer sin superposiciones.
+- QA manual: `0-0`, `9-9`, `21-15`, `100-99`, plantel largo, `Tiempo cumplido`, pausa/reanudar y fin de tiempo.
