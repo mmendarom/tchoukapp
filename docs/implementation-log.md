@@ -1,5 +1,172 @@
 # Implementation Log
 
+## 2026-06-21 - Stage 3 modo practica 3v3: live mini-match tracking
+
+Se implemento tracking en vivo de un mini partido dentro de una sesion de `Práctica 3v3`, sin rotacion automatica, sin summary avanzado y sin export.
+
+Implementado:
+
+- `LiveTrainingMiniMatchScreen` muestra marcador, target score, estado, ganador, acciones, deshacer y ultimas acciones.
+- `TrainingSessionsScreen` permite elegir dos equipos e iniciar un mini partido desde el detalle de sesion.
+- Se bloquea iniciar un segundo mini partido si ya hay uno `live`.
+- `CourtMapInput` agrega modos de texto para:
+  - `training_point`;
+  - `training_shot_defended`.
+- `trainingLive.ts` agrega helpers para labels en espanol, score y jugadores por equipo.
+- Tests nuevos/actualizados cubren labels, ubicaciones en eventos, bloqueo de segundo mini partido activo y score.
+
+Acciones live:
+
+- `Punto {Equipo}`: jugador + ubicacion, suma al equipo.
+- `En contra {Equipo}`: jugador, suma al rival interno.
+- `Defensa`: equipo + jugador, no cambia score.
+- `Tiro defendido`: equipo + jugador + ubicacion, no cambia score.
+- `Error`: equipo + jugador, no cambia score.
+- `Deshacer`: revierte ultimo evento y recalcula score/ganador.
+
+Target score:
+
+- Al llegar al target se marca ganador/perdedor y se bloquean nuevos eventos.
+- Antes de cerrar, `Deshacer` permite corregir y reabrir el score.
+- `Finalizar mini partido` marca el mini partido como finalizado.
+
+Diferido:
+
+- Rotacion/cola winner-stays.
+- Inicio automatico del siguiente mini partido.
+- Standings/resumen avanzado.
+- Backup/export/PDF de training sessions.
+- Mapa one-frame dedicado.
+
+QA manual recomendado:
+
+- Crear una sesion de 3 equipos con 9 jugadores.
+- Iniciar `Equipo 1` vs `Equipo 2`.
+- Registrar punto con jugador y ubicacion.
+- Registrar punto del otro equipo con ubicacion.
+- Registrar defensa.
+- Registrar tiro defendido con ubicacion.
+- Registrar error.
+- Registrar punto en contra.
+- Llegar al target score.
+- Confirmar ganador y bloqueo de nuevos eventos.
+- Deshacer ultimo evento y confirmar que score/ganador se revierten.
+- Finalizar mini partido.
+- Volver a la sesion y confirmar historial.
+- Confirmar que `Partidos` formal sigue funcionando.
+
+## 2026-06-21 - Stage 2 modo practica 3v3: setup UI
+
+Se implemento la UI inicial para crear sesiones de `Práctica 3v3`, sin tracking live, sin rotacion y sin export.
+
+Implementado:
+
+- Home agrega seccion `Entrenamiento` con accion `Práctica 3v3`.
+- `TrainingSessionsScreen` permite:
+  - elegir plantel;
+  - seleccionar jugadores presentes;
+  - elegir 2, 3 o 4 equipos segun participantes;
+  - asignar jugadores manualmente a equipos;
+  - ver jugadores seleccionados sin equipo;
+  - definir `Puntos para ganar`;
+  - guardar `Ganador queda`;
+  - crear sesion con `useTrainingStore`;
+  - listar sesiones guardadas;
+  - ver un detalle basico con equipos y configuracion.
+- Se agregaron helpers puros en `src/domain/trainingSetup.ts` para opciones de cantidad de equipos, armado de equipos desde asignaciones, parsing de target score y validacion.
+- `App.tsx` y `src/utils/navigation.ts` registran la ruta `TrainingSessions`.
+
+Validaciones visibles:
+
+- `Seleccioná al menos 6 jugadores.`
+- `Cada equipo necesita 3 o 4 jugadores.`
+- `Los puntos para ganar deben ser al menos 1.`
+- `No se pudo crear la práctica.`
+
+Diferido:
+
+- Tracking en vivo de mini partidos.
+- Rotacion/cola.
+- Auto-balance.
+- Borrado/archivo de sesiones.
+- Backup/export/PDF de training sessions.
+
+QA manual recomendado:
+
+- Abrir Home.
+- Tocar `Práctica 3v3`.
+- Seleccionar `Mayores`.
+- Seleccionar 9 jugadores.
+- Elegir 3 equipos y asignar 3 jugadores a cada uno.
+- Dejar target score en 3.
+- Confirmar que se crea la sesion y aparece el detalle.
+- Probar invalidos: menos de 6 participantes, equipo con 2 jugadores y target score 0.
+- Volver a `Partidos` y confirmar que el flujo formal sigue funcionando.
+- Reiniciar app y confirmar que la sesion creada persiste.
+
+## 2026-06-21 - Stage 1 modo practica 3v3: dominio/store/tests
+
+Se implemento la primera etapa tecnica del modo entrenamiento 3v3/4v4 sin agregar UI y sin modificar el flujo formal de partidos.
+
+Implementado:
+
+- `src/domain/training.ts` define `TrainingSession`, `TrainingTeam`, `TrainingMiniMatch`, `TrainingEvent`, settings, validaciones y helpers de stats.
+- `src/store/useTrainingStore.ts` agrega un store Zustand separado de `useMatchStore`.
+- `src/storage/asyncStorage.ts` agrega `STORAGE_KEYS.trainingState` para persistir entrenamiento con key propia.
+- Tests nuevos:
+  - `src/domain/training.test.ts`;
+  - `src/store/useTrainingStore.test.ts`.
+
+Reglas actuales:
+
+- Equipos validos de 3 o 4 jugadores.
+- Un jugador solo puede estar en un equipo por sesion.
+- `targetScore` default 3 y `winnerStays` default `true`.
+- `point` suma al equipo del evento.
+- `own_point_against` suma al equipo contrario.
+- `shot_defended`, `defense` y `error` no cambian score.
+- Al llegar al target se marca ganador/perdedor y se bloquean nuevos eventos hasta `undo` o `finishMiniMatch`.
+- `undoLastTrainingEvent` recalcula score y limpia ganador si corresponde.
+- Stats de sesion derivan de eventos: player stats, team stats, intentos y diferencial.
+
+No incluido todavia:
+
+- UI de Home/setup/live/resumen.
+- Rotacion/cola visual.
+- Backup/export de training sessions.
+- PDF/texto compartible.
+- Mapa one-frame dedicado.
+- Auto-balance de equipos.
+
+## 2026-06-21 - Planning: modo practica 3v3 / entrenamiento
+
+Se planifico un nuevo modo de entrenamiento para mini partidos internos 3v3/4v4, sin implementar codigo productivo.
+
+Decisiones propuestas:
+
+- Crear un modelo separado de `Match` para no mezclar Uruguay vs rival, 7 titulares, periodos oficiales y reportes formales con equipos internos de practica.
+- Introducir entidades futuras `TrainingSession`, `TrainingTeam`, `TrainingMiniMatch`, `TrainingEvent` y `TrainingSessionSettings`.
+- Entrar desde Home con `Practica 3v3` o `Modo entrenamiento`.
+- MVP recomendado:
+  - elegir plantel;
+  - seleccionar presentes;
+  - crear equipos manuales de 3/4;
+  - target score default 3;
+  - seleccionar manualmente los equipos del proximo mini partido;
+  - summary in-app antes que PDF.
+- Reusar `Player`, `TeamPool`, `CourtLocation`, `CourtMapInput`/`CourtLocationMap` y patrones de stats solo cuando no arrastren supuestos del modo formal.
+- Diferir auto-balance, rotacion automatica, mapa one-frame dedicado y PDF hasta validar el tracking vivo.
+
+Docs creados:
+
+- `docs/specs/011-training-3v3-scrimmage-mode.md`.
+- `docs/plans/011-training-3v3-scrimmage-mode-plan.md`.
+
+QA/validacion:
+
+- Tarea docs-only.
+- No se tocaron modelos, store, navegacion ni pantallas productivas para este modo.
+
 ## 2026-06-21 - Full court geometry unification pass
 
 Se unifico la geometria visual de mapas en input, mapas live, resumenes in-app y PDF/preview, sin cambiar eventos, scoring, tracking, coordenadas normalizadas, sectores tacticos ni persistencia.
@@ -2032,3 +2199,59 @@ Se reemplazaron los jugadores ficticios de demo por la lista real provista del p
 - `landingLocation` sigue viniendo exclusivamente del mapa de cancha.
 - El boton `Reiniciar datos demo` vuelve a cargar esta lista real.
 - Se agregaron tests para la lista de jugadores, zonas habituales, reset demo y preservacion de `landingLocation`.
+
+## 2026-06-21 - Practica 3v3 Stage 4 rotation queue
+
+Se implemento la rotacion de mini partidos para `Practica 3v3`.
+
+- `TrainingSession` ahora puede persistir `teamQueue`.
+- Sesiones antiguas sin `teamQueue` derivan el orden desde `queueOrder`.
+- Se agregaron helpers puros para normalizar cola, sugerir el proximo mini partido y avanzar la cola al finalizar.
+- Con `Ganador queda`, el ganador permanece, entra el siguiente equipo esperando y el perdedor va al fondo.
+- Si `Ganador queda` esta apagado, los dos equipos que jugaron rotan al fondo.
+- Con solo dos equipos, la sugerencia es revancha.
+- El detalle de sesion muestra `Cola`, `Proximo sugerido`, `Iniciar proximo` y mantiene `Elegir manualmente`.
+- La pantalla live muestra la siguiente sugerencia despues de finalizar el mini partido.
+- No hay inicio automatico: el entrenador confirma siempre el proximo cruce.
+- No se tocaron partidos formales, scoring formal, PDF formal ni backup/import.
+
+QA manual sugerida:
+
+- Crear sesion con 3 equipos de 3.
+- Iniciar Equipo 1 vs Equipo 2.
+- Hacer ganar a Equipo 1 y finalizar.
+- Confirmar sugerencia Equipo 1 vs Equipo 3.
+- Iniciar sugerido.
+- Hacer ganar a Equipo 3 y finalizar.
+- Confirmar sugerencia Equipo 3 vs Equipo 2.
+- Probar `Elegir manualmente` con otro cruce y confirmar que la siguiente sugerencia sale desde ese resultado.
+- Crear sesion de 2 equipos y confirmar revancha sugerida.
+- Intentar iniciar otro mini partido mientras uno esta en vivo y confirmar bloqueo.
+- Confirmar que `Partidos` formales sigue funcionando.
+
+## 2026-06-21 - Practica 3v3 Stage 5 session summary
+
+Se implemento resumen estadistico in-app para `Practica 3v3`.
+
+- `getTrainingSessionStats` ahora deriva resumen de sesion, standings de equipos, rankings de jugadores y alertas.
+- Stats por jugador: puntos, intentos, efectividad, tiros defendidos, puntos en contra, errores, defensas, jugados, ganados/perdidos, win rate y plus/minus.
+- Stats por equipo: jugados, ganados, perdidos, win rate, puntos a favor, puntos en contra y diferencia.
+- El detalle de sesion muestra `Resumen de la practica`, `Tabla de equipos`, `Top ataque`, `Top defensa`, `Alertas`, `Rendimiento jugadores` e historial.
+- El ranking de ataque prioriza puntos, luego intentos y luego efectividad.
+- Los rankings de eficiencia usan minimo de intentos para reducir ruido.
+- Mini partidos cancelados no suman a standings ni rankings.
+- No se tocaron partidos formales, scoring formal ni PDF/export formal.
+
+QA manual sugerida:
+
+- Crear sesion con 3 equipos.
+- Jugar 3 mini partidos con ganadores distintos.
+- Registrar puntos, defensas, errores, puntos en contra y tiros defendidos.
+- Volver al detalle de sesion.
+- Confirmar tabla de equipos: J, G, P, PF, PC, DIF y porcentaje.
+- Confirmar `Top ataque` prioriza al jugador con mas puntos aunque tenga menor efectividad que otro con pocos tiros.
+- Confirmar `Top defensa` ordena por defensas.
+- Confirmar `Alertas` muestra errores, puntos en contra o baja efectividad con numeros concretos.
+- Confirmar historial muestra todos los mini partidos.
+- Confirmar que un mini partido en vivo no rompe el resumen.
+- Confirmar que `Partidos` formales sigue funcionando.

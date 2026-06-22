@@ -23,7 +23,7 @@ type CourtMapInputProps = {
   onSelectLocation: (location: CourtLocation) => void;
   onConfirm: () => void;
   onCancel: () => void;
-  mode: 'uruguay_point' | 'opponent_point' | 'opponent_defense';
+  mode: 'uruguay_point' | 'opponent_point' | 'opponent_defense' | 'training_point' | 'training_shot_defended';
 };
 
 type CourtRect = {
@@ -54,11 +54,17 @@ export function CourtMapInput({ selectedLocation, onSelectLocation, onConfirm, o
       ? '¿Dónde cayó nuestro punto?'
       : mode === 'opponent_point'
         ? '¿Dónde nos hicieron el punto?'
+        : mode === 'training_point'
+          ? '¿Dónde cayó el punto?'
+          : mode === 'training_shot_defended'
+            ? '¿Dónde fue defendido el tiro?'
         : '¿Dónde nos defendieron?';
-  const kicker = mode === 'opponent_defense' ? 'Marcá dónde nos defendieron' : 'Marcá dónde cayó la pelota';
+  const kicker = mode === 'opponent_defense' || mode === 'training_shot_defended'
+    ? 'Marcá dónde fue defendido'
+    : 'Marcá dónde cayó la pelota';
   const tip =
-    mode === 'opponent_defense'
-      ? 'Marcá dónde el rival defendió el tiro.'
+    mode === 'opponent_defense' || mode === 'training_shot_defended'
+      ? 'Marcá dónde fue defendido el tiro.'
       : 'Tip: girá el celular para marcar con más precisión.';
   const mapHeight = useMemo(() => {
     return getCourtInputMapHeight({

@@ -196,6 +196,15 @@ export function HomeScreen({ navigation }: Props) {
           </View>
         </HomeActionSection>
 
+        <HomeActionSection title="Entrenamiento">
+          <HomeActionCard
+            label="Práctica 3v3"
+            description="Crear equipos internos y preparar la sesión"
+            onPress={() => navigation.navigate('TrainingSessions')}
+            tone="training"
+          />
+        </HomeActionSection>
+
         <HomeActionSection title="Gestión">
           <View style={styles.actionRow}>
             <HomeActionCard
@@ -289,11 +298,11 @@ type HomeActionCardProps = {
   description: string;
   disabled?: boolean;
   onPress: () => void;
-  tone: 'primary' | 'secondary' | 'management' | 'quiet' | 'live' | 'data' | 'caution';
+  tone: 'primary' | 'secondary' | 'management' | 'quiet' | 'live' | 'training' | 'data' | 'caution';
 };
 
 function HomeActionCard({ label, description, disabled = false, onPress, tone }: HomeActionCardProps) {
-  const darkText = tone === 'quiet' || tone === 'management' || tone === 'data' || tone === 'caution';
+  const darkText = tone === 'quiet' || tone === 'management' || tone === 'training' || tone === 'data' || tone === 'caution';
 
   return (
     <Pressable
@@ -451,6 +460,12 @@ const styles = StyleSheet.create({
   managementAction: {
     backgroundColor: '#e8f6ff',
     borderColor: '#8bd3ff',
+  },
+  trainingAction: {
+    flexBasis: '100%',
+    minHeight: 104,
+    backgroundColor: '#eefcf7',
+    borderColor: '#43b58b',
   },
   quietAction: {
     backgroundColor: '#ffffff',

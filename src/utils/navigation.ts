@@ -7,4 +7,6 @@ export type RootStackParamList = {
   PeriodSummary: { matchId: string; periodNumber: 1 | 2 | 3 };
   FinalSummary: { matchId: string };
   Fixtures: undefined;
+  TrainingSessions: undefined;
+  LiveTrainingMiniMatch: { sessionId: string; miniMatchId: string };
 };

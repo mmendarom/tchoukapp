@@ -8,10 +8,12 @@ import { FinalSummaryScreen } from './src/screens/FinalSummaryScreen';
 import { FixturesScreen } from './src/screens/FixturesScreen';
 import { HomeScreen } from './src/screens/HomeScreen';
 import { LiveMatchScreen } from './src/screens/LiveMatchScreen';
+import { LiveTrainingMiniMatchScreen } from './src/screens/LiveTrainingMiniMatchScreen';
 import { MatchDashboardScreen } from './src/screens/MatchDashboardScreen';
 import { MatchesScreen } from './src/screens/MatchesScreen';
 import { PeriodSummaryScreen } from './src/screens/PeriodSummaryScreen';
 import { PlayersScreen } from './src/screens/PlayersScreen';
+import { TrainingSessionsScreen } from './src/screens/TrainingSessionsScreen';
 import { useMatchStore } from './src/store/useMatchStore';
 import { RootStackParamList } from './src/utils/navigation';
 import { fontSize, spacing } from './src/utils/responsive';
@@ -48,6 +50,8 @@ export default function App() {
             <Stack.Screen name="PeriodSummary" component={PeriodSummaryScreen} options={{ title: 'Resumen del tiempo' }} />
             <Stack.Screen name="FinalSummary" component={FinalSummaryScreen} options={{ title: 'Resumen final' }} />
             <Stack.Screen name="Fixtures" component={FixturesScreen} options={{ title: 'Fixture' }} />
+            <Stack.Screen name="TrainingSessions" component={TrainingSessionsScreen} options={{ title: 'Práctica 3v3' }} />
+            <Stack.Screen name="LiveTrainingMiniMatch" component={LiveTrainingMiniMatchScreen} options={{ title: 'Mini partido' }} />
           </Stack.Navigator>
         </NavigationContainer>
       )}
