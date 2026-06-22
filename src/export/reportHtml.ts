@@ -9,6 +9,7 @@ import {
   ReportSubstitution,
   reportEmptyLabel,
 } from '../domain/reportData';
+import { COURT_VISUAL_GEOMETRY } from '../domain/courtVisual';
 import { CourtLocation } from '../domain/types';
 
 const escapeHtml = (value: string | number) =>
@@ -27,6 +28,7 @@ const clampPercent = (value: number) => Math.max(0, Math.min(100, value));
 const formatCount = (value: number, singular: string, plural: string) => `${value} ${value === 1 ? singular : plural}`;
 const PERFORMANCE_ROW_LIMIT = 7;
 const SECTOR_ROW_LIMIT = 5;
+const percent = (value: number) => `${value}%`;
 
 type ReportInsightItem = {
   severity?: string;
@@ -266,8 +268,8 @@ export const renderReportCourtMap = (
     .map((location, index) => {
       const normalizedX = Math.min(Math.max(location.x, 0), 1);
       const normalizedY = Math.min(Math.max(location.y, 0), 1);
-      const x = 4 + normalizedX * 92;
-      const y = 6 + normalizedY * 88;
+      const x = normalizedX * 100;
+      const y = normalizedY * 100;
       const density = densityForLocation(location, locations);
       const size = Math.min(11 + density * 3, 25);
       const opacity = Math.min(0.66 + density * 0.08, 0.96);
@@ -290,11 +292,17 @@ export const renderReportCourtMap = (
         locations.length === 0
           ? '<div class="empty-map">Sin ubicaciones registradas.</div>'
           : `<div class="report-court-map" role="img" aria-label="${escapeHtml(title)}">
+              <div class="report-court-center-lane"></div>
               <div class="report-court-center-line"></div>
+              <div class="report-court-lane-line report-court-lane-one"></div>
+              <div class="report-court-lane-line report-court-lane-two"></div>
+              <div class="report-court-horizontal-guide report-court-horizontal-top"></div>
+              <div class="report-court-horizontal-guide report-court-horizontal-middle"></div>
+              <div class="report-court-horizontal-guide report-court-horizontal-bottom"></div>
+              <div class="report-court-frame-area report-court-frame-area-left"></div>
+              <div class="report-court-frame-area report-court-frame-area-right"></div>
               <div class="report-court-area report-court-area-left"></div>
               <div class="report-court-area report-court-area-right"></div>
-              <div class="report-court-frame report-court-frame-left"></div>
-              <div class="report-court-frame report-court-frame-right"></div>
               ${markers}
             </div>`
       }
@@ -421,14 +429,22 @@ export function buildMatchReportHtml(report: MatchReportData) {
     .map-stack { display: block; margin-top: 8px; }
     .map-card { border: 1px solid #dbe4ef; border-radius: 8px; padding: 14px; background: #f7fafc; break-inside: avoid; page-break-inside: avoid; margin: 0 0 16px; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
     .map-card h4 { font-size: 15px; margin-bottom: 10px; }
-    .report-court-map { position: relative; width: 100%; height: 260px; min-height: 260px; display: block; overflow: hidden; border: 2px solid #1f6b4d; border-radius: 8px; background: #fbfdf8; box-sizing: border-box; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    .report-court-map { position: relative; width: 100%; height: 260px; min-height: 260px; display: block; overflow: hidden; border: 2px solid #188038; border-radius: 8px; background: #e9f7ee; box-sizing: border-box; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    .report-court-center-lane { position: absolute; left: ${percent(COURT_VISUAL_GEOMETRY.centerLaneLeftPercent)}; top: 0; bottom: 0; width: ${percent(COURT_VISUAL_GEOMETRY.centerLaneWidthPercent)}; background: rgba(255,255,255,0.16); }
     .report-court-center-line { position: absolute; top: 0; bottom: 0; left: 50%; width: 0; border-left: 2px dashed #9cb7aa; }
-    .report-court-area { position: absolute; top: 50%; width: 110px; height: 170px; margin-top: -85px; border: 2px solid #9cb7aa; background: rgba(156, 183, 170, 0.08); }
-    .report-court-area-left { left: -58px; border-radius: 0 100px 100px 0; }
-    .report-court-area-right { right: -58px; border-radius: 100px 0 0 100px; }
-    .report-court-frame { position: absolute; top: 50%; width: 12px; height: 72px; margin-top: -36px; background: #19344d; border-radius: 8px; }
-    .report-court-frame-left { left: 7px; }
-    .report-court-frame-right { right: 7px; }
+    .report-court-lane-line { position: absolute; top: 0; bottom: 0; width: 1px; background: rgba(24,128,56,0.22); }
+    .report-court-lane-one { left: ${percent(COURT_VISUAL_GEOMETRY.laneOneLeftPercent)}; }
+    .report-court-lane-two { left: ${percent(COURT_VISUAL_GEOMETRY.laneTwoLeftPercent)}; }
+    .report-court-horizontal-guide { position: absolute; left: 0; right: 0; height: 1px; background: rgba(24,128,56,0.14); }
+    .report-court-horizontal-top { top: ${percent(COURT_VISUAL_GEOMETRY.horizontalTopPercent)}; }
+    .report-court-horizontal-middle { top: ${percent(COURT_VISUAL_GEOMETRY.horizontalMiddlePercent)}; background: rgba(24,128,56,0.2); }
+    .report-court-horizontal-bottom { top: ${percent(COURT_VISUAL_GEOMETRY.horizontalBottomPercent)}; }
+    .report-court-frame-area { position: absolute; top: 0; bottom: 0; width: ${percent(COURT_VISUAL_GEOMETRY.frameAreaWidthPercent)}; background: rgba(11,107,203,0.07); }
+    .report-court-frame-area-left { left: 0; border-right: 1px solid rgba(47,125,69,0.35); }
+    .report-court-frame-area-right { right: 0; border-left: 1px solid rgba(47,125,69,0.35); }
+    .report-court-area { position: absolute; top: ${percent(COURT_VISUAL_GEOMETRY.forbiddenAreaTopPercent)}; width: ${percent(COURT_VISUAL_GEOMETRY.forbiddenAreaWidthPercent)}; height: ${percent(COURT_VISUAL_GEOMETRY.forbiddenAreaHeightPercent)}; border: 2px solid rgba(180,35,24,0.45); background: rgba(180,35,24,0.06); border-radius: 999px; }
+    .report-court-area-left { left: ${percent(COURT_VISUAL_GEOMETRY.forbiddenAreaOffsetPercent)}; }
+    .report-court-area-right { right: ${percent(COURT_VISUAL_GEOMETRY.forbiddenAreaOffsetPercent)}; }
     .report-map-point { position: absolute; z-index: 4; display: block; border: 2px solid; border-radius: 999px; box-shadow: 0 0 0 3px rgba(255,255,255,0.72); box-sizing: border-box; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
     .empty-map { height: 220px; border: 1px dashed #b7c5d3; border-radius: 8px; display: flex; align-items: center; justify-content: center; color: #5d6b7a; font-size: 13px; text-align: center; padding: 12px; }
     .muted { color: #5d6b7a; }

@@ -1,5 +1,31 @@
 # Implementation Log
 
+## 2026-06-21 - PDF report map geometry alignment
+
+Se corrigio la geometria visual de mapas PDF para que coincida con la cancha usada al registrar ubicaciones, sin cambiar eventos, scoring, tracking, coordenadas normalizadas, sectores tacticos ni mapas interactivos.
+
+Root cause:
+
+- El renderer PDF print-safe usaba una cancha HTML/CSS independiente de `CourtField`.
+- Los marcadores PDF aplicaban offsets artificiales (`4%/6%` de margen), por lo que un mismo `landingLocation` o `defenseLocation` podia verse desplazado respecto a `CourtMapInput`.
+
+Implementado:
+
+- Se agrego `src/domain/courtVisual.ts` como fuente compartida de geometria visual.
+- `CourtField` consume esos valores para carriles, areas de marco, guias horizontales y areas prohibidas.
+- `reportHtml` consume los mismos valores para dibujar la cancha PDF con HTML/CSS print-safe.
+- Los marcadores del PDF ahora usan coordenadas normalizadas directas (`x * 100`, `y * 100`) y conservan `data-normalized-x/y`.
+- La matematica de sectores tacticos, labels, eventos legacy y coordenadas persistidas no cambiaron.
+
+QA manual recomendado:
+
+- En `CourtMapInput`, marcar puntos cerca de ambos marcos y lados.
+- Exportar PDF y confirmar que los puntos aparecen en las mismas areas visuales.
+- Confirmar que las areas/semicirculos del PDF se parecen a la cancha de carga.
+- Confirmar que los puntos no se ven desplazados, invertidos ni recortados.
+- Confirmar que no aparecen etiquetas de grados dentro de los mapas PDF.
+- Confirmar que las tablas de sectores tacticos siguen coincidiendo con los puntos visibles.
+
 ## 2026-06-21 - PDF report map rendering fix
 
 Se corrigio el render de mapas en reportes PDF sin cambiar modelos de eventos, scoring, tracking, coordenadas normalizadas, sectores tacticos ni mapas de la app.

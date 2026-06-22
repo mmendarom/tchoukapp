@@ -219,6 +219,31 @@ Estado: Implemented.
 
 Estado: Implemented.
 
+## Report Export v3.2 - Mapas PDF alineados con cancha app
+
+Estado: Implemented.
+
+### Problema
+
+El renderer HTML/CSS print-safe de mapas PDF resolvio la visibilidad en Expo Print, pero definia una geometria propia para la cancha y aplicaba offsets a los marcadores. Eso podia hacer que una ubicacion normalizada se viera en un sector distinto al que el usuario habia tocado en `CourtMapInput`.
+
+### Resultado implementado
+
+- La geometria visual de cancha se centraliza en `src/domain/courtVisual.ts`.
+- `CourtField` y `reportHtml` consumen los mismos valores para carriles, areas de marco, semicirculos/areas prohibidas y guias horizontales.
+- Los mapas PDF siguen usando HTML/CSS print-safe, pero ya no tienen una forma independiente.
+- Los marcadores del PDF usan directamente `x * 100` y `y * 100` sobre la misma superficie normalizada que usa la app.
+- Se mantienen `data-normalized-x/y` para test/debug.
+- No se agregan etiquetas de grados dentro del mapa PDF.
+
+### No cambia
+
+- Eventos, scoring, tracking, backups ni import/export de datos.
+- `landingLocation`, `defenseLocation` ni coordenadas normalizadas persistidas.
+- Matematica de sectores tacticos.
+- `CourtMapInput`, `CourtMapSummary` y mapas de la app, salvo que ahora comparten constantes visuales.
+- Dependencias nativas o librerias de graficos.
+
 ### Problema
 
 El reporte v2 incluye score, mapas, efectividad e insights, pero no refleja de forma completa la lectura post-periodo/post-partido: falta rendimiento unificado por jugador, comparacion visual entre tiros generados y puntos convertidos, top ataque/defensa y sectores vulnerables por tiempo.

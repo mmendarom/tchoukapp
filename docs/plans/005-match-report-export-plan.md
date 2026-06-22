@@ -202,6 +202,22 @@ Estado: Implemented.
   - no depende de `<svg`;
   - muestra `Sin ubicaciones registradas.` cuando no hay datos.
 
+#### Refinamiento - geometria PDF compartida con CourtMapInput
+
+Estado: Implemented.
+
+- [x] Centralizar valores visuales de cancha en `src/domain/courtVisual.ts`.
+- [x] Actualizar `CourtField` para consumir esos valores sin modificar la apariencia de `CourtMapInput`.
+- [x] Actualizar `reportHtml` para dibujar la cancha PDF con los mismos porcentajes de carriles, areas de marco, guias horizontales y areas prohibidas.
+- [x] Eliminar offsets artificiales de marcadores PDF; las ubicaciones usan `x * 100` y `y * 100`.
+- [x] Mantener `data-normalized-x/y` para validar la correspondencia entre punto registrado y punto exportado.
+- [x] Mantener HTML/CSS print-safe para Expo Print y `print-color-adjust: exact`.
+- [x] No cambiar coordenadas persistidas, sectores tacticos, eventos ni mapas interactivos de la app.
+- [x] Tests de HTML:
+  - el CSS del reporte contiene valores derivados de `COURT_VISUAL_GEOMETRY`;
+  - los marcadores usan coordenadas normalizadas directas;
+  - no aparecen etiquetas de grados ni SVG.
+
 ### Stage 4 - Fallback textual v2
 
 - [x] Evolucionar `buildMatchReportText`.

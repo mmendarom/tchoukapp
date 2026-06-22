@@ -334,6 +334,8 @@ Estado: implementado como propagacion tactica posterior a Stage 4C.
 - Para puntos rivales, `landingLocation` es la fuente de verdad completa del sector: el marco se deriva de `x` y no del `frame` persistido, porque eventos actuales y legacy pueden conservar el valor default `right-frame` aunque la pelota haya caido en el area izquierda.
 - Sectores rivales distintos no se colapsan; si varios superan el umbral, pueden mostrarse varias alertas vulnerables.
 - Las listas de final/PDF para `Zonas donde nos entraron` y `Zonas donde nos defendieron` usan sectores tacticos.
+- Los mapas PDF usan la misma geometria visual que `CourtMapInput` mediante `COURT_VISUAL_GEOMETRY`, para que los puntos exportados se vean en el mismo sector tactico que fueron registrados.
+- La correccion de geometria PDF no cambia `landingLocation`, `defenseLocation`, derivacion de sectores ni eventos historicos.
 - Eventos antiguos sin ubicacion se ignoran; eventos antiguos con ubicacion siguen agrupando sin crashear.
 - No se migran eventos ni se modifican las coordenadas guardadas.
 - Las etiquetas genericas `zona izquierda`/`zona derecha` ya no se usan para alertas rivales.
@@ -516,7 +518,8 @@ Estado: implementado en Stage 3 con tabla HTML y linea compacta de texto.
 ## Impacto En Mapas
 
 - `getOpponentDefenseEventsWithLocation` y live maps deben seguir aceptando eventos con/sin `playerId`.
-- No se requiere cambio visual de mapa para MVP.
+- Los mapas PDF deben representar la misma geometria visual que `CourtMapInput`, derivada desde constantes compartidas, para evitar lecturas tacticas inconsistentes.
+- La posicion de marcadores exportados usa directamente las coordenadas normalizadas del evento; no debe aplicar offsets propios del PDF.
 - Futuro posible: filtro por jugador en mapa de defensas rivales, fuera de alcance de este MVP.
 
 ## Testing Plan

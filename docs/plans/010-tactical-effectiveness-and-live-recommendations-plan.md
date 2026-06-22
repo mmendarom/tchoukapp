@@ -456,6 +456,8 @@ Estado: implementado como mejora tactica posterior a Stage 4C.
    - El HTML cambia labels a `Rendimiento ofensivo`, `Tiros generados`, `Puntos convertidos`, `Tiros atajados` y `Lectura táctica`.
    - El texto compartible incluye resumen compacto de sectores.
    - Report Export v3 agrega rendimiento completo por tiempo/total, barras de intentos-conversiones, top ataque/defensa y lecturas `Lectura del tiempo`/`Lectura final`.
+   - Los mapas PDF usan `COURT_VISUAL_GEOMETRY`, compartido con `CourtField`, para que los sectores visuales coincidan con `CourtMapInput`.
+   - Los marcadores PDF usan coordenadas normalizadas directas (`x * 100`, `y * 100`) y no offsets especificos del reporte.
 
 ### No cambia
 
@@ -463,6 +465,8 @@ Estado: implementado como mejora tactica posterior a Stage 4C.
 - Reglas de scoring.
 - Registro de puntos, defensas, errores o cambios.
 - Coordenadas normalizadas.
+- Matematica de sectores tacticos.
+- Mapas interactivos de la app.
 - Mapas.
 - Dependencias.
 

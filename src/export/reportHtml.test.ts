@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
+import { COURT_VISUAL_GEOMETRY } from '../domain/courtVisual';
 import { MatchReportData } from '../domain/reportData';
 import { buildMatchReportHtml, buildMatchReportText } from './reportHtml';
 
@@ -278,6 +279,16 @@ describe('reportHtml', () => {
     expect(html).toContain('class="map-stack"');
     expect(html).toContain('class="report-map-section"');
     expect(html).toContain('.report-court-map { position: relative; width: 100%; height: 260px; min-height: 260px;');
+    expect(html).toContain(`left: ${COURT_VISUAL_GEOMETRY.centerLaneLeftPercent}%`);
+    expect(html).toContain(`width: ${COURT_VISUAL_GEOMETRY.centerLaneWidthPercent}%`);
+    expect(html).toContain(`width: ${COURT_VISUAL_GEOMETRY.frameAreaWidthPercent}%`);
+    expect(html).toContain(`top: ${COURT_VISUAL_GEOMETRY.forbiddenAreaTopPercent}%`);
+    expect(html).toContain(`width: ${COURT_VISUAL_GEOMETRY.forbiddenAreaWidthPercent}%`);
+    expect(html).toContain(`height: ${COURT_VISUAL_GEOMETRY.forbiddenAreaHeightPercent}%`);
+    expect(html).toContain(`left: ${COURT_VISUAL_GEOMETRY.forbiddenAreaOffsetPercent}%`);
+    expect(html).toContain(`right: ${COURT_VISUAL_GEOMETRY.forbiddenAreaOffsetPercent}%`);
+    expect(html).toContain('class="report-court-center-lane"');
+    expect(html).toContain('class="report-court-frame-area report-court-frame-area-left"');
     expect(html).toContain('print-color-adjust: exact');
     expect(html).toContain('background:#0b6bcb');
     expect(html).toContain('background:#e84f3d');
@@ -299,7 +310,7 @@ describe('reportHtml', () => {
     expect(html).toContain('Sin ubicaciones registradas');
     expect(html).toContain('data-normalized-x="0.750"');
     expect(html).toContain('data-normalized-y="0.300"');
-    expect(html).toContain('left:73.00%; top:32.40%;');
+    expect(html).toContain('left:75.00%; top:30.00%;');
     expect(html).toContain('Sin ubicaciones registradas.');
     expect(html).toContain('Donde hicimos los puntos');
     expect(html).toContain('Donde nos hicieron puntos');

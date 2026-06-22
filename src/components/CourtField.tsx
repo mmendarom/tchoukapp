@@ -1,6 +1,8 @@
 import { forwardRef, ReactNode } from 'react';
 import { LayoutChangeEvent, StyleProp, StyleSheet, Text, View, ViewStyle } from 'react-native';
 
+import { COURT_VISUAL_GEOMETRY } from '../domain/courtVisual';
+
 type CourtFieldProps = {
   children?: ReactNode;
   onLayout?: (event: LayoutChangeEvent) => void;
@@ -56,10 +58,10 @@ const styles = StyleSheet.create({
   },
   centerLane: {
     position: 'absolute',
-    left: '33.33%',
+    left: `${COURT_VISUAL_GEOMETRY.centerLaneLeftPercent}%`,
     top: 0,
     bottom: 0,
-    width: '33.34%',
+    width: `${COURT_VISUAL_GEOMETRY.centerLaneWidthPercent}%`,
     backgroundColor: 'rgba(255, 255, 255, 0.16)',
   },
   centerLine: {
@@ -91,10 +93,10 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(24, 128, 56, 0.22)',
   },
   laneOne: {
-    left: '33.33%',
+    left: `${COURT_VISUAL_GEOMETRY.laneOneLeftPercent}%`,
   },
   laneTwo: {
-    left: '66.66%',
+    left: `${COURT_VISUAL_GEOMETRY.laneTwoLeftPercent}%`,
   },
   horizontalGuide: {
     position: 'absolute',
@@ -104,18 +106,18 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(24, 128, 56, 0.14)',
   },
   horizontalTop: {
-    top: '25%',
+    top: `${COURT_VISUAL_GEOMETRY.horizontalTopPercent}%`,
   },
   horizontalMiddle: {
-    top: '50%',
+    top: `${COURT_VISUAL_GEOMETRY.horizontalMiddlePercent}%`,
     backgroundColor: 'rgba(24, 128, 56, 0.2)',
   },
   horizontalBottom: {
-    top: '75%',
+    top: `${COURT_VISUAL_GEOMETRY.horizontalBottomPercent}%`,
   },
   frameArea: {
     position: 'absolute',
-    width: '12%',
+    width: `${COURT_VISUAL_GEOMETRY.frameAreaWidthPercent}%`,
     top: 0,
     bottom: 0,
     backgroundColor: 'rgba(11, 107, 203, 0.07)',
@@ -132,19 +134,19 @@ const styles = StyleSheet.create({
   },
   forbiddenArea: {
     position: 'absolute',
-    top: '16%',
-    width: '32%',
-    height: '68%',
+    top: `${COURT_VISUAL_GEOMETRY.forbiddenAreaTopPercent}%`,
+    width: `${COURT_VISUAL_GEOMETRY.forbiddenAreaWidthPercent}%`,
+    height: `${COURT_VISUAL_GEOMETRY.forbiddenAreaHeightPercent}%`,
     borderRadius: 999,
     borderWidth: 2,
     borderColor: 'rgba(180, 35, 24, 0.45)',
     backgroundColor: 'rgba(180, 35, 24, 0.06)',
   },
   leftForbidden: {
-    left: '-16%',
+    left: `${COURT_VISUAL_GEOMETRY.forbiddenAreaOffsetPercent}%`,
   },
   rightForbidden: {
-    right: '-16%',
+    right: `${COURT_VISUAL_GEOMETRY.forbiddenAreaOffsetPercent}%`,
   },
   zoneLabel: {
     position: 'absolute',
