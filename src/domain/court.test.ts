@@ -113,6 +113,33 @@ describe('court derived zones', () => {
     });
   });
 
+  it('aligns the visual 0°, 45° and 90° guides with tactical bands', () => {
+    const zeroTop = deriveTacticalCourtSector({ x: 0.2, y: 0 });
+    const fortyFive = deriveTacticalCourtSector({ x: 0.2, y: 0.25 });
+    const ninety = deriveTacticalCourtSector({ x: 0.2, y: 0.5 });
+    const zeroBottom = deriveTacticalCourtSector({ x: 0.2, y: 1 });
+
+    expect(zeroTop).toMatchObject({ angleDegrees: 0, angleBand: '0°-30°', areaSideLabel: 'lado derecho' });
+    expect(fortyFive).toMatchObject({ angleDegrees: 45, angleBand: '30°-60°', areaSideLabel: 'lado derecho' });
+    expect(ninety).toMatchObject({ angleDegrees: 90, angleBand: '60°-90°', areaSideLabel: 'lado izquierdo' });
+    expect(zeroBottom).toMatchObject({ angleDegrees: 0, angleBand: '0°-30°', areaSideLabel: 'lado izquierdo' });
+  });
+
+  it('clamps legacy normalized locations and never emits angles above 90°', () => {
+    const legacyLocations = [
+      { x: -0.4, y: -0.2 },
+      { x: 0.2, y: 0.22 },
+      { x: 0.8, y: 0.78 },
+      { x: 1.4, y: 1.3 },
+    ];
+    const sectors = legacyLocations.map((location) => deriveTacticalCourtSector(location));
+
+    expect(sectors.every((sector) => sector.angleDegrees >= 0 && sector.angleDegrees <= 90)).toBe(true);
+    expect(sectors.map((sector) => sector.shortLabel).join(' ')).not.toMatch(/60°-120°|120°|150°|180°/);
+    expect(sectors[0].sideLabel).toBe('marco izquierdo');
+    expect(sectors[3].sideLabel).toBe('marco derecho');
+  });
+
   it('deriveTacticalCourtSector respects explicit frame when available', () => {
     expect(deriveTacticalCourtSector({ x: 0.2, y: 0.33 }, 'right-frame')).toMatchObject({
       sideLabel: 'marco derecho',

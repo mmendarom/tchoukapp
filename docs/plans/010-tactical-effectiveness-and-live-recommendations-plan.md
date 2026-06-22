@@ -595,3 +595,29 @@ Estado: implementado el 2026-06-20; QA visual manual pendiente.
 4. Reorganizar el score header en tres columnas flexibles, con numeros autoajustables y metadata central centrada/truncable.
 5. Documentar QA manual para telefono portrait y tablet landscape.
 6. Validar con `npm test`, `npx tsc --noEmit` y `git diff --check`.
+## Precision visual del mapa de cancha
+
+Estado: implementado el 2026-06-20; QA visual en dispositivos pendiente.
+
+1. Ampliar la aproximacion semicircular compartida en `CourtField` sin cambiar el sistema normalizado.
+2. Agregar una opcion `showDegreeGuides` y activarla en `CourtMapInput`.
+3. Mantener live y resumenes sobre la misma cancha, sin labels angulares en formatos compactos.
+4. Reforzar tests de limites `0°`, `45°`, `90°`, espejado, legacy y ausencia de ubicacion.
+5. Documentar geometria aproximada, QA manual y validacion completa.
+
+### Polish de guias angulares
+
+Estado: implementado el 2026-06-20; QA visual en telefono pendiente.
+
+1. Quitar labels repetidos y lineas largas del interior de `CourtField`.
+2. Conservar marcas cortas, suaves y input-only cerca del arco.
+3. Agregar una leyenda angular compacta bajo el mapa en `CourtMapInput`.
+4. Verificar que botones, semicirculos, math y coordenadas permanezcan sin cambios.
+
+### Ajuste fino de altura del semicirculo
+
+Estado: implementado el 2026-06-20; QA visual en dispositivos pendiente.
+
+1. Reducir la altura porcentual del area manteniendo su ancho ampliado y centrado vertical.
+2. Preservar ticks, leyenda, dimensiones del mapa y superficie de tap.
+3. Validar que no haya cambios de dominio y documentar QA en telefono/tablet.

@@ -6,12 +6,13 @@ import { COURT_VISUAL_GEOMETRY } from '../domain/courtVisual';
 type CourtFieldProps = {
   children?: ReactNode;
   onLayout?: (event: LayoutChangeEvent) => void;
+  showDegreeGuides?: boolean;
   showLabels?: boolean;
   style?: StyleProp<ViewStyle>;
 };
 
 export const CourtField = forwardRef<View, CourtFieldProps>(function CourtField(
-  { children, onLayout, showLabels = false, style },
+  { children, onLayout, showDegreeGuides = false, showLabels = false, style },
   ref,
 ) {
   return (
@@ -32,6 +33,13 @@ export const CourtField = forwardRef<View, CourtFieldProps>(function CourtField(
         <View style={[styles.forbiddenArea, styles.leftForbidden]} />
         <View style={[styles.forbiddenArea, styles.rightForbidden]} />
 
+        {showDegreeGuides && (
+          <>
+            <DegreeGuides side="left" />
+            <DegreeGuides side="right" />
+          </>
+        )}
+
         {showLabels && (
           <>
             <Text style={[styles.zoneLabel, styles.leftZoneLabel]}>Izquierda</Text>
@@ -46,6 +54,19 @@ export const CourtField = forwardRef<View, CourtFieldProps>(function CourtField(
     </View>
   );
 });
+
+function DegreeGuides({ side }: { side: 'left' | 'right' }) {
+  const sideStyle = side === 'left' ? styles.leftDegreeGuides : styles.rightDegreeGuides;
+  const tickSideStyle = side === 'left' ? styles.leftDegreeTick : styles.rightDegreeTick;
+
+  return (
+    <View style={[styles.degreeGuides, sideStyle]}>
+      <View style={[styles.degreeTick, tickSideStyle, styles.degreeUpperMid]} />
+      <View style={[styles.degreeTick, tickSideStyle, styles.degreeCenter]} />
+      <View style={[styles.degreeTick, tickSideStyle, styles.degreeLowerMid]} />
+    </View>
+  );
+}
 
 const styles = StyleSheet.create({
   court: {
@@ -147,6 +168,42 @@ const styles = StyleSheet.create({
   },
   rightForbidden: {
     right: `${COURT_VISUAL_GEOMETRY.forbiddenAreaOffsetPercent}%`,
+  },
+  degreeGuides: {
+    position: 'absolute',
+    top: 0,
+    bottom: 0,
+    width: `${COURT_VISUAL_GEOMETRY.degreeGuideWidthPercent}%`,
+  },
+  leftDegreeGuides: {
+    left: 0,
+  },
+  rightDegreeGuides: {
+    right: 0,
+  },
+  degreeTick: {
+    position: 'absolute',
+    width: 12,
+    height: 1,
+    borderRadius: 1,
+    backgroundColor: 'rgba(11, 31, 51, 0.22)',
+  },
+  leftDegreeTick: {
+    right: 1,
+  },
+  rightDegreeTick: {
+    left: 1,
+  },
+  degreeUpperMid: {
+    top: `${COURT_VISUAL_GEOMETRY.horizontalTopPercent}%`,
+  },
+  degreeCenter: {
+    top: `${COURT_VISUAL_GEOMETRY.horizontalMiddlePercent}%`,
+    height: 2,
+    backgroundColor: 'rgba(11, 31, 51, 0.3)',
+  },
+  degreeLowerMid: {
+    top: `${COURT_VISUAL_GEOMETRY.horizontalBottomPercent}%`,
   },
   zoneLabel: {
     position: 'absolute',

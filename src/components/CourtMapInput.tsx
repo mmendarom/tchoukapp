@@ -184,6 +184,7 @@ export function CourtMapInput({ selectedLocation, onSelectLocation, onConfirm, o
           <CourtField
             ref={courtRef}
             onLayout={handleLayout}
+            showDegreeGuides
             showLabels
             style={{ height: mapHeight }}
           >
@@ -223,9 +224,14 @@ export function CourtMapInput({ selectedLocation, onSelectLocation, onConfirm, o
             )}
           </CourtField>
 
-          <Text style={styles.help}>
-            {selectedLocation ? 'Cambiar ubicación tocando otra zona.' : 'Tocá la cancha para marcar la ubicación.'}
-          </Text>
+          <View style={styles.mapHelp}>
+            <Text adjustsFontSizeToFit minimumFontScale={0.82} numberOfLines={1} style={styles.degreeLegend}>
+              Guía: 0° fondo · 45° intermedio · 90° centro del área
+            </Text>
+            <Text style={styles.help}>
+              {selectedLocation ? 'Cambiar ubicación tocando otra zona.' : 'Tocá la cancha para marcar la ubicación.'}
+            </Text>
+          </View>
 
           <View style={[styles.actions, isLandscape && styles.actionsLandscape]}>
             <Pressable onPress={onCancel} style={[styles.button, styles.actionButton, styles.secondary]}>
@@ -320,6 +326,15 @@ const styles = StyleSheet.create({
     color: '#5d6b7a',
     fontSize: fontSize.small,
     fontWeight: '800',
+    textAlign: 'center',
+  },
+  mapHelp: {
+    gap: 2,
+  },
+  degreeLegend: {
+    color: '#7a8794',
+    fontSize: fontSize.tiny,
+    fontWeight: '700',
     textAlign: 'center',
   },
   actions: {

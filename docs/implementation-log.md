@@ -46,7 +46,77 @@ QA manual recomendado:
 - Confirmar que mapas sin datos muestran `Sin ubicaciones registradas.`
 - Confirmar que no aparecen guias de grados dentro del mapa.
 - Confirmar que las tablas de sectores tacticos siguen coincidiendo con las ubicaciones.
+## 2026-06-20 - Ajuste fino de altura del semicirculo
 
+Se recupero espacio visual para marcas cercanas a 0° sin perder el ancho util incorporado en el mapa.
+
+- El area conserva `width: 52%` y el desplazamiento lateral de 26%, por lo que mantiene su alcance horizontal ampliado.
+- La altura baja de 88% a 80% y el margen superior/inferior sube de 6% a 10%.
+- El arco sigue centrado, pero queda mejor separado de fondo/laterales y distingue con mas claridad la zona de 0°.
+- Ticks, leyenda compacta, altura del mapa, botones y superficie de tap permanecen sin cambios.
+- No cambiaron coordenadas normalizadas, eventos, sectores tacticos, scoring, persistencia ni exportacion.
+
+QA manual pendiente:
+
+- Comparar telefono portrait y tablet landscape, especialmente taps entre el arco y los bordes superior/inferior.
+- Confirmar que 0° se distingue mejor, que 45°/90° siguen siendo intuitivos y que los arcos no se ven demasiado bajos.
+- Verificar que live/resumenes heredan la forma mas limpia sin agregar guias o ruido.
+
+Validacion:
+
+- `npm test`: 17 archivos y 215 tests aprobados.
+- `npx tsc --noEmit`: aprobado.
+- `git diff --check`: aprobado; solo avisos esperados de normalizacion CRLF.
+
+## 2026-06-20 - Polish de guias angulares del mapa
+
+Se redujo el ruido visual de `CourtMapInput` sin tocar la geometria ampliada, los taps ni la lectura tactica.
+
+- Se eliminaron los diez labels `0°/45°/90°` repetidos dentro de la cancha y las lineas azules largas que competian con grilla, zonas y arcos.
+- Cada marco conserva tres ticks cortos y neutros junto al arco para referenciar 45°/90°/45° sin ocupar el area principal.
+- Una leyenda unica bajo la cancha explica `0° fondo · 45° intermedio · 90° centro del área` con tipografia pequena y ajuste a una linea.
+- Las marcas siguen activas solo mediante `showDegreeGuides` en `CourtMapInput`; mapas live y resumenes permanecen limpios.
+- Los semicirculos ampliados no cambiaron. Tampoco cambiaron `CourtLocation`, normalizacion, math de sectores, eventos, score ni exportacion; no se requiere migracion.
+
+QA manual pendiente:
+
+- Revisar input en telefono portrait y tablet landscape, verificando ausencia de solapamientos con zonas, `Área prohibida` y botones.
+- Tocar cerca de 0°/45°/90° y confirmar que las lecturas conservan sus tres bandas.
+- Confirmar live y resumenes sin labels angulares.
+
+Validacion:
+
+- `npm test`: 17 archivos y 215 tests aprobados.
+- `npx tsc --noEmit`: aprobado.
+- `git diff --check`: aprobado; solo avisos esperados de normalizacion CRLF.
+
+## 2026-06-20 - Precision visual del mapa de cancha
+
+Se mejoro la representacion compartida de la cancha sin cambiar eventos, score, tracking ni coordenadas persistidas.
+
+- Las areas de marco pasan de una media elipse visible de aproximadamente 16% a una aproximacion semicircular mas amplia de aproximadamente 26% por extremo.
+- La franja visual inmediata del marco aumenta de 12% a 18%, mejorando la lectura y el objetivo tactil sin alterar el area real de tap.
+- `CourtField` incorpora `showDegreeGuides`; `CourtMapInput` lo activa y muestra `0°`, `45°`, `90°`, `45°`, `0°` desde borde superior a inferior en ambos marcos.
+- Live, resumen de tiempo y resumen final reutilizan automaticamente las areas ampliadas mediante `CourtLocationMap`, pero omiten labels angulares para mantener limpios los mapas compactos.
+- La geometria visual coincide con la derivacion existente: `y=0/1` representa 0°, `y=0.25/0.75` representa 45° y `y=0.5` representa 90°.
+- `normalizeTapLocation`, `denormalizeLocation`, `CourtLocation` y los eventos guardados no cambiaron. Los puntos antiguos conservan exactamente su posicion relativa.
+- Se reforzaron tests de ambos lados, bandas angulares, coordenadas legacy fuera de rango y ausencia de labels mayores a 90°.
+
+QA manual pendiente:
+
+- Abrir input de punto/defensa rival en telefono portrait y tablet landscape; revisar semicírculos, guias y botones inferiores.
+- Tocar ambos marcos cerca de 0°/45°/90° y verificar `0°-30°`, `30°-60°` y `60°-90°` en lecturas tacticas.
+- Confirmar mapas live, de tiempo y finales legibles, y revisar sectores en PDF.
+
+Limitacion conocida:
+
+- Los semicirculos son una aproximacion con Views/elipses recortadas, no geometria vectorial reglamentaria; se prioriza consistencia, rendimiento y ausencia de dependencias.
+
+Validacion:
+
+- `npm test`: 17 archivos y 215 tests aprobados.
+- `npx tsc --noEmit`: aprobado.
+- `git diff --check`: aprobado; solo avisos esperados de normalizacion CRLF.
 ## 2026-06-20 - Plantel default Femenino
 
 Se agrego un tercer plantel fijo sin cambiar score, tracking, eventos, mapas, snapshots historicos ni backup/import.
