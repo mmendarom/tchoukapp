@@ -53,6 +53,34 @@ Hallazgos:
 - No inferir `playerId` ni ubicacion historica.
 - No tocar scoring salvo tests de no-regresion.
 - No agregar dependencias.
+- No cambiar coordenadas normalizadas ni matematica de sectores al ajustar la geometria visual.
+
+## Stage 0.5 - Unificacion Visual De Mapas Tacticos
+
+Estado: Implemented.
+
+### Cambios implementados
+
+1. Se centralizo la geometria visual en `src/domain/courtVisual.ts`.
+2. `CourtField` consume esos valores para carriles, areas de marco, guias horizontales y semicirculos.
+3. `CourtMapInput` usa helper compartido para su altura tactil.
+4. `CourtLocationMap` usa helper compartido para alturas de resumen.
+5. `CourtMapSummary` deja de calcular una altura propia.
+6. `LiveMapPanel` usa helper compartido para la altura del mapa live.
+7. `reportHtml` usa los mismos porcentajes y tamanos objetivo para mapas PDF.
+
+### Reglas
+
+- `landingLocation` y `defenseLocation` siguen como coordenadas normalizadas.
+- El PDF sigue usando HTML/CSS print-safe.
+- Las guias de grados quedan solo en `CourtMapInput`.
+- No se modifica la matematica tactica de sectores.
+- No hay migracion de eventos.
+
+### Tests implementados
+
+- Helpers de altura responsive en `courtVisual.test.ts`.
+- Guardias en `reportHtml.test.ts` para que input, live, resumenes y PDF sigan derivando de la fuente compartida.
 
 ## Stage 0 - Barras De Rendimiento Con Datos Existentes
 
@@ -458,6 +486,8 @@ Estado: implementado como mejora tactica posterior a Stage 4C.
    - Report Export v3 agrega rendimiento completo por tiempo/total, barras de intentos-conversiones, top ataque/defensa y lecturas `Lectura del tiempo`/`Lectura final`.
    - Los mapas PDF usan `COURT_VISUAL_GEOMETRY`, compartido con `CourtField`, para que los sectores visuales coincidan con `CourtMapInput`.
    - Los marcadores PDF usan coordenadas normalizadas directas (`x * 100`, `y * 100`) y no offsets especificos del reporte.
+   - El fix post-merge agrega ratio/tamaño objetivo a `COURT_VISUAL_GEOMETRY` para que el PDF no use una cancha de alto independiente que distorsione los semicírculos.
+   - Las guias de grado quedan solo en `CourtMapInput`; el PDF conserva mapas limpios.
 
 ### No cambia
 

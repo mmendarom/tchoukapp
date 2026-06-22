@@ -8,6 +8,7 @@ import {
   LiveMapMarkerKind,
   LiveMapTab,
 } from '../domain/liveMaps';
+import { getCourtLiveMapHeight } from '../domain/courtVisual';
 import { MatchEvent, MatchPeriod } from '../domain/types';
 import { fontSize, spacing } from '../utils/responsive';
 import { CourtLocationMap, MarkerVariant } from './CourtLocationMap';
@@ -43,7 +44,7 @@ export const LiveMapPanel = memo(function LiveMapPanel({
   const { height, width } = useWindowDimensions();
   const [selectedTab, setSelectedTab] = useState<LiveMapTab>('combined');
   const isTabletLandscape = width >= 900 && width > height;
-  const mapHeight = isTabletLandscape ? 240 : width >= 768 ? 260 : 220;
+  const mapHeight = getCourtLiveMapHeight({ isTabletLandscape, windowWidth: width });
   const selectedTabConfig = useMemo(() => tabs.find((tab) => tab.id === selectedTab) ?? tabs[0], [selectedTab]);
   const selectedData = useMemo(() => getLiveMapLocationData(events, periodNumber, selectedTab), [events, periodNumber, selectedTab]);
   const combinedMarkers = useMemo(

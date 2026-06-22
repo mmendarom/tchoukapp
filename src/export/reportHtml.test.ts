@@ -1,3 +1,6 @@
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+
 import { describe, expect, it } from 'vitest';
 
 import { COURT_VISUAL_GEOMETRY } from '../domain/courtVisual';
@@ -278,7 +281,7 @@ describe('reportHtml', () => {
     expect(html).toContain('class="report-map-point"');
     expect(html).toContain('class="map-stack"');
     expect(html).toContain('class="report-map-section"');
-    expect(html).toContain('.report-court-map { position: relative; width: 100%; height: 260px; min-height: 260px;');
+    expect(html).toContain(`.report-court-map { position: relative; width: 100%; max-width: ${COURT_VISUAL_GEOMETRY.reportMapWidthPx}px; height: ${COURT_VISUAL_GEOMETRY.reportMapHeightPx}px; min-height: ${COURT_VISUAL_GEOMETRY.reportMapHeightPx}px;`);
     expect(html).toContain(`left: ${COURT_VISUAL_GEOMETRY.centerLaneLeftPercent}%`);
     expect(html).toContain(`width: ${COURT_VISUAL_GEOMETRY.centerLaneWidthPercent}%`);
     expect(html).toContain(`width: ${COURT_VISUAL_GEOMETRY.frameAreaWidthPercent}%`);
@@ -320,6 +323,8 @@ describe('reportHtml', () => {
     expect(html).not.toContain('<svg');
     expect(html).not.toContain('viewBox="0 0 640 360"');
     expect(html).not.toContain('data-angle-guide');
+    expect(html).not.toContain('Guía: 0° fondo');
+    expect(html).not.toContain('45° intermedio');
     expect(html).not.toContain('NaN');
     expect(html).not.toContain('undefined');
     expect(html).not.toContain('opponent_own_point');
@@ -335,6 +340,49 @@ describe('reportHtml', () => {
     expect(html).not.toContain('Ã');
     expect(html).not.toContain('Â');
     expect(html).not.toContain('�');
+  });
+
+  it('keeps report map geometry tied to the shared CourtField constants', () => {
+    const root = process.cwd();
+    const courtFieldSource = readFileSync(join(root, 'src/components/CourtField.tsx'), 'utf8');
+    const courtLocationMapSource = readFileSync(join(root, 'src/components/CourtLocationMap.tsx'), 'utf8');
+    const courtMapInputSource = readFileSync(join(root, 'src/components/CourtMapInput.tsx'), 'utf8');
+    const courtMapSummarySource = readFileSync(join(root, 'src/components/CourtMapSummary.tsx'), 'utf8');
+    const liveMapPanelSource = readFileSync(join(root, 'src/components/LiveMapPanel.tsx'), 'utf8');
+    const reportHtmlSource = readFileSync(join(root, 'src/export/reportHtml.ts'), 'utf8');
+
+    expect(courtFieldSource).toContain('COURT_VISUAL_GEOMETRY.frameAreaWidthPercent');
+    expect(courtFieldSource).toContain('COURT_VISUAL_GEOMETRY.forbiddenAreaWidthPercent');
+    expect(courtFieldSource).toContain('COURT_VISUAL_GEOMETRY.forbiddenAreaHeightPercent');
+    expect(courtFieldSource).toContain('COURT_VISUAL_GEOMETRY.forbiddenAreaOffsetPercent');
+    expect(courtFieldSource).not.toContain("width: '18%'");
+    expect(courtFieldSource).not.toContain("width: '52%'");
+    expect(courtFieldSource).not.toContain("height: '80%'");
+
+    expect(courtMapInputSource).toContain('getCourtInputMapHeight');
+    expect(courtMapInputSource).not.toContain('0.62');
+    expect(courtMapInputSource).not.toContain('0.58');
+    expect(courtMapInputSource).not.toContain('0.42');
+
+    expect(courtLocationMapSource).toContain('getCourtSummaryMapHeight');
+    expect(courtLocationMapSource).not.toContain('380');
+    expect(courtLocationMapSource).not.toContain('340');
+    expect(courtLocationMapSource).not.toContain('250');
+    expect(courtLocationMapSource).not.toContain('280');
+
+    expect(courtMapSummarySource).not.toContain('useWindowDimensions');
+    expect(courtMapSummarySource).not.toContain('mapHeight');
+
+    expect(liveMapPanelSource).toContain('getCourtLiveMapHeight');
+    expect(liveMapPanelSource).not.toContain(' ? 240 : ');
+    expect(liveMapPanelSource).not.toContain(' ? 260 : ');
+    expect(liveMapPanelSource).not.toContain(' : 220');
+
+    expect(reportHtmlSource).toContain('COURT_VISUAL_GEOMETRY.frameAreaWidthPercent');
+    expect(reportHtmlSource).toContain('COURT_VISUAL_GEOMETRY.forbiddenAreaWidthPercent');
+    expect(reportHtmlSource).toContain('COURT_VISUAL_GEOMETRY.reportMapHeightPx');
+    expect(reportHtmlSource).not.toContain('height: 260px');
+    expect(reportHtmlSource).not.toContain('viewBox="0 0 640 360"');
   });
 
   it('builds shareable text fallback', () => {

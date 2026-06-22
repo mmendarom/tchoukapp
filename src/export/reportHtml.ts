@@ -429,7 +429,7 @@ export function buildMatchReportHtml(report: MatchReportData) {
     .map-stack { display: block; margin-top: 8px; }
     .map-card { border: 1px solid #dbe4ef; border-radius: 8px; padding: 14px; background: #f7fafc; break-inside: avoid; page-break-inside: avoid; margin: 0 0 16px; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
     .map-card h4 { font-size: 15px; margin-bottom: 10px; }
-    .report-court-map { position: relative; width: 100%; height: 260px; min-height: 260px; display: block; overflow: hidden; border: 2px solid #188038; border-radius: 8px; background: #e9f7ee; box-sizing: border-box; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    .report-court-map { position: relative; width: 100%; max-width: ${COURT_VISUAL_GEOMETRY.reportMapWidthPx}px; height: ${COURT_VISUAL_GEOMETRY.reportMapHeightPx}px; min-height: ${COURT_VISUAL_GEOMETRY.reportMapHeightPx}px; display: block; overflow: hidden; margin: 0 auto; border: 2px solid #188038; border-radius: 8px; background: #e9f7ee; box-sizing: border-box; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
     .report-court-center-lane { position: absolute; left: ${percent(COURT_VISUAL_GEOMETRY.centerLaneLeftPercent)}; top: 0; bottom: 0; width: ${percent(COURT_VISUAL_GEOMETRY.centerLaneWidthPercent)}; background: rgba(255,255,255,0.16); }
     .report-court-center-line { position: absolute; top: 0; bottom: 0; left: 50%; width: 0; border-left: 2px dashed #9cb7aa; }
     .report-court-lane-line { position: absolute; top: 0; bottom: 0; width: 1px; background: rgba(24,128,56,0.22); }

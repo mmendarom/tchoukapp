@@ -137,10 +137,10 @@ Convertir el export post-partido en un reporte de coaching mas util, con resumen
 - Evitar enums crudos.
 - Tests de HTML para estructura y labels.
 
-### Stage 3 - Mapas PDF con inline SVG
+### Stage 3 - Mapas PDF print-safe
 
 - [x] Implementar `renderReportCourtMap` en `src/export/reportHtml.ts` o archivo helper dentro de `src/export`.
-- [x] Usar SVG inline con coordenadas normalizadas.
+- [x] Usar HTML/CSS print-safe con coordenadas normalizadas.
 - [x] Renderizar:
   - puntos Uruguay.
   - puntos rival.
@@ -152,9 +152,10 @@ Convertir el export post-partido en un reporte de coaching mas util, con resumen
   - `Punto en contra rival`.
 - Usar puntos con tamano/opacidad por densidad cercana como heatmap liviano.
 - [x] No usar componentes React Native para PDF.
+- [x] No reintroducir SVG para Expo Print.
 - [x] No agregar dependencias.
 - [x] Tests de HTML del mapa:
-  - incluye `<svg`.
+  - incluye `report-court-map`.
   - incluye cantidad esperada de puntos.
   - no incluye eventos sin ubicacion.
 
@@ -164,8 +165,8 @@ Estado: Implemented.
 
 - [x] Reemplazar el layout de mapas de 3 columnas por una pila vertical `map-stack`.
 - [x] Renderizar cada mapa como tarjeta full-width.
-- [x] Usar viewBox SVG grande `640x360`.
-- [x] Fijar altura visual de cancha en PDF cerca de `260px`.
+- [x] Usar cancha HTML/CSS full-width con proporcion compartida.
+- [x] Fijar altura visual desde `COURT_VISUAL_GEOMETRY.reportMapHeightPx`.
 - [x] Envolver `Mapas del tiempo` y `Mapas totales` con `report-map-section`.
 - [x] Usar `break-inside` y `page-break-inside` para reducir titulos huerfanos y cortes de tarjetas.
 - [x] Agrandar levemente marcadores y diferenciarlos por color:
@@ -175,8 +176,9 @@ Estado: Implemented.
 - [x] Mantener intactos `landingLocation`, `defenseLocation` y el modelo de coordenadas normalizadas.
 - [x] Tests de HTML:
   - contiene `map-stack` y `report-map-section`;
-  - usa viewBox `640x360`;
+  - usa `report-court-map`;
   - no usa la clase vieja `map-grid`;
+  - no usa SVG;
   - no genera `NaN` ni `undefined` en coordenadas.
 
 #### Refinamiento - mapas PDF print-safe
@@ -217,6 +219,35 @@ Estado: Implemented.
   - el CSS del reporte contiene valores derivados de `COURT_VISUAL_GEOMETRY`;
   - los marcadores usan coordenadas normalizadas directas;
   - no aparecen etiquetas de grados ni SVG.
+
+#### Refinamiento - estabilizacion post-merge de proporcion PDF
+
+Estado: Implemented.
+
+- [x] Auditar hardcodes post-merge en `CourtField`, `CourtMapInput`, `CourtLocationMap`, `CourtMapSummary` y `reportHtml`.
+- [x] Confirmar que la regresion no estaba en datos ni sectores, sino en la geometria visual del contenedor PDF.
+- [x] Mover el ratio visual de `CourtMapInput` a `COURT_VISUAL_GEOMETRY.inputHeightToWindowWidthRatio`.
+- [x] Mover ancho/alto objetivo de mapa PDF a `COURT_VISUAL_GEOMETRY.reportMapWidthPx` y `reportMapHeightPx`.
+- [x] Reemplazar el alto fijo `260px` del PDF por constantes compartidas.
+- [x] Mantener PDF HTML/CSS print-safe, sin SVG, sin guias de grado y con marcadores por `data-normalized-x/y`.
+- [x] Agregar test de guardia para evitar que `CourtField` o `reportHtml` vuelvan a hardcodear geometria divergente.
+
+#### Refinamiento - unificacion completa de geometria de cancha
+
+Estado: Implemented.
+
+- [x] Centralizar en `src/domain/courtVisual.ts`:
+  - geometria visual de areas, carriles y semicirculos;
+  - relacion/altura de `CourtMapInput`;
+  - alturas por defecto de mapas in-app de resumen;
+  - alturas de mapas live;
+  - ancho/alto objetivo de mapas PDF.
+- [x] Actualizar `CourtField`, `CourtMapInput`, `CourtLocationMap`, `CourtMapSummary`, `LiveMapPanel` y `reportHtml` para consumir la misma fuente visual.
+- [x] Eliminar calculos duplicados de altura en `CourtMapSummary`.
+- [x] Mantener guias de grado solo en el input tactil.
+- [x] Mantener coordenadas normalizadas directas (`x * 100`, `y * 100`) en app y PDF.
+- [x] Agregar tests de helper y guardias contra hardcodes divergentes en renderers activos.
+- [x] No cambiar coordenadas persistidas, sectores tacticos, eventos, scoring ni dependencias.
 
 ### Stage 4 - Fallback textual v2
 

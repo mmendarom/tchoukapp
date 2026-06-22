@@ -1,6 +1,7 @@
 import { memo, useMemo } from 'react';
 import { StyleProp, StyleSheet, useWindowDimensions, View, ViewStyle } from 'react-native';
 
+import { getCourtSummaryMapHeight } from '../domain/courtVisual';
 import { CourtLocation } from '../domain/types';
 import { CourtField } from './CourtField';
 
@@ -26,7 +27,7 @@ export const CourtLocationMap = memo(function CourtLocationMap({ height, locatio
   const { height: windowHeight, width: windowWidth } = useWindowDimensions();
   const isTablet = windowWidth >= 768;
   const isLandscape = windowWidth > windowHeight;
-  const mapHeight = height ?? (isTablet ? (isLandscape ? 380 : 340) : isLandscape ? 250 : 280);
+  const mapHeight = height ?? getCourtSummaryMapHeight({ isLandscape, isTablet });
   const mapMarkers = useMemo(() => markers ?? locations.map((location) => ({ location, markerVariant })), [locations, markerVariant, markers]);
   const renderedMarkers = useMemo(() => {
     const densityLocations = mapMarkers.map((marker) => marker.location);

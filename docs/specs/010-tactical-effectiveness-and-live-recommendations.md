@@ -42,6 +42,7 @@ La mejora pendiente es elevar la calidad tactica de esos datos. En particular, u
   - no castigar roles defensivos por no anotar;
   - detectar baja participacion solo cuando no hay tiros ni defensas;
   - detectar jugadores anulados o de baja efectividad.
+- Mantener mapas tacticos consistentes visualmente entre input, live, resumenes y PDF usando una unica fuente de geometria.
 
 ## No Objetivos
 
@@ -51,9 +52,20 @@ La mejora pendiente es elevar la calidad tactica de esos datos. En particular, u
 - No cambiar reglas de score.
 - No cambiar puntos en contra ni puntos en contra del rival.
 - No cambiar mapas existentes salvo para consumir datos nuevos.
+- No cambiar coordenadas normalizadas ni matematica de sectores por ajustes visuales.
 - No agregar backend, auth, cloud ni servicios pagos.
 - No reescribir toda la arquitectura de insights.
 - No agregar dependencias pesadas de graficos.
+
+## Geometria Visual De Mapas
+
+Estado: Implemented.
+
+- `src/domain/courtVisual.ts` centraliza la geometria visual usada por `CourtField`, `CourtMapInput`, `CourtLocationMap`, `CourtMapSummary`, `LiveMapPanel` y el renderer PDF `reportHtml`.
+- Los mapas tacticos usan la misma familia de semicirculos/areas y el mismo sistema normalizado `x/y`.
+- Las guias de 0°/45°/90° son exclusivas del input tactil para no ensuciar resumenes ni PDF.
+- `landingLocation` y `defenseLocation` no se migran ni se reinterpretan.
+- La matematica de sectores tacticos sigue en `src/domain/court.ts`; esta unificacion solo evita drift visual entre renderers.
 
 ## Definiciones Tacticas
 
@@ -335,6 +347,7 @@ Estado: implementado como propagacion tactica posterior a Stage 4C.
 - Sectores rivales distintos no se colapsan; si varios superan el umbral, pueden mostrarse varias alertas vulnerables.
 - Las listas de final/PDF para `Zonas donde nos entraron` y `Zonas donde nos defendieron` usan sectores tacticos.
 - Los mapas PDF usan la misma geometria visual que `CourtMapInput` mediante `COURT_VISUAL_GEOMETRY`, para que los puntos exportados se vean en el mismo sector tactico que fueron registrados.
+- `COURT_VISUAL_GEOMETRY` incluye tambien la proporcion visual del input y el tamaño objetivo de mapas PDF para evitar drift post-merge entre el contenedor de carga y el contenedor exportado.
 - La correccion de geometria PDF no cambia `landingLocation`, `defenseLocation`, derivacion de sectores ni eventos historicos.
 - Eventos antiguos sin ubicacion se ignoran; eventos antiguos con ubicacion siguen agrupando sin crashear.
 - No se migran eventos ni se modifican las coordenadas guardadas.
@@ -554,6 +567,8 @@ Estado: implementado en Stage 3 con tabla HTML y linea compacta de texto.
 - `getOpponentDefenseEventsWithLocation` y live maps deben seguir aceptando eventos con/sin `playerId`.
 - Los mapas PDF deben representar la misma geometria visual que `CourtMapInput`, derivada desde constantes compartidas, para evitar lecturas tacticas inconsistentes.
 - La posicion de marcadores exportados usa directamente las coordenadas normalizadas del evento; no debe aplicar offsets propios del PDF.
+- El PDF no debe mostrar guias/leyendas de grados; esas marcas son exclusivas del input tactil.
+- El contenedor PDF no debe volver a un alto fijo independiente que aplaste los semicírculos respecto al input.
 - Futuro posible: filtro por jugador en mapa de defensas rivales, fuera de alcance de este MVP.
 
 ## Testing Plan

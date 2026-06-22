@@ -1,5 +1,33 @@
 # Implementation Log
 
+## 2026-06-21 - Full court geometry unification pass
+
+Se unifico la geometria visual de mapas en input, mapas live, resumenes in-app y PDF/preview, sin cambiar eventos, scoring, tracking, coordenadas normalizadas, sectores tacticos ni persistencia.
+
+Root cause:
+
+- El merge habia dejado decisiones visuales duplicadas: `CourtField`/`CourtMapInput`, `CourtLocationMap`, `CourtMapSummary`, `LiveMapPanel` y `reportHtml` calculaban tamanos o proporciones de cancha por separado.
+- El PDF ya compartia porcentajes de areas, pero conservaba una proporcion independiente; los mapas live/resumen tambien tenian alturas hardcodeadas distintas.
+- Esa deriva hacia que el mismo `landingLocation` o `defenseLocation` pudiera verse en zonas visuales distintas segun pantalla/export.
+
+Implementado:
+
+- `src/domain/courtVisual.ts` centraliza porcentajes de carriles, areas, semicirculos, guias, relacion visual del input, alturas de mapas live/resumen y tamano objetivo del PDF.
+- `CourtField`, `CourtMapInput`, `CourtLocationMap`, `CourtMapSummary`, `LiveMapPanel` y `reportHtml` consumen esa fuente compartida.
+- `CourtMapSummary` deja de recalcular altura propia y delega en `CourtLocationMap`.
+- El PDF mantiene HTML/CSS print-safe, `report-court-map`, marcadores absolutos y `print-color-adjust: exact`.
+- Las guias de grados siguen siendo exclusivas de `CourtMapInput`; mapas live/resumen/PDF permanecen limpios.
+- Se agregaron tests de helpers responsive y tests de guardia para evitar hardcodes divergentes en renderers activos.
+
+QA manual recomendado:
+
+- Marcar ubicaciones en `CourtMapInput` cerca de 0°, 45° y 90° en ambos marcos.
+- Revisar esas ubicaciones en mapas live, resumen de tiempo, resumen final y PDF.
+- Comparar que puntos, semicírculos y espacio de 0° correspondan visualmente en todos los renderers.
+- Confirmar `Mapas del tiempo` y `Mapas totales` con puntos visibles.
+- Confirmar que solo el input tactil muestra la leyenda `Guía: 0° fondo · 45° intermedio · 90° centro del área`.
+- Confirmar que mapas vacios muestran `Sin ubicaciones registradas.`
+
 ## 2026-06-21 - PDF report map geometry alignment
 
 Se corrigio la geometria visual de mapas PDF para que coincida con la cancha usada al registrar ubicaciones, sin cambiar eventos, scoring, tracking, coordenadas normalizadas, sectores tacticos ni mapas interactivos.
@@ -757,7 +785,7 @@ Se mejoro la legibilidad de mapas tacticos en el PDF sin cambiar tracking, score
 
 - Los mapas PDF ya no se muestran como tres tarjetas pequenas en una fila.
 - `Mapas del tiempo` y `Mapas totales` ahora renderizan un mapa grande por fila.
-- Cada SVG de cancha usa viewBox `640x360` y altura visual aproximada de `260px`.
+- En esa version se usaba SVG con viewBox `640x360` y altura visual aproximada de `260px`; esto quedo reemplazado luego por `report-court-map` HTML/CSS y `COURT_VISUAL_GEOMETRY`.
 - Las tarjetas de mapa tienen mas padding, titulos mas legibles y reglas anti-corte (`break-inside` / `page-break-inside`).
 - Los marcadores se agrandaron levemente y siguen siendo circulares.
 - Se usan colores diferenciados en PDF: azul para puntos Uruguay, rojo para puntos rivales y violeta para defensas rivales.

@@ -1,4 +1,4 @@
-import { StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 
 import { getOpponentDefenseEventsWithLocation, getPointEventsWithLocation } from '../domain/court';
 import { MatchEvent, TeamSide } from '../domain/types';
@@ -13,10 +13,6 @@ type CourtMapSummaryProps = {
 };
 
 export function CourtMapSummary({ title, events, team = 'uruguay', source = 'points' }: CourtMapSummaryProps) {
-  const { height: windowHeight, width: windowWidth } = useWindowDimensions();
-  const isTablet = windowWidth >= 768;
-  const isLandscape = windowWidth > windowHeight;
-  const mapHeight = isTablet ? (isLandscape ? 380 : 340) : isLandscape ? 250 : 280;
   const pointEvents = source === 'points' ? getPointEventsWithLocation(events, team) : [];
   const defenseEvents = source === 'opponent_defenses' ? getOpponentDefenseEventsWithLocation(events) : [];
   const locations = source === 'opponent_defenses'
@@ -31,7 +27,6 @@ export function CourtMapSummary({ title, events, team = 'uruguay', source = 'poi
     <View style={styles.card}>
       <Text style={styles.title}>{title}</Text>
       <CourtLocationMap
-        height={mapHeight}
         locations={locations}
         markerVariant={source === 'opponent_defenses' ? 'opponentDefense' : team === 'uruguay' ? 'uruguay' : 'opponent'}
       />

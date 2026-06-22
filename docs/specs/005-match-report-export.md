@@ -244,6 +244,61 @@ El renderer HTML/CSS print-safe de mapas PDF resolvio la visibilidad en Expo Pri
 - `CourtMapInput`, `CourtMapSummary` y mapas de la app, salvo que ahora comparten constantes visuales.
 - Dependencias nativas o librerias de graficos.
 
+## Report Export v3.3 - Estabilizacion post-merge de mapas PDF
+
+Estado: Implemented.
+
+### Problema
+
+Tras mergear cambios de dos computadoras, los mapas PDF seguian renderizando pero se veian poco confiables: los porcentajes de areas estaban compartidos, pero el contenedor PDF mantenia un alto fijo independiente que aplastaba la cancha frente a `CourtMapInput`.
+
+### Resultado implementado
+
+- `COURT_VISUAL_GEOMETRY` tambien define:
+  - proporcion visual usada por `CourtMapInput`;
+  - ancho/alto objetivo de mapas PDF.
+- `CourtMapInput` deja de hardcodear el ratio `0.62`.
+- `reportHtml` deja de hardcodear la cancha PDF en `260px` de alto.
+- El PDF mantiene HTML/CSS print-safe, pero centra una cancha con proporcion consistente con la experiencia de carga.
+- Los mapas PDF no muestran leyendas o guias de grados; esas referencias son exclusivas del input tactil.
+- Se agregan tests de regresion para detectar drift si `CourtField` o `reportHtml` vuelven a hardcodear geometria.
+
+## Report Export v3.4 - Geometria unificada en input, app y PDF
+
+Estado: Implemented.
+
+### Problema
+
+El arreglo PDF anterior redujo el drift entre `CourtField` y `reportHtml`, pero seguian existiendo calculos visuales independientes en mapas live y resumenes in-app. En QA de campo, un mismo punto normalizado podia verse confiable en una pantalla y ambiguo en otra.
+
+### Resultado implementado
+
+- `src/domain/courtVisual.ts` es la fuente unica para:
+  - carriles, areas laterales y semicirculos;
+  - proporcion/altura tactil de `CourtMapInput`;
+  - alturas default de `CourtLocationMap` y resumenes;
+  - altura de `LiveMapPanel`;
+  - ancho/alto objetivo del mapa PDF.
+- `CourtField`, `CourtMapInput`, `CourtLocationMap`, `CourtMapSummary`, `LiveMapPanel` y `reportHtml` derivan de esa fuente.
+- `CourtMapSummary` ya no calcula una altura propia, evitando drift con otros mapas in-app.
+- Los mapas PDF siguen usando HTML/CSS print-safe, no SVG.
+- Las guias de grados quedan solo en `CourtMapInput`; resumenes, live y PDF permanecen limpios.
+- `landingLocation` y `defenseLocation` siguen posicionandose por coordenadas normalizadas directas.
+
+### No cambia
+
+- Coordenadas normalizadas persistidas.
+- `landingLocation`, `defenseLocation`, eventos legacy ni sectores tacticos.
+- Score, tracking, undo, resumenes o datos exportados.
+- Dependencias.
+
+### No cambia
+
+- Coordenadas normalizadas persistidas.
+- `landingLocation`, `defenseLocation`, eventos legacy ni sectores tacticos.
+- Score, tracking, resumenes o export data.
+- Dependencias.
+
 ### Problema
 
 El reporte v2 incluye score, mapas, efectividad e insights, pero no refleja de forma completa la lectura post-periodo/post-partido: falta rendimiento unificado por jugador, comparacion visual entre tiros generados y puntos convertidos, top ataque/defensa y sectores vulnerables por tiempo.
@@ -450,7 +505,7 @@ Implementado en `src/export/reportHtml.ts` con HTML/CSS:
 - Mapa `Donde nos defendieron`.
 - Mapas por tiempo y mapas totales.
 - Fallback visible `Sin ubicaciones registradas`.
-- Contenedor `report-court-map` con alto fijo, fondo, borde, linea central, areas laterales y frames.
+- Contenedor `report-court-map` con alto derivado de `COURT_VISUAL_GEOMETRY`, fondo, borde, linea central, areas laterales y frames.
 - Marcadores `report-map-point` con `data-normalized-x/y`, posicionados por porcentaje y diferenciados por color.
 - Sin dependencias nuevas.
 - El HTML declara `UTF-8` y el fallback textual usa strings UTF-8 normales para evitar mojibake en acentos.
@@ -459,14 +514,14 @@ Refinamiento de legibilidad PDF:
 
 - Los mapas del PDF se renderizan como bloques grandes de ancho completo, uno por fila.
 - Se reemplazo el layout anterior de tres mapas pequenos en una fila.
-- Cada cancha usa altura fija cercana a 260px para evitar contenedores colapsados en PDF.
+- Cada cancha usa altura fija derivada de `COURT_VISUAL_GEOMETRY.reportMapHeightPx` para evitar contenedores colapsados en PDF sin divergir de la geometria compartida.
 - Los marcadores son mas visibles, mantienen forma circular y usan colores por tipo:
   - azul para puntos de Uruguay;
   - rojo para puntos del rival;
   - violeta para defensas del rival.
 - Las secciones `Mapas del tiempo` y `Mapas totales` usan reglas CSS para evitar titulos huerfanos y cortes internos de tarjetas.
 - El modelo de coordenadas normalizadas no cambia.
-- Los mapas de la app (`CourtMapInput`, `CourtMapSummary`, `CourtLocationMap`) no cambian.
+- Los mapas de la app (`CourtMapInput`, `CourtMapSummary`, `CourtLocationMap`, `LiveMapPanel`) comparten la misma fuente de geometria visual que el PDF.
 
 Limitaciones:
 

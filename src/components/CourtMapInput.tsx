@@ -13,6 +13,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { denormalizeLocation, isValidCourtLayout, normalizeTapLocation } from '../domain/court';
+import { getCourtInputMapHeight } from '../domain/courtVisual';
 import { CourtLocation } from '../domain/types';
 import { fontSize, spacing } from '../utils/responsive';
 import { CourtField } from './CourtField';
@@ -60,14 +61,14 @@ export function CourtMapInput({ selectedLocation, onSelectLocation, onConfirm, o
       ? 'Marcá dónde el rival defendió el tiro.'
       : 'Tip: girá el celular para marcar con más precisión.';
   const mapHeight = useMemo(() => {
-    const verticalInsets = insets.top + insets.bottom;
-    const availableHeight = windowHeight - verticalInsets;
-
-    if (isLandscape) {
-      return Math.max(170, Math.min(availableHeight * 0.58, availableHeight - (isTablet ? 320 : 280)));
-    }
-
-    return Math.min(Math.max(windowWidth * 0.62, 220), availableHeight * 0.42);
+    return getCourtInputMapHeight({
+      bottomInset: insets.bottom,
+      isLandscape,
+      isTablet,
+      topInset: insets.top,
+      windowHeight,
+      windowWidth,
+    });
   }, [insets.bottom, insets.top, isLandscape, isTablet, windowHeight, windowWidth]);
   const markerPixelLocation = useMemo(() => {
     if (!selectedLocation || !courtRect || !isValidCourtLayout(courtRect.width, courtRect.height)) {
