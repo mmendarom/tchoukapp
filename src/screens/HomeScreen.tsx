@@ -10,6 +10,7 @@ import { AppBackupData, buildBackupData } from '../domain/backup';
 import { exportBackupJson } from '../export/exportBackup';
 import { pickAndParseBackupJson } from '../export/importBackup';
 import { STORE_DATA_VERSION, useMatchStore } from '../store/useMatchStore';
+import { useTrainingStore } from '../store/useTrainingStore';
 import { RootStackParamList } from '../utils/navigation';
 import { fontSize, spacing } from '../utils/responsive';
 
@@ -31,6 +32,8 @@ export function HomeScreen({ navigation }: Props) {
   const teamPools = useMatchStore((state) => state.teamPools);
   const resetDemoData = useMatchStore((state) => state.resetDemoData);
   const restoreBackupData = useMatchStore((state) => state.restoreBackupData);
+  const trainingSessions = useTrainingStore((state) => state.trainingSessions);
+  const restoreTrainingSessions = useTrainingStore((state) => state.restoreTrainingSessions);
   const activeMatch = matches.find((match) => match.status === 'live' || match.status === 'period_break');
   const visibleMatchCount = matches.filter((match) => match.status !== 'cancelled').length;
   const backupStatusLabel =
@@ -58,6 +61,7 @@ export function HomeScreen({ navigation }: Props) {
           teamPools,
           matches,
           fixtures,
+          trainingSessions,
         },
         { dataVersion: STORE_DATA_VERSION },
       );
@@ -121,7 +125,8 @@ export function HomeScreen({ navigation }: Props) {
 
     setImportStatus('restoring');
 
-    const restored = restoreBackupData(pendingBackup);
+    const trainingRestored = restoreTrainingSessions(pendingBackup.data.trainingSessions);
+    const restored = trainingRestored && restoreBackupData(pendingBackup);
 
     if (!restored) {
       setImportError('No se pudo importar el backup.');
@@ -233,7 +238,7 @@ export function HomeScreen({ navigation }: Props) {
             <HomeActionCard
               disabled={backupStatus === 'loading'}
               label={backupStatus === 'loading' ? 'Generando...' : 'Exportar backup'}
-              description="Guardar jugadores, planteles y partidos"
+              description="Guardar jugadores, planteles, partidos y prácticas 3v3"
               onPress={handleExportBackup}
               tone="data"
             />
@@ -268,6 +273,7 @@ export function HomeScreen({ navigation }: Props) {
                 <Text style={styles.restoreSummaryItem}>Planteles: {pendingBackup?.data.teamPools.length ?? 0}</Text>
                 <Text style={styles.restoreSummaryItem}>Partidos: {pendingBackup?.data.matches.length ?? 0}</Text>
                 <Text style={styles.restoreSummaryItem}>Fixtures: {pendingBackup?.data.fixtures.length ?? 0}</Text>
+                <Text style={styles.restoreSummaryItem}>Prácticas 3v3: {pendingBackup?.data.trainingSessions.length ?? 0}</Text>
                 <Text style={styles.restoreSummaryItem}>Exportado: {pendingBackup?.exportedAt || 'Sin fecha'}</Text>
               </View>
               {pendingBackupWarnings.map((warning) => (

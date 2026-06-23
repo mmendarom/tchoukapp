@@ -1,6 +1,7 @@
 import { Fixture, Match, Player, TeamPool } from './types';
+import { TrainingSession } from './training';
 
-export const BACKUP_VERSION = 1;
+export const BACKUP_VERSION = 2;
 export const BACKUP_APP_NAME = 'Tchoukball Uruguay';
 export const UNSUPPORTED_BACKUP_ERROR = 'Este backup no es compatible con esta versión de la app.';
 export const INVALID_BACKUP_ERROR = 'No se pudo importar el backup.';
@@ -10,6 +11,7 @@ export type BackupSourceState = {
   teamPools: TeamPool[];
   matches: Match[];
   fixtures: Fixture[];
+  trainingSessions: TrainingSession[];
 };
 
 export type AppBackupData = {
@@ -64,6 +66,56 @@ const isFixtureLike = (value: unknown) =>
   hasStringField(value, 'venue') &&
   hasStringField(value, 'startsAt');
 
+const trainingSessionStatuses = new Set(['draft', 'live', 'finished', 'cancelled']);
+const trainingMiniMatchStatuses = new Set(['scheduled', 'live', 'finished', 'cancelled']);
+const trainingEventTypes = new Set(['point', 'defense', 'shot_defended', 'error', 'own_point_against']);
+
+const isTrainingTeamLike = (value: unknown) =>
+  hasStringField(value, 'id') &&
+  hasStringField(value, 'name') &&
+  isRecord(value) &&
+  Array.isArray(value.playerIds) &&
+  value.playerIds.every((playerId) => typeof playerId === 'string') &&
+  (value.queueOrder === undefined || (typeof value.queueOrder === 'number' && Number.isFinite(value.queueOrder)));
+
+const isTrainingEventLike = (value: unknown) =>
+  hasStringField(value, 'id') &&
+  hasStringField(value, 'sessionId') &&
+  hasStringField(value, 'miniMatchId') &&
+  hasStringField(value, 'createdAt') &&
+  hasStringField(value, 'teamId') &&
+  isRecord(value) &&
+  typeof value.type === 'string' &&
+  trainingEventTypes.has(value.type);
+
+const isTrainingMiniMatchLike = (value: unknown) =>
+  hasStringField(value, 'id') &&
+  hasStringField(value, 'sessionId') &&
+  hasStringField(value, 'teamAId') &&
+  hasStringField(value, 'teamBId') &&
+  hasStringField(value, 'status') &&
+  isRecord(value) &&
+  trainingMiniMatchStatuses.has(value.status as string) &&
+  Array.isArray(value.events) &&
+  value.events.every(isTrainingEventLike);
+
+const isTrainingSessionLike = (value: unknown) =>
+  hasStringField(value, 'id') &&
+  hasStringField(value, 'createdAt') &&
+  hasStringField(value, 'updatedAt') &&
+  hasStringField(value, 'status') &&
+  isRecord(value) &&
+  trainingSessionStatuses.has(value.status as string) &&
+  Array.isArray(value.participantPlayerIds) &&
+  value.participantPlayerIds.every((playerId) => typeof playerId === 'string') &&
+  Array.isArray(value.teams) &&
+  value.teams.every(isTrainingTeamLike) &&
+  Array.isArray(value.miniMatches) &&
+  value.miniMatches.every(isTrainingMiniMatchLike) &&
+  (value.archivedAt === undefined || typeof value.archivedAt === 'string') &&
+  (value.teamQueue === undefined || (Array.isArray(value.teamQueue) && value.teamQueue.every((teamId) => typeof teamId === 'string'))) &&
+  (value.settings === undefined || isRecord(value.settings));
+
 export function buildBackupData(
   state: BackupSourceState,
   options: { exportedAt?: string; dataVersion?: number; appName?: string } = {},
@@ -78,6 +130,7 @@ export function buildBackupData(
       teamPools: cloneDomainData(state.teamPools ?? []),
       matches: cloneDomainData(state.matches ?? []),
       fixtures: cloneDomainData(state.fixtures ?? []),
+      trainingSessions: cloneDomainData(state.trainingSessions ?? []),
     },
   };
 }
@@ -93,7 +146,7 @@ export function createBackupFileName(exportedAt: string) {
 }
 
 export function isSupportedBackupVersion(version: unknown) {
-  return version === BACKUP_VERSION;
+  return version === 1 || version === BACKUP_VERSION;
 }
 
 export function validateBackupData(value: unknown): BackupValidationResult {
@@ -114,12 +167,17 @@ export function validateBackupData(value: unknown): BackupValidationResult {
   }
 
   const { players, teamPools, matches, fixtures } = value.data;
+  const trainingSessions = Array.isArray(value.data.trainingSessions) ? value.data.trainingSessions : [];
 
   if (!Array.isArray(players) || !Array.isArray(teamPools) || !Array.isArray(matches) || !Array.isArray(fixtures)) {
     return { valid: false, error: INVALID_BACKUP_ERROR };
   }
 
   if (!players.every(isPlayerLike) || !teamPools.every(isTeamPoolLike) || !matches.every(isMatchLike) || !fixtures.every(isFixtureLike)) {
+    return { valid: false, error: INVALID_BACKUP_ERROR };
+  }
+
+  if (!trainingSessions.every(isTrainingSessionLike)) {
     return { valid: false, error: INVALID_BACKUP_ERROR };
   }
 
@@ -139,6 +197,7 @@ export function validateBackupData(value: unknown): BackupValidationResult {
         teamPools: cloneDomainData(teamPools as TeamPool[]),
         matches: cloneDomainData(matches as Match[]),
         fixtures: cloneDomainData(fixtures as Fixture[]),
+        trainingSessions: cloneDomainData(trainingSessions as TrainingSession[]),
       },
     },
   };

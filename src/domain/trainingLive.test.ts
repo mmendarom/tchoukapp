@@ -1,3 +1,6 @@
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+
 import { describe, expect, it } from 'vitest';
 
 import { formatTrainingEventLabel, formatTrainingMiniMatchScore, getTrainingTeamPlayers, trainingStatusLabel } from './trainingLive';
@@ -65,6 +68,49 @@ describe('training live helpers', () => {
       teamId: 'team-b',
       playerId: 'p2',
       type: 'shot_defended',
+      defendingTeamId: 'team-a',
+      defenderPlayerId: 'p1',
+    }, session, players)).toBe('#8 Tadeo tiro atajado por #3 Mendaro');
+    expect(formatTrainingEventLabel({
+      id: 'event-3',
+      sessionId: 'session-1',
+      miniMatchId: 'mini-1',
+      createdAt: 'now',
+      teamId: 'team-b',
+      playerId: 'p2',
+      type: 'error',
+      errorSubtype: 'line_step',
+    }, session, players)).toBe('#8 Tadeo pisa la línea');
+    expect(formatTrainingEventLabel({
+      id: 'event-4',
+      sessionId: 'session-1',
+      miniMatchId: 'mini-1',
+      createdAt: 'now',
+      teamId: 'team-b',
+      playerId: 'p2',
+      type: 'shot_defended',
     }, session, players)).toBe('#8 Tadeo tiro defendido');
+  });
+
+  it('keeps live training UI player-centric and stops creating standalone defense events', () => {
+    const source = readFileSync(join(process.cwd(), 'src/screens/LiveTrainingMiniMatchScreen.tsx'), 'utf8');
+
+    expect(source).toContain('Lo atajaron');
+    expect(source).toContain('¿Quién lo atajó?');
+    expect(source).toContain("type: 'shot_defended'");
+    expect(source).not.toContain("type: 'defense'");
+  });
+
+  it('keeps legacy location events without scope compatible', () => {
+    expect(formatTrainingEventLabel({
+      id: 'legacy-event',
+      sessionId: 'session-1',
+      miniMatchId: 'mini-1',
+      createdAt: 'now',
+      teamId: 'team-a',
+      playerId: 'p1',
+      type: 'point',
+      location: { x: 0.25, y: 0.75 },
+    }, session, players)).toBe('#3 Mendaro punto para Equipo 1');
   });
 });

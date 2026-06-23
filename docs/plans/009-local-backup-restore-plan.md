@@ -165,3 +165,27 @@ Estado: Implemented.
 
 - `npm test`.
 - `npx tsc --noEmit`.
+
+## Stage 6A - Practicas 3v3 en backup/import
+
+Estado: Implemented.
+
+### Alcance
+
+- Elevar el schema de backup a v2 y aceptar backups v1 y v2.
+- Exportar `trainingSessions` desde `useTrainingStore` con equipos, mini partidos, eventos, cola, settings y status.
+- Normalizar backups viejos o `trainingSessions` no-array a `[]`; rechazar arrays con sesiones invalidas.
+- Restaurar por reemplazo en `useTrainingStore`, usando la misma normalizacion de hidratacion.
+- Excluir y limpiar `activeTrainingSessionId`; no cambiar scoring formal ni de entrenamiento.
+- Preservar `archivedAt` en sesiones archivadas; sesiones eliminadas quedan fuera del backup por no existir en el store.
+- Mostrar el conteo de `Practicas 3v3` y aclarar que el backup las incluye.
+
+### QA manual Stage 6A
+
+- Crear una sesion 3v3, equipos y al menos un mini partido.
+- Registrar puntos, errores, defensas y puntos en contra.
+- Exportar y confirmar `trainingSessions` en el JSON.
+- Limpiar datos locales si es seguro e importar el backup.
+- Confirmar sesion, equipos, historial, cola y stats restaurados.
+- Confirmar que los partidos formales tambien se restauran.
+- Importar un backup v1 sin `trainingSessions` y confirmar compatibilidad.

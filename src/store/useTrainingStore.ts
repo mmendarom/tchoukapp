@@ -41,6 +41,9 @@ type TrainingEventInput = {
   teamId: string;
   playerId?: string;
   location?: CourtLocation;
+  defenderPlayerId?: string;
+  defendingTeamId?: string;
+  errorSubtype?: TrainingEvent['errorSubtype'];
   errorType?: TrainingEvent['errorType'];
 };
 
@@ -53,6 +56,9 @@ type TrainingState = {
   updateTrainingSession: (id: string, patch: Partial<Pick<TrainingSession, 'teamPoolId' | 'teamPoolName' | 'participantPlayerIds' | 'settings'>>) => boolean;
   cancelTrainingSession: (id: string) => boolean;
   finishTrainingSession: (id: string) => boolean;
+  archiveTrainingSession: (id: string) => boolean;
+  unarchiveTrainingSession: (id: string) => boolean;
+  deleteTrainingSession: (id: string) => boolean;
   startTrainingSession: (id: string) => boolean;
   startMiniMatch: (sessionId: string, teamAId: string, teamBId: string) => string;
   startSuggestedNextMiniMatch: (sessionId: string) => string;
@@ -61,6 +67,7 @@ type TrainingState = {
   recordTrainingEvent: (sessionId: string, miniMatchId: string, input: TrainingEventInput) => boolean;
   undoLastTrainingEvent: (sessionId: string, miniMatchId: string) => boolean;
   getActiveTrainingSession: () => TrainingSession | undefined;
+  restoreTrainingSessions: (trainingSessions: TrainingSession[]) => boolean;
   resetTrainingData: () => void;
 };
 
@@ -68,7 +75,7 @@ const createId = () => `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
 
 const nowIso = () => new Date().toISOString();
 
-const normalizeTrainingSession = (session: TrainingSession): TrainingSession => {
+export const normalizeTrainingSession = (session: TrainingSession): TrainingSession => {
   const teams = (session.teams ?? []).map((team, index) => ({
     ...team,
     name: team.name?.trim() || `Equipo ${index + 1}`,
@@ -77,6 +84,7 @@ const normalizeTrainingSession = (session: TrainingSession): TrainingSession => 
   }));
   const normalizedSession = {
     ...session,
+    archivedAt: typeof session.archivedAt === 'string' && session.archivedAt.trim() ? session.archivedAt : undefined,
     participantPlayerIds: uniqueTrainingIds(session.participantPlayerIds ?? []),
     settings: buildTrainingSettings(session.settings),
     teams,
@@ -103,7 +111,7 @@ const createTeams = (teams: CreateTrainingTeamInput[]): TrainingTeam[] =>
   }));
 
 const isSessionClosed = (session: TrainingSession) =>
-  session.status === 'finished' || session.status === 'cancelled';
+  session.status === 'finished' || session.status === 'cancelled' || Boolean(session.archivedAt);
 
 const isMiniMatchClosed = (miniMatch: TrainingMiniMatch) =>
   miniMatch.status === 'finished' || miniMatch.status === 'cancelled';
@@ -127,6 +135,26 @@ const isPlayerInTeam = (session: TrainingSession, teamId: string, playerId?: str
 
 const eventRequiresPlayer = (type: TrainingEventType) =>
   ['point', 'defense', 'shot_defended', 'error', 'own_point_against'].includes(type);
+
+const getDefendingTeamIdForShot = (
+  miniMatch: Pick<TrainingMiniMatch, 'teamAId' | 'teamBId'>,
+  attackingTeamId: string,
+  requestedDefendingTeamId?: string,
+) => {
+  const oppositeTeamId = attackingTeamId === miniMatch.teamAId
+    ? miniMatch.teamBId
+    : attackingTeamId === miniMatch.teamBId ? miniMatch.teamAId : undefined;
+
+  if (!oppositeTeamId) {
+    return undefined;
+  }
+
+  if (requestedDefendingTeamId && requestedDefendingTeamId !== oppositeTeamId) {
+    return undefined;
+  }
+
+  return requestedDefendingTeamId ?? oppositeTeamId;
+};
 
 export const useTrainingStore = create<TrainingState>()(
   persist(
@@ -205,7 +233,7 @@ export const useTrainingStore = create<TrainingState>()(
       cancelTrainingSession: (id) => {
         const session = findSession(get().trainingSessions, id);
 
-        if (!session || session.status === 'finished') {
+        if (!session || session.status === 'finished' || session.archivedAt) {
           return false;
         }
 
@@ -233,7 +261,7 @@ export const useTrainingStore = create<TrainingState>()(
       finishTrainingSession: (id) => {
         const session = findSession(get().trainingSessions, id);
 
-        if (!session || session.status === 'cancelled') {
+        if (!session || session.status === 'cancelled' || session.archivedAt) {
           return false;
         }
 
@@ -256,6 +284,64 @@ export const useTrainingStore = create<TrainingState>()(
           ),
         }));
 
+        return true;
+      },
+      archiveTrainingSession: (id) => {
+        const session = findSession(get().trainingSessions, id);
+
+        if (!session) {
+          return false;
+        }
+
+        if (session.archivedAt) {
+          return true;
+        }
+
+        const archivedAt = nowIso();
+
+        set((state) => ({
+          activeTrainingSessionId: state.activeTrainingSessionId === id ? undefined : state.activeTrainingSessionId,
+          trainingSessions: state.trainingSessions.map((item) =>
+            item.id === id ? { ...item, archivedAt, updatedAt: archivedAt } : item,
+          ),
+        }));
+        return true;
+      },
+      unarchiveTrainingSession: (id) => {
+        const session = findSession(get().trainingSessions, id);
+
+        if (!session) {
+          return false;
+        }
+
+        if (!session.archivedAt) {
+          return true;
+        }
+
+        const updatedAt = nowIso();
+
+        set((state) => ({
+          trainingSessions: state.trainingSessions.map((item) => {
+            if (item.id !== id) {
+              return item;
+            }
+
+            const { archivedAt: _archivedAt, ...restoredSession } = item;
+
+            return { ...restoredSession, updatedAt };
+          }),
+        }));
+        return true;
+      },
+      deleteTrainingSession: (id) => {
+        if (!findSession(get().trainingSessions, id)) {
+          return false;
+        }
+
+        set((state) => ({
+          activeTrainingSessionId: state.activeTrainingSessionId === id ? undefined : state.activeTrainingSessionId,
+          trainingSessions: state.trainingSessions.filter((session) => session.id !== id),
+        }));
         return true;
       },
       startTrainingSession: (id) => {
@@ -404,10 +490,24 @@ export const useTrainingStore = create<TrainingState>()(
           !session ||
           !miniMatch ||
           session.status !== 'live' ||
+          Boolean(session.archivedAt) ||
           miniMatch.status !== 'live' ||
           miniMatch.winnerTeamId ||
           ![miniMatch.teamAId, miniMatch.teamBId].includes(input.teamId) ||
           (eventRequiresPlayer(input.type) && !isPlayerInTeam(session, input.teamId, input.playerId))
+        ) {
+          return false;
+        }
+
+        const defendingTeamId = input.type === 'shot_defended'
+          ? getDefendingTeamIdForShot(miniMatch, input.teamId, input.defendingTeamId)
+          : undefined;
+
+        if (
+          input.type === 'shot_defended' &&
+          ((Boolean(input.defendingTeamId) && !defendingTeamId) ||
+            (Boolean(input.defenderPlayerId) &&
+              (!defendingTeamId || !isPlayerInTeam(session, defendingTeamId, input.defenderPlayerId))))
         ) {
           return false;
         }
@@ -421,6 +521,9 @@ export const useTrainingStore = create<TrainingState>()(
           playerId: input.playerId,
           type: input.type,
           location: input.location,
+          defenderPlayerId: input.defenderPlayerId,
+          defendingTeamId,
+          errorSubtype: input.errorSubtype,
           errorType: input.errorType,
         };
         const withEvent = recalculateTrainingMiniMatch({
@@ -490,6 +593,23 @@ export const useTrainingStore = create<TrainingState>()(
         return activeTrainingSessionId
           ? trainingSessions.find((session) => session.id === activeTrainingSessionId)
           : undefined;
+      },
+      restoreTrainingSessions: (trainingSessions) => {
+        if (!Array.isArray(trainingSessions)) {
+          return false;
+        }
+
+        try {
+          const normalizedSessions = trainingSessions.map(normalizeTrainingSession);
+
+          set({
+            activeTrainingSessionId: undefined,
+            trainingSessions: normalizedSessions,
+          });
+          return true;
+        } catch {
+          return false;
+        }
       },
       resetTrainingData: () => set({ activeTrainingSessionId: undefined, trainingSessions: [] }),
     }),

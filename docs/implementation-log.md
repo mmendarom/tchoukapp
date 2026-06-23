@@ -1,5 +1,246 @@
 # Implementation Log
 
+## 2026-06-23 - Practica 3v3 barras visuales de rendimiento
+
+Se agregaron barras visuales de rendimiento para que el resumen de `Practica 3v3` sea mas facil de leer que una lista de numeros.
+
+Implementado:
+
+- Nuevo helper puro `src/domain/trainingPerformance.ts`.
+- Nuevo componente `src/components/TrainingPerformanceBars.tsx`.
+- `TrainingSessionsScreen` reemplaza el bloque textual de `Rendimiento jugadores` por barras de `Ataque` y `Defensa`.
+- Ataque muestra puntos/intentos/efectividad, con barra suave para tiros generados y barra fuerte para puntos convertidos.
+- Ataque desglosa tiros atajados y puntos en contra como errados cuando existen.
+- Defensa muestra defensas y porcentaje de contribucion defensiva.
+- `shot_defended.defenderPlayerId` alimenta defensas nuevas; eventos legacy `defense` siguen contando.
+- Se destacan los dos primeros grupos de ranking con empates incluidos.
+- Jugadores con cero intentos no se destacan en ataque y jugadores con cero defensas no se destacan en defensa.
+- No se cambio scoring, modelos persistidos, partidos formales, reportes formales ni PDF.
+
+Tests agregados:
+
+- intentos = puntos + tiros atajados + puntos en contra;
+- `shot_defended` suma tiro atajado/intento al tirador;
+- `shot_defended` suma defensa al defensor;
+- `defense` legacy sigue contando;
+- punto en contra cuenta como intento errado;
+- ataque prioriza goleadores de volumen sobre 100% de bajo volumen;
+- defensa ordena por cantidad;
+- top groups incluyen empates y excluyen ceros.
+
+QA manual pendiente:
+
+- Crear practica 3v3.
+- Jugar varios mini partidos.
+- Registrar puntos.
+- Registrar `Lo atajaron` con tirador y defensor.
+- Registrar `Punto en contra`.
+- Volver al detalle de sesion.
+- Confirmar barras de ataque con puntos/intentos/efectividad y atajados/errados.
+- Confirmar barras de defensa con defensores derivados de `Lo atajaron`.
+- Confirmar destacados `Top`.
+- Abrir sesion vieja con eventos `defense` legacy y confirmar que no crashea.
+
+## 2026-06-22 - Practica 3v3 live jugador-centrico y defensa via Lo atajaron
+
+Se simplifico el tracking live de `Practica 3v3` para que el flujo principal sea tocar un jugador y elegir que paso, en vez de elegir primero un tipo de evento global.
+
+Implementado:
+
+- `LiveTrainingMiniMatchScreen` muestra cada equipo con botones grandes por jugador.
+- Al tocar un jugador se abre un menu con `Punto`, `Lo atajaron` y `Error`.
+- `Punto` abre el mapa one-frame `¿Dónde cayó el punto?` y registra `point` con tirador, equipo y ubicacion.
+- `Lo atajaron` pide `¿Quién lo atajó?`, filtra defensores del equipo contrario, abre `¿Dónde fue defendido el tiro?` y registra `shot_defended`.
+- `shot_defended` ahora puede guardar `defenderPlayerId` y `defendingTeamId`.
+- `Error` abre `Punto en contra`, `Invasión`, `Pisa la línea` y `Perdió la pelota`.
+- `errorSubtype` agrega `invasion`, `line_step` y `turnover`.
+- `own_point_against` sigue separado de `error` porque suma punto al rival y cuenta como intento errado.
+- La UI live ya no crea eventos `defense` independientes.
+- Eventos legacy `defense` siguen soportados y cuentan como defensas si tienen `playerId`.
+- `formatTrainingEventLabel` muestra textos especificos para tiros atajados por defensor y errores tipados.
+- Se documento la decision en `docs/decisions/005-training-player-centric-live-defense.md`.
+
+Stats:
+
+- Intentos = puntos + tiros atajados + puntos en contra.
+- `shot_defended` suma intento/tiro atajado al tirador.
+- `shot_defended` suma defensa al defensor si tiene `defenderPlayerId`.
+- `defense` legacy sigue sumando defensa.
+- `error` tipado no cambia score.
+
+QA manual pendiente:
+
+- Iniciar mini partido y confirmar que se ven ambos equipos con jugadores tocables.
+- Tocar jugador -> `Punto`, marcar mapa y confirmar score/equipo/jugador.
+- Tocar jugador -> `Lo atajaron`, elegir defensor rival, marcar mapa y confirmar que score no cambia.
+- Confirmar que el tirador suma intento/tiro atajado y el defensor suma defensa.
+- Tocar jugador -> `Error` -> `Punto en contra` y confirmar +1 al rival.
+- Probar `Invasión`, `Pisa la línea` y `Perdió la pelota` y confirmar que no cambian score.
+- Confirmar que no existe boton global `Defensa` en live training.
+- Confirmar que partidos formales siguen intactos.
+
+## 2026-06-22 - Practica 3v3 modelo tactico de un solo marco
+
+Se unifico la lectura de ubicaciones de `Practica 3v3` alrededor de un solo marco, para evitar que textos de entrenamiento hereden conceptos full-court del modo formal.
+
+Implementado:
+
+- `trainingGoalMap.ts` agrega `deriveTrainingGoalSector(location)` como helper tactico dedicado a training.
+- Los labels training quedan limitados a `lado izquierdo · 0°-30°`, `lado izquierdo · 30°-60°`, `centro · 60°-90°`, `lado derecho · 30°-60°` y `lado derecho · 0°-30°`.
+- El helper devuelve `null` sin ubicacion y clampa coordenadas fuera de 0-1 para tolerar datos legacy.
+- `trainingShareText` agrega, si existen ubicaciones, `Zonas donde más convertimos` y `Zonas donde más nos defendieron` usando labels one-goal.
+- Eventos training antiguos con `{x,y}` no se migran; desde ahora se interpretan como one-goal-relative en textos/resumenes de training.
+- No se tocaron mapas formales, sectores tacticos formales, PDF formal, scoring formal ni scoring training.
+
+Tests agregados/actualizados:
+
+- Labels one-goal para lado izquierdo 0°, lado izquierdo 45°, centro 90°, lado derecho 45° y lado derecho 0°.
+- Guardias para que labels training no contengan `marco izquierdo`, `marco derecho`, `zona izquierda`, `zona derecha` ni angulos 120°/150°/180°.
+- Resumen compartible con secciones de ubicacion one-goal.
+
+QA manual pendiente:
+
+- Crear practica 3v3 e iniciar mini partido.
+- Registrar puntos y tiros defendidos cerca de lado izquierdo 0°, lado izquierdo 45°, centro 90°, lado derecho 45° y lado derecho 0°.
+- Compartir resumen y confirmar labels one-goal hasta 90°.
+- Confirmar que ningun texto training dice `marco izquierdo` o `marco derecho`.
+- Confirmar que reportes/mapas formales conservan etiquetas full-court.
+
+## 2026-06-22 - Stage 8 resumen textual compartible de Practica 3v3
+
+Se agrego un resumen compacto de sesion para compartir por WhatsApp, notas o chat de equipo, sin implementar PDF ni cambiar reportes formales, scoring, backup o mapa one-frame.
+
+Implementado:
+
+- Nuevo builder puro `src/export/trainingShareText.ts` basado en `getTrainingSessionStats`.
+- El texto incluye titulo/plantel, fecha, target, cantidad de mini partidos, standings, top ataque, top defensa, alertas e historial.
+- Limites: 5 equipos, 5 atacantes, 5 defensores, 3 alertas por errores, 3 por puntos en contra y 10 mini partidos.
+- Si hay mas de 10 partidos, se muestra `+N mini partidos mas`.
+- Mini partidos cancelados quedan fuera del conteo, stats e historial compartido.
+- Sesiones vacias muestran estados seguros; sesiones con partido live lo identifican como `En vivo`.
+- El detalle de sesion agrega `Compartir resumen` y usa `Share.share`, el mismo patron nativo del reporte formal.
+- Las sesiones archivadas pueden compartir sin restaurarse.
+- La UI muestra feedback `Resumen compartido.` o `No se pudo compartir el resumen.`.
+
+Tests agregados:
+
+- titulo, plantel, fecha y target;
+- standings y orden de equipos;
+- ataque priorizando puntos/volumen antes que efectividad aislada;
+- top defensa, errores y puntos en contra;
+- historial sin cancelados;
+- sesion vacia/archivada y sesion solo-live;
+- limite de diez mini partidos con indicador de restantes.
+
+QA manual pendiente:
+
+- Crear practica de 3 equipos y jugar varios mini partidos.
+- Registrar puntos, defensas, errores y puntos en contra.
+- Tocar `Compartir resumen` y revisar legibilidad/longitud.
+- Compartir a WhatsApp o notas.
+- Compartir una sesion archivada y una sesion vacia.
+- Confirmar que reportes formales, backup y mapa one-frame no cambian.
+
+## 2026-06-22 - Stage 7 mapa one-frame para Practica 3v3
+
+Se reemplazo el mapa full-court usado por eventos training por un input dedicado a practicas de un solo marco, sin cambiar mapas, scoring, reportes ni coordenadas de partidos formales.
+
+Implementado:
+
+- Nuevo `TrainingGoalMapInput` full-screen con un marco, area semicircular, guias visuales 0°/45°/90°, marcador y botones grandes.
+- `Punto` muestra `¿Donde cayo el punto?` y `Tiro defendido` muestra `¿Donde fue defendido el tiro?`.
+- `LiveTrainingMiniMatchScreen` usa el componente dedicado solo para `point` y `shot_defended`.
+- `CourtMapInput` queda reservado al flujo formal full-court.
+- Nuevo helper puro `trainingGoalMap.ts` normaliza taps a `{x,y}` 0-1 y deriva bandas simples `0°-30°`, `30°-60°`, `60°-90°` sin superar 90°.
+- No se agrego `locationScope`, migracion ni dependencia: scoring, stats, persistencia y backup mantienen el modelo existente.
+- Eventos training legacy sin metadata de scope siguen cargando y funcionando.
+- Decision de alcance de coordenadas documentada en `docs/decisions/004-training-one-frame-coordinate-scope.md`.
+
+Tests agregados/actualizados:
+
+- normalizacion central y clamp fuera de limites;
+- rechazo de dimensiones invalidas;
+- grados/bandas limitados a 0-90°;
+- flujo training usa `TrainingGoalMapInput` y flujo formal conserva `CourtMapInput`/`CourtField`;
+- puntos y tiros defendidos siguen almacenando ubicacion;
+- eventos legacy sin scope siguen formateando correctamente;
+- tests de mapas/reportes formales siguen pasando.
+
+QA manual pendiente:
+
+- Crear practica e iniciar mini partido.
+- Registrar punto y confirmar que abre el mapa de un marco.
+- Marcar cerca de 0°, 45° y 90° y confirmar cada evento.
+- Registrar tiro defendido y confirmar ubicacion.
+- Abrir un partido formal y confirmar que el punto sigue usando cancha completa.
+- Abrir sesiones training antiguas y confirmar que no crashean.
+
+## 2026-06-22 - Stage 6B gestion de sesiones de Practica 3v3
+
+Se agregaron archivo, restauracion, eliminacion confirmada y filtros para manejar muchas sesiones de prueba sin cambiar partidos formales, scoring formal, scoring 3v3, mapas ni reportes.
+
+Implementado:
+
+- `TrainingSession` incorpora `archivedAt?: string`, independiente de `draft/live/finished/cancelled`.
+- `useTrainingStore` agrega `archiveTrainingSession`, `unarchiveTrainingSession` y `deleteTrainingSession`.
+- Archivar es la limpieza segura: conserva equipos, cola, mini partidos, eventos y stats, pero oculta la sesion de `Activas`.
+- Eliminar remueve la sesion permanentemente y la UI exige confirmacion con accion destructiva.
+- Archivar o eliminar la sesion activa limpia `activeTrainingSessionId`.
+- Si habia un mini partido live al archivar, se conserva sin mutarlo y queda bloqueado para nuevos eventos hasta restaurar la sesion.
+- La lista agrega filtros `Activas`, `Finalizadas`, `Archivadas` y `Todas`; las tarjetas muestran plantel, fecha, equipos, participantes, mini partidos, status y badge de archivo.
+- Sesiones legacy sin `archivedAt` se normalizan como no archivadas.
+- Backup v2 mantiene todas las sesiones archivadas y preserva `archivedAt`; las eliminadas no se exportan porque ya no existen en el store.
+
+Tests agregados:
+
+- filtros por estado/archivo;
+- archivo de sesiones draft, live, finished y cancelled;
+- limpieza del id activo al archivar/eliminar;
+- restauracion sin reactivacion automatica;
+- delete aislado sin afectar otras sesiones;
+- bloqueo de tracking archivado;
+- compatibilidad legacy y preservacion de `archivedAt` en restore/backup.
+
+QA manual pendiente:
+
+- Crear una sesion 3v3, archivarla y confirmar que desaparece de `Activas`.
+- Abrir `Archivadas`, restaurarla y confirmar que vuelve a `Activas`.
+- Eliminar una sesion y confirmar que primero aparece `Esta accion no se puede deshacer.`.
+- Reiniciar la app y confirmar que la sesion eliminada no reaparece.
+- Exportar un backup con una sesion archivada, importarlo y confirmar que conserva el badge/estado archivado.
+- Confirmar que `Partidos` formal sigue funcionando.
+
+## 2026-06-22 - Stage 6A Practica 3v3 en backup/import local
+
+Se incorporaron las sesiones de entrenamiento al backup JSON local sin cambiar partidos formales, scoring formal, scoring 3v3 ni reportes PDF.
+
+Implementado:
+
+- El schema actual usa `backupVersion: 2` e incluye `trainingSessions` completas.
+- El import acepta backups v1 y v2; si `trainingSessions` falta o no es array, usa `[]`.
+- Arrays con sesiones estructuralmente invalidas se rechazan antes de restaurar.
+- Home exporta desde `useMatchStore` y `useTrainingStore`, muestra el conteo de `Practicas 3v3` y aclara que se incluyen.
+- Restore reemplaza las sesiones, reutiliza la normalizacion del training store y limpia `activeTrainingSessionId`.
+- `activeMatchId` y `activeTrainingSessionId` siguen fuera del archivo por ser estado runtime.
+- Se documento la compatibilidad y la separacion de stores en `docs/decisions/003-training-sessions-backup-compatibility.md`.
+
+Tests agregados/actualizados:
+
+- export preserva equipos, mini partidos, eventos, cola, settings y status;
+- backup v1 sin sesiones importa como `[]`;
+- campo training malformado no-array usa `[]` y sesiones invalidas se rechazan;
+- restore normaliza sesiones, limpia estado activo y conserva stats derivadas;
+- restore formal de jugadores, planteles, partidos y fixtures sigue cubierto.
+
+QA manual pendiente:
+
+- Crear una sesion 3v3 con equipos y jugar al menos un mini partido.
+- Registrar puntos, errores, defensas y puntos en contra.
+- Exportar y confirmar `trainingSessions` en el JSON.
+- Limpiar datos locales si es seguro, importar y confirmar sesion, equipos, historial, cola y stats.
+- Confirmar que partidos formales tambien se restauran.
+- Confirmar que un backup v1 sin `trainingSessions` sigue importando.
+
 ## 2026-06-21 - Stage 3 modo practica 3v3: live mini-match tracking
 
 Se implemento tracking en vivo de un mini partido dentro de una sesion de `Práctica 3v3`, sin rotacion automatica, sin summary avanzado y sin export.

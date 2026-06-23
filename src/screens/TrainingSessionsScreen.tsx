@@ -1,10 +1,18 @@
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useMemo, useState } from 'react';
-import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Alert, Pressable, Share, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { ActionButton } from '../components/ActionButton';
 import { Screen } from '../components/Screen';
-import { getSuggestedNextMiniMatch, getTrainingQueue, getTrainingSessionStats, TrainingPlayerStats } from '../domain/training';
+import { TrainingPerformanceBars } from '../components/TrainingPerformanceBars';
+import {
+  filterTrainingSessions,
+  getSuggestedNextMiniMatch,
+  getTrainingQueue,
+  getTrainingSessionStats,
+  TrainingPlayerStats,
+  TrainingSessionFilter,
+} from '../domain/training';
 import {
   formatTrainingMiniMatchScore,
   getTrainingTeamName,
@@ -19,13 +27,22 @@ import {
   parseTrainingTargetScore,
   TrainingTeamAssignment,
 } from '../domain/trainingSetup';
+import { buildTrainingPerformance } from '../domain/trainingPerformance';
 import { Player, TeamPool } from '../domain/types';
+import { buildTrainingShareText } from '../export/trainingShareText';
 import { useMatchStore } from '../store/useMatchStore';
 import { useTrainingStore } from '../store/useTrainingStore';
 import { RootStackParamList } from '../utils/navigation';
 import { fontSize, spacing } from '../utils/responsive';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'TrainingSessions'>;
+
+const sessionFilters: { id: TrainingSessionFilter; label: string }[] = [
+  { id: 'active', label: 'Activas' },
+  { id: 'finished', label: 'Finalizadas' },
+  { id: 'archived', label: 'Archivadas' },
+  { id: 'all', label: 'Todas' },
+];
 
 const formatDate = (value: string) => {
   const date = new Date(value);
@@ -63,6 +80,9 @@ export function TrainingSessionsScreen({ navigation }: Props) {
   const startTrainingSession = useTrainingStore((state) => state.startTrainingSession);
   const startMiniMatch = useTrainingStore((state) => state.startMiniMatch);
   const startSuggestedNextMiniMatch = useTrainingStore((state) => state.startSuggestedNextMiniMatch);
+  const archiveTrainingSession = useTrainingStore((state) => state.archiveTrainingSession);
+  const unarchiveTrainingSession = useTrainingStore((state) => state.unarchiveTrainingSession);
+  const deleteTrainingSession = useTrainingStore((state) => state.deleteTrainingSession);
   const [selectedTeamPoolId, setSelectedTeamPoolId] = useState(teamPools[0]?.id ?? '');
   const [participantIds, setParticipantIds] = useState<string[]>([]);
   const [teamCount, setTeamCount] = useState(2);
@@ -74,6 +94,9 @@ export function TrainingSessionsScreen({ navigation }: Props) {
   const [selectedTeamBId, setSelectedTeamBId] = useState<string | undefined>();
   const [createStatus, setCreateStatus] = useState('');
   const [miniMatchStatus, setMiniMatchStatus] = useState('');
+  const [sessionFilter, setSessionFilter] = useState<TrainingSessionFilter>('active');
+  const [sharingSummary, setSharingSummary] = useState(false);
+  const [shareStatus, setShareStatus] = useState('');
   const selectedTeamPool = useMemo(
     () => teamPools.find((pool) => pool.id === selectedTeamPoolId) ?? teamPools[0],
     [selectedTeamPoolId, teamPools],
@@ -98,6 +121,10 @@ export function TrainingSessionsScreen({ navigation }: Props) {
     targetScore,
   });
   const selectedSession = trainingSessions.find((session) => session.id === selectedSessionId);
+  const visibleTrainingSessions = useMemo(
+    () => filterTrainingSessions(trainingSessions, sessionFilter),
+    [sessionFilter, trainingSessions],
+  );
   const activeMiniMatch = selectedSession?.miniMatches.find((miniMatch) => miniMatch.status === 'live');
   const miniMatchHistory = selectedSession?.miniMatches.filter((miniMatch) => miniMatch.status !== 'live') ?? [];
   const latestFinishedMiniMatch = selectedSession?.miniMatches.find((miniMatch) => miniMatch.status === 'finished');
@@ -107,24 +134,9 @@ export function TrainingSessionsScreen({ navigation }: Props) {
     () => selectedSession ? getTrainingSessionStats(selectedSession) : undefined,
     [selectedSession],
   );
-  const playerRanking = useMemo(
-    () =>
-      (selectedSessionStats?.playerStats ?? [])
-        .filter((stats) =>
-          stats.points > 0 ||
-          stats.attempts > 0 ||
-          stats.defenses > 0 ||
-          stats.errors > 0 ||
-          stats.ownPointsAgainst > 0 ||
-          stats.miniMatchesPlayed > 0)
-        .sort((a, b) =>
-          b.points - a.points ||
-          b.defenses - a.defenses ||
-          b.attempts - a.attempts ||
-          b.plusMinus - a.plusMinus ||
-          a.playerId.localeCompare(b.playerId))
-        .slice(0, 7),
-    [selectedSessionStats?.playerStats],
+  const selectedTrainingPerformance = useMemo(
+    () => selectedSession ? buildTrainingPerformance(selectedSession, players) : undefined,
+    [players, selectedSession],
   );
   const trainingAlerts = useMemo(() => {
     if (!selectedSessionStats) {
@@ -272,6 +284,79 @@ export function TrainingSessionsScreen({ navigation }: Props) {
 
     navigation.navigate('LiveTrainingMiniMatch', { sessionId: selectedSession.id, miniMatchId });
   };
+  const handleArchiveSession = () => {
+    if (!selectedSession) {
+      return;
+    }
+
+    Alert.alert(
+      'Archivar práctica',
+      'La práctica se ocultará de la lista principal.',
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        {
+          text: 'Archivar',
+          onPress: () => {
+            archiveTrainingSession(selectedSession.id);
+            setSelectedSessionId(undefined);
+            setSelectedTeamAId(undefined);
+            setSelectedTeamBId(undefined);
+          },
+        },
+      ],
+    );
+  };
+  const handleUnarchiveSession = () => {
+    if (!selectedSession) {
+      return;
+    }
+
+    unarchiveTrainingSession(selectedSession.id);
+    setSelectedSessionId(undefined);
+  };
+  const handleDeleteSession = () => {
+    if (!selectedSession) {
+      return;
+    }
+
+    Alert.alert(
+      'Eliminar práctica',
+      'Esta acción no se puede deshacer.',
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        {
+          text: 'Eliminar',
+          style: 'destructive',
+          onPress: () => {
+            deleteTrainingSession(selectedSession.id);
+            setSelectedSessionId(undefined);
+            setSelectedTeamAId(undefined);
+            setSelectedTeamBId(undefined);
+          },
+        },
+      ],
+    );
+  };
+  const handleShareSummary = async () => {
+    if (!selectedSession || sharingSummary) {
+      return;
+    }
+
+    setSharingSummary(true);
+    setShareStatus('');
+
+    try {
+      await Share.share({
+        title: 'Resumen de práctica 3v3',
+        message: buildTrainingShareText(selectedSession, players),
+      });
+      setShareStatus('Resumen compartido.');
+    } catch {
+      setShareStatus('No se pudo compartir el resumen.');
+    } finally {
+      setSharingSummary(false);
+    }
+  };
 
   return (
     <Screen>
@@ -287,18 +372,45 @@ export function TrainingSessionsScreen({ navigation }: Props) {
       {trainingSessions.length > 0 && (
         <View style={styles.card}>
           <Text style={styles.sectionTitle}>Sesiones guardadas</Text>
+          <View style={styles.filterRow}>
+            {sessionFilters.map((filter) => {
+              const selected = sessionFilter === filter.id;
+
+              return (
+                <Pressable
+                  key={filter.id}
+                  onPress={() => {
+                    setSessionFilter(filter.id);
+                    setSelectedSessionId(undefined);
+                  }}
+                  style={({ pressed }) => [styles.filterButton, selected && styles.filterButtonSelected, pressed && styles.pressed]}
+                >
+                  <Text style={[styles.filterText, selected && styles.filterTextSelected]}>{filter.label}</Text>
+                </Pressable>
+              );
+            })}
+          </View>
           <View style={styles.sessionList}>
-            {trainingSessions.map((session) => (
+            {visibleTrainingSessions.length === 0 ? (
+              <Text style={styles.helperText}>No hay sesiones en este filtro.</Text>
+            ) : visibleTrainingSessions.map((session) => (
               <Pressable
                 key={session.id}
-                onPress={() => setSelectedSessionId(session.id)}
+                onPress={() => {
+                  setSelectedSessionId(session.id);
+                  setShareStatus('');
+                }}
                 style={({ pressed }) => [styles.sessionCard, selectedSessionId === session.id && styles.sessionCardSelected, pressed && styles.pressed]}
               >
                 <Text style={styles.sessionTitle}>{session.teamPoolName || 'Práctica'}</Text>
                 <Text style={styles.sessionMeta}>
                   {formatDate(session.createdAt)} · {session.teams.length} equipos · {session.participantPlayerIds.length} jugadores
                 </Text>
-                <Text style={styles.sessionStatus}>{trainingStatusLabel[session.status]}</Text>
+                <Text style={styles.sessionMeta}>{session.miniMatches.length} mini partidos</Text>
+                <View style={styles.sessionBadgeRow}>
+                  <Text style={styles.sessionStatus}>{trainingStatusLabel[session.status]}</Text>
+                  {session.archivedAt ? <Text style={styles.archivedBadge}>Archivada</Text> : null}
+                </View>
               </Pressable>
             ))}
           </View>
@@ -312,6 +424,29 @@ export function TrainingSessionsScreen({ navigation }: Props) {
           <Text style={styles.detailText}>Participantes: {selectedSession.participantPlayerIds.length}</Text>
           <Text style={styles.detailText}>Puntos para ganar: {selectedSession.settings.targetScore}</Text>
           <Text style={styles.detailText}>Ganador queda: {selectedSession.settings.winnerStays ? 'Sí' : 'No'}</Text>
+          <View style={styles.managementActions}>
+            <ActionButton
+              disabled={sharingSummary}
+              label={sharingSummary ? 'Compartiendo...' : 'Compartir resumen'}
+              onPress={handleShareSummary}
+              variant="secondary"
+            />
+            {selectedSession.archivedAt ? (
+              <ActionButton label="Restaurar" onPress={handleUnarchiveSession} variant="secondary" />
+            ) : (
+              <ActionButton label="Archivar" onPress={handleArchiveSession} variant="secondary" />
+            )}
+            <Pressable
+              accessibilityRole="button"
+              onPress={handleDeleteSession}
+              style={({ pressed }) => [styles.deleteButton, pressed && styles.pressed]}
+            >
+              <Text style={styles.deleteButtonText}>Eliminar</Text>
+            </Pressable>
+          </View>
+          {shareStatus ? (
+            <Text style={[styles.statusText, shareStatus.startsWith('No ') && styles.errorText]}>{shareStatus}</Text>
+          ) : null}
           <View style={styles.teamPreviewGrid}>
             {selectedSession.teams.map((team) => (
               <View key={team.id} style={styles.teamPreviewCard}>
@@ -404,20 +539,9 @@ export function TrainingSessionsScreen({ navigation }: Props) {
             </View>
           )}
 
-          {playerRanking.length > 0 && (
+          {selectedTrainingPerformance && (
             <View style={styles.setupSection}>
-              <Text style={styles.sectionTitle}>Rendimiento jugadores</Text>
-              {playerRanking.map((stats) => (
-                <View key={stats.playerId} style={styles.playerStatRow}>
-                  <View style={styles.playerStatMain}>
-                    <Text style={styles.rankingName}>{getPlayerStatLabel(playersById, stats.playerId)}</Text>
-                    <Text style={styles.rankingMeta}>
-                      {formatShootingLine(stats)} · Def {stats.defenses} · Err {stats.errors} · EC {stats.ownPointsAgainst}
-                    </Text>
-                  </View>
-                  <Text style={styles.playerStatRecord}>{stats.wins}-{stats.losses}</Text>
-                </View>
-              ))}
+              <TrainingPerformanceBars data={selectedTrainingPerformance} />
             </View>
           )}
 
@@ -447,7 +571,12 @@ export function TrainingSessionsScreen({ navigation }: Props) {
             </View>
           </View>
 
-          {activeMiniMatch ? (
+          {selectedSession.archivedAt ? (
+            <View style={styles.archivedNotice}>
+              <Text style={styles.archivedNoticeTitle}>Práctica archivada</Text>
+              <Text style={styles.helperText}>Restaurala para continuar registrando mini partidos.</Text>
+            </View>
+          ) : activeMiniMatch ? (
             <View style={styles.liveMiniCard}>
               <Text style={styles.liveMiniTitle}>Mini partido en vivo</Text>
               <Text style={styles.liveMiniText}>{formatTrainingMiniMatchScore(selectedSession, activeMiniMatch)}</Text>
@@ -1148,6 +1277,32 @@ const styles = StyleSheet.create({
   sessionList: {
     gap: spacing.sm,
   },
+  filterRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.xs,
+  },
+  filterButton: {
+    minHeight: 40,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#c9d7e5',
+    backgroundColor: '#f7fafc',
+    justifyContent: 'center',
+    paddingHorizontal: spacing.sm,
+  },
+  filterButtonSelected: {
+    borderColor: '#0b6bcb',
+    backgroundColor: '#0b6bcb',
+  },
+  filterText: {
+    color: '#36546f',
+    fontSize: fontSize.small,
+    fontWeight: '900',
+  },
+  filterTextSelected: {
+    color: '#ffffff',
+  },
   sessionCard: {
     borderRadius: 8,
     borderWidth: 1,
@@ -1173,6 +1328,54 @@ const styles = StyleSheet.create({
   sessionStatus: {
     color: '#0b6bcb',
     fontSize: fontSize.tiny,
+    fontWeight: '900',
+  },
+  sessionBadgeRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    gap: spacing.xs,
+  },
+  archivedBadge: {
+    borderRadius: 8,
+    backgroundColor: '#e5e7eb',
+    color: '#374151',
+    fontSize: fontSize.tiny,
+    fontWeight: '900',
+    paddingHorizontal: spacing.xs,
+    paddingVertical: 2,
+  },
+  managementActions: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  deleteButton: {
+    minHeight: 44,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#dc2626',
+    backgroundColor: '#fff7f7',
+    justifyContent: 'center',
+    paddingHorizontal: spacing.md,
+  },
+  deleteButtonText: {
+    color: '#b42318',
+    fontSize: fontSize.small,
+    fontWeight: '900',
+  },
+  archivedNotice: {
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#c9d7e5',
+    backgroundColor: '#f7fafc',
+    padding: spacing.sm,
+    gap: spacing.xs,
+  },
+  archivedNoticeTitle: {
+    color: '#374151',
+    fontSize: fontSize.small,
     fontWeight: '900',
   },
   detailText: {

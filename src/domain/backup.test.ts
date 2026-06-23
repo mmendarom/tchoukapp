@@ -10,14 +10,52 @@ import {
   validateBackupData,
 } from './backup';
 import { initialMatches, teamPools, upcomingFixtures, uruguayPlayers } from './mockData';
+import { TrainingSession } from './training';
 
 describe('backup', () => {
+  const trainingSession: TrainingSession = {
+    id: 'training-session-1',
+    createdAt: '2026-06-21T18:00:00.000Z',
+    updatedAt: '2026-06-21T18:15:00.000Z',
+    participantPlayerIds: ['p1', 'p2', 'p3', 'p4', 'p5', 'p6'],
+    teams: [
+      { id: 'team-a', name: 'Equipo A', playerIds: ['p1', 'p2', 'p3'], queueOrder: 0 },
+      { id: 'team-b', name: 'Equipo B', playerIds: ['p4', 'p5', 'p6'], queueOrder: 1 },
+    ],
+    teamQueue: ['team-b', 'team-a'],
+    miniMatches: [{
+      id: 'mini-match-1',
+      sessionId: 'training-session-1',
+      teamAId: 'team-a',
+      teamBId: 'team-b',
+      scoreA: 1,
+      scoreB: 0,
+      targetScore: 3,
+      status: 'live',
+      events: [{
+        id: 'event-1',
+        sessionId: 'training-session-1',
+        miniMatchId: 'mini-match-1',
+        createdAt: '2026-06-21T18:05:00.000Z',
+        teamId: 'team-a',
+        playerId: 'p1',
+        type: 'point',
+        scoreAfter: { teamA: 1, teamB: 0 },
+      }],
+    }],
+    activeMiniMatchId: 'mini-match-1',
+    settings: { targetScore: 3, winnerStays: true },
+    status: 'live',
+    archivedAt: '2026-06-22T12:00:00.000Z',
+  };
   const sourceState = {
     players: uruguayPlayers,
     teamPools,
     matches: initialMatches,
     fixtures: upcomingFixtures,
+    trainingSessions: [trainingSession],
     activeMatchId: 'transient-match',
+    activeTrainingSessionId: 'transient-training-session',
   };
 
   it('builds a backup with metadata and persisted domain data', () => {
@@ -27,7 +65,7 @@ describe('backup', () => {
     });
 
     expect(backup).toMatchObject({
-      backupVersion: 1,
+      backupVersion: 2,
       exportedAt: '2026-06-15T12:00:00.000Z',
       appName: 'Tchoukball Uruguay',
       dataVersion: 8,
@@ -36,12 +74,15 @@ describe('backup', () => {
     expect(backup.data.teamPools).toEqual(teamPools);
     expect(backup.data.matches).toEqual(initialMatches);
     expect(backup.data.fixtures).toEqual(upcomingFixtures);
+    expect(backup.data.trainingSessions).toEqual([trainingSession]);
+    expect(backup.data.trainingSessions[0]).not.toBe(trainingSession);
   });
 
   it('excludes transient UI/runtime state', () => {
     const backup = buildBackupData(sourceState);
 
     expect('activeMatchId' in backup.data).toBe(false);
+    expect('activeTrainingSessionId' in backup.data).toBe(false);
   });
 
   it('can be JSON stringified safely', () => {
@@ -52,7 +93,7 @@ describe('backup', () => {
     const json = buildBackupJson(backup);
     const parsed = JSON.parse(json);
 
-    expect(parsed.backupVersion).toBe(1);
+    expect(parsed.backupVersion).toBe(2);
     expect(parsed.data.players.length).toBeGreaterThan(0);
     expect(json).toContain('\n');
   });
@@ -63,6 +104,7 @@ describe('backup', () => {
       teamPools: [],
       matches: [],
       fixtures: [],
+      trainingSessions: [],
     });
 
     expect(backup.data).toEqual({
@@ -70,6 +112,7 @@ describe('backup', () => {
       teamPools: [],
       matches: [],
       fixtures: [],
+      trainingSessions: [],
     });
   });
 
@@ -88,6 +131,61 @@ describe('backup', () => {
     if (validation.valid) {
       expect(validation.backup.data.players).toEqual(uruguayPlayers);
     }
+  });
+
+  it('preserves training teams, mini matches, events, queue, settings and status', () => {
+    const backup = buildBackupData(sourceState);
+    const restoredSession = backup.data.trainingSessions[0];
+
+    expect(restoredSession).toMatchObject({
+      teams: trainingSession.teams,
+      miniMatches: trainingSession.miniMatches,
+      teamQueue: trainingSession.teamQueue,
+      settings: trainingSession.settings,
+      status: trainingSession.status,
+      archivedAt: trainingSession.archivedAt,
+    });
+  });
+
+  it('exports and validates archived training sessions', () => {
+    const backup = buildBackupData(sourceState);
+    const validation = validateBackupData(backup);
+
+    expect(backup.data.trainingSessions[0].archivedAt).toBe('2026-06-22T12:00:00.000Z');
+    expect(validation.valid).toBe(true);
+    if (validation.valid) {
+      expect(validation.backup.data.trainingSessions[0].archivedAt).toBe('2026-06-22T12:00:00.000Z');
+    }
+  });
+
+  it('accepts a version 1 backup without trainingSessions and defaults to an empty array', () => {
+    const currentBackup = buildBackupData(sourceState);
+    const { trainingSessions: _trainingSessions, ...legacyData } = currentBackup.data;
+    const validation = validateBackupData({ ...currentBackup, backupVersion: 1, data: legacyData });
+
+    expect(validation.valid).toBe(true);
+    if (validation.valid) {
+      expect(validation.backup.data.trainingSessions).toEqual([]);
+    }
+  });
+
+  it('defaults malformed non-array trainingSessions safely', () => {
+    const backup = buildBackupData(sourceState);
+    const validation = validateBackupData({ ...backup, data: { ...backup.data, trainingSessions: 'invalid' } });
+
+    expect(validation.valid).toBe(true);
+    if (validation.valid) {
+      expect(validation.backup.data.trainingSessions).toEqual([]);
+    }
+  });
+
+  it('rejects malformed sessions inside trainingSessions', () => {
+    const backup = buildBackupData(sourceState);
+
+    expect(validateBackupData({ ...backup, data: { ...backup.data, trainingSessions: [{ id: 'bad' }] } })).toEqual({
+      valid: false,
+      error: INVALID_BACKUP_ERROR,
+    });
   });
 
   it('rejects invalid JSON', () => {

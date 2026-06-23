@@ -5,6 +5,8 @@ export const TRAINING_STORE_DATA_VERSION = 1;
 
 export type TrainingSessionStatus = 'draft' | 'live' | 'finished' | 'cancelled';
 
+export type TrainingSessionFilter = 'active' | 'finished' | 'archived' | 'all';
+
 export type TrainingMiniMatchStatus = 'scheduled' | 'live' | 'finished' | 'cancelled';
 
 export type TrainingEventType =
@@ -13,6 +15,8 @@ export type TrainingEventType =
   | 'shot_defended'
   | 'error'
   | 'own_point_against';
+
+export type TrainingErrorSubtype = 'invasion' | 'line_step' | 'turnover';
 
 export type TrainingSessionSettings = {
   targetScore: number;
@@ -36,6 +40,9 @@ export type TrainingEvent = {
   playerId?: string;
   type: TrainingEventType;
   location?: CourtLocation;
+  defenderPlayerId?: string;
+  defendingTeamId?: string;
+  errorSubtype?: TrainingErrorSubtype;
   errorType?: 'falta' | 'punto_en_contra' | 'turnover' | 'other';
   scoreAfter?: {
     teamA: number;
@@ -72,6 +79,7 @@ export type TrainingSession = {
   activeMiniMatchId?: string;
   settings: TrainingSessionSettings;
   status: TrainingSessionStatus;
+  archivedAt?: string;
 };
 
 export type TrainingPlayerStats = {
@@ -120,6 +128,19 @@ export type TrainingValidationResult = {
   valid: boolean;
   errors: string[];
 };
+
+export function filterTrainingSessions(sessions: TrainingSession[], filter: TrainingSessionFilter) {
+  switch (filter) {
+    case 'active':
+      return sessions.filter((session) => !session.archivedAt && (session.status === 'draft' || session.status === 'live'));
+    case 'finished':
+      return sessions.filter((session) => !session.archivedAt && (session.status === 'finished' || session.status === 'cancelled'));
+    case 'archived':
+      return sessions.filter((session) => Boolean(session.archivedAt));
+    case 'all':
+      return sessions;
+  }
+}
 
 export const uniqueTrainingIds = (ids: string[]) => {
   const seen = new Set<string>();
@@ -513,6 +534,11 @@ export function getTrainingSessionStats(session: TrainingSession): TrainingSessi
         case 'shot_defended':
           stats.shotsDefended += 1;
           stats.attempts += 1;
+          if (event.defenderPlayerId) {
+            const defenderStats = getPlayerStats(event.defenderPlayerId);
+
+            defenderStats.defenses += 1;
+          }
           break;
         case 'own_point_against':
           stats.ownPointsAgainst += 1;

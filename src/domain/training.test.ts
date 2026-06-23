@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   buildTrainingSettings,
   advanceTrainingQueueAfterMiniMatch,
+  filterTrainingSessions,
   getSuggestedNextMiniMatch,
   getOppositeTrainingTeamId,
   getTrainingMiniMatchScore,
@@ -55,6 +56,22 @@ const session = (overrides: Partial<TrainingSession> = {}): TrainingSession => (
 });
 
 describe('training domain', () => {
+  it('filters active, finished, archived and all sessions independently from status', () => {
+    const sessions = [
+      session({ id: 'draft', status: 'draft' }),
+      session({ id: 'live', status: 'live' }),
+      session({ id: 'finished', status: 'finished' }),
+      session({ id: 'cancelled', status: 'cancelled' }),
+      session({ id: 'archived-live', status: 'live', archivedAt: '2026-06-22T12:00:00.000Z' }),
+      session({ id: 'archived-finished', status: 'finished', archivedAt: '2026-06-22T12:00:00.000Z' }),
+    ];
+
+    expect(filterTrainingSessions(sessions, 'active').map((item) => item.id)).toEqual(['draft', 'live']);
+    expect(filterTrainingSessions(sessions, 'finished').map((item) => item.id)).toEqual(['finished', 'cancelled']);
+    expect(filterTrainingSessions(sessions, 'archived').map((item) => item.id)).toEqual(['archived-live', 'archived-finished']);
+    expect(filterTrainingSessions(sessions, 'all')).toEqual(sessions);
+  });
+
   it('validates teams of 3 or 4 players', () => {
     expect(validateTrainingTeams(participants, teams)).toEqual({ valid: true, errors: [] });
     expect(validateTrainingTeams([...participants, 'p7', 'p8'], [
@@ -151,7 +168,17 @@ describe('training domain', () => {
           loserTeamId: 'team-b',
           events: [
             { id: 'e1', sessionId: 'session-1', miniMatchId: 'mini-1', createdAt: 'now', teamId: 'team-a', playerId: 'p1', type: 'point' },
-            { id: 'e2', sessionId: 'session-1', miniMatchId: 'mini-1', createdAt: 'now', teamId: 'team-a', playerId: 'p1', type: 'shot_defended' },
+            {
+              id: 'e2',
+              sessionId: 'session-1',
+              miniMatchId: 'mini-1',
+              createdAt: 'now',
+              teamId: 'team-a',
+              playerId: 'p1',
+              type: 'shot_defended',
+              defendingTeamId: 'team-b',
+              defenderPlayerId: 'p4',
+            },
             { id: 'e3', sessionId: 'session-1', miniMatchId: 'mini-1', createdAt: 'now', teamId: 'team-a', playerId: 'p1', type: 'own_point_against' },
             { id: 'e4', sessionId: 'session-1', miniMatchId: 'mini-1', createdAt: 'now', teamId: 'team-a', playerId: 'p2', type: 'point' },
             { id: 'e5', sessionId: 'session-1', miniMatchId: 'mini-1', createdAt: 'now', teamId: 'team-a', playerId: 'p3', type: 'point' },
@@ -167,10 +194,46 @@ describe('training domain', () => {
 
     expect(p1).toMatchObject({ points: 1, shotsDefended: 1, ownPointsAgainst: 1, attempts: 3, miniMatchesPlayed: 1, wins: 1 });
     expect(p2).toMatchObject({ defenses: 1, miniMatchesPlayed: 1, wins: 1 });
-    expect(p4).toMatchObject({ errors: 1, miniMatchesPlayed: 1, losses: 1 });
+    expect(p4).toMatchObject({ defenses: 1, errors: 1, miniMatchesPlayed: 1, losses: 1 });
     expect(p1?.effectiveness).toBeCloseTo(1 / 3);
     expect(p1?.winRate).toBe(1);
     expect(p1?.plusMinus).toBe(2);
+  });
+
+  it('counts shot defended as shooter attempt and defender defense without changing score', () => {
+    const currentSession = session({
+      miniMatches: [
+        miniMatch({
+          status: 'finished',
+          events: [
+            {
+              id: 'e-shot-defended',
+              sessionId: 'session-1',
+              miniMatchId: 'mini-1',
+              createdAt: 'now',
+              teamId: 'team-a',
+              playerId: 'p1',
+              type: 'shot_defended',
+              defendingTeamId: 'team-b',
+              defenderPlayerId: 'p4',
+            },
+          ],
+        }),
+      ],
+    });
+    const recalculated = recalculateTrainingMiniMatch(currentSession.miniMatches[0]);
+    const stats = getTrainingSessionStats(currentSession);
+
+    expect(recalculated.scoreA).toBe(0);
+    expect(recalculated.scoreB).toBe(0);
+    expect(stats.playerStats.find((item) => item.playerId === 'p1')).toMatchObject({
+      attempts: 1,
+      shotsDefended: 1,
+      points: 0,
+    });
+    expect(stats.playerStats.find((item) => item.playerId === 'p4')).toMatchObject({
+      defenses: 1,
+    });
   });
 
   it('aggregates team standings across mini matches', () => {

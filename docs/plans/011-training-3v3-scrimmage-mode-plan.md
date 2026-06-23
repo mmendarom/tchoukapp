@@ -2,7 +2,7 @@
 
 Spec relacionada: `docs/specs/011-training-3v3-scrimmage-mode.md`
 
-Estado: Draft - Stage 1, Stage 2, Stage 3, Stage 4 and Stage 5 implemented
+Estado: Draft - Stages 1-8 implemented; single-goal tactical model unified
 
 ## Objetivo del plan
 
@@ -194,8 +194,8 @@ Reglas:
 
 Mapa:
 
-- Implementado: se reutiliza `CourtMapInput` full-court para `point` y `shot_defended`.
-- Futuro: `TrainingGoalMapInput` one-frame si QA de campo lo pide.
+- Stage 3 reutilizo `CourtMapInput` full-court para `point` y `shot_defended`.
+- Stage 7 lo reemplaza solo en training por `TrainingGoalMapInput` one-frame.
 
 Notas:
 
@@ -332,6 +332,169 @@ Opciones:
   - mini match history.
 - PDF diferido si el resumen in-app ya esta validado.
 
+#### Stage 6A - Backup/import de sesiones
+
+Estado: Implemented.
+
+- Backup v2 agrega `trainingSessions`; import acepta v1 y v2.
+- Export lee el store separado de entrenamiento.
+- Restore reemplaza sesiones, reutiliza su normalizacion y limpia `activeTrainingSessionId`.
+- No incluye PDF ni texto compartible de resumen; no cambia modelos de score.
+
+#### Stage 6B - Archivo, eliminacion y filtros
+
+Estado: Implemented.
+
+- Agregar `archivedAt?: string` sin mezclar archivo con el status deportivo de la sesion.
+- Agregar acciones de store para archivar, restaurar y eliminar.
+- Limpiar `activeTrainingSessionId` al archivar o eliminar la sesion activa, conservando intactos eventos y score de sesiones archivadas.
+- Mostrar filtros `Activas`, `Finalizadas`, `Archivadas` y `Todas` con `Activas` por defecto.
+- Requerir confirmacion antes de archivar y antes de eliminar; delete es irreversible.
+- Mantener sesiones archivadas dentro del backup v2 y preservar `archivedAt` al restaurar.
+- Cubrir store, filtros, compatibilidad legacy y backup con tests.
+
+QA manual:
+
+- Crear, archivar, localizar en `Archivadas` y restaurar una sesion.
+- Eliminar una sesion y confirmar que se solicita confirmacion y no reaparece al reiniciar.
+- Exportar/importar con una sesion archivada y confirmar que sigue archivada.
+- Confirmar que `Partidos` formal sigue funcionando.
+
+### Stage 7 - Mapa one-frame dedicado
+
+Estado: Implemented.
+
+- Crear `TrainingGoalMapInput` aislado de `CourtField` y `CourtMapInput` formal.
+- Mostrar un marco, area semicircular, guias 0°/45°/90°, marcador y botones grandes de confirmar/cancelar.
+- Mantener `{x,y}` normalizado 0-1 y agregar helpers puros de normalizacion/banda angular training-specific.
+- Usarlo para `point` y `shot_defended` en `LiveTrainingMiniMatchScreen`.
+- Mantener eventos legacy sin scope, scoring y stats sin migracion.
+- No agregar heatmaps, PDF ni sectores tacticos avanzados.
+- Probar helpers, persistencia de ubicaciones y que los tests formales/reportes siguen intactos.
+
+QA manual:
+
+- Crear practica, iniciar mini partido y registrar punto cerca de 0°, 45° y 90°.
+- Registrar tiro defendido y confirmar ubicacion persistida.
+- Confirmar que partidos formales siguen mostrando cancha completa.
+- Abrir sesiones training antiguas y confirmar que no crashean.
+
+### Stage 8 - Resumen textual compartible
+
+Estado: Implemented.
+
+- Crear builder puro `src/export/trainingShareText.ts` basado en `getTrainingSessionStats`.
+- Incluir titulo/plantel, fecha, target, cantidad de mini partidos, standings, top ataque, top defensa, alertas e historial compacto.
+- Limitar equipos/ataque/defensa a 5, alertas a 3 por tipo y mini partidos a 10 con indicador de restantes.
+- Excluir mini partidos cancelados y tolerar sesiones vacias o con un solo partido live.
+- Agregar `Compartir resumen` al detalle usando `Share.share`, sin dependencia ni PDF nuevos.
+- Permitir compartir sesiones archivadas sin restaurarlas.
+- Mantener reportes formales, backup, scoring y mapa one-frame sin cambios.
+
+### Ajuste - Modelo tactico one-goal para ubicaciones training
+
+Estado: Implemented.
+
+- `src/domain/trainingGoalMap.ts` agrega `deriveTrainingGoalSector(location)`.
+- El helper interpreta todas las ubicaciones de `Practica 3v3` como relativas a un solo marco.
+- Labels permitidos:
+  - `lado izquierdo · 0°-30°`;
+  - `lado izquierdo · 30°-60°`;
+  - `centro · 60°-90°`;
+  - `lado derecho · 30°-60°`;
+  - `lado derecho · 0°-30°`.
+- No se usan `marco izquierdo`, `marco derecho`, `zona izquierda`, `zona derecha` ni angulos mayores a 90° en textos training.
+- `trainingShareText` agrega, cuando hay ubicaciones, `Zonas donde más convertimos` y `Zonas donde más nos defendieron` usando esos labels one-goal.
+- Eventos training antiguos con `{x,y}` no se migran; se interpretan con el helper one-goal para resumenes futuros.
+- `CourtMapInput`, sectores tacticos formales, reportes PDF formales y scoring no cambian.
+
+QA manual:
+
+- Crear practica de 3 equipos y registrar puntos, defensas, errores y puntos en contra.
+- Compartir y revisar legibilidad en WhatsApp/notas.
+- Compartir una sesion archivada y una vacia.
+- Confirmar que export/reporte formal no cambia.
+- Registrar puntos cerca de lado izquierdo 0°, lado izquierdo 45°, centro 90°, lado derecho 45° y lado derecho 0°.
+- Registrar tiros defendidos en zonas equivalentes.
+- Compartir resumen y confirmar labels `lado izquierdo`, `centro`, `lado derecho`, sin `marco izquierdo/derecho`.
+- Confirmar que reportes formales siguen usando labels full-court cuando corresponde.
+
+### Ajuste - UI live jugador-centrica y defensa via shot_defended
+
+Estado: Implemented.
+
+- `LiveTrainingMiniMatchScreen` muestra dos equipos con botones grandes por jugador.
+- El flujo principal queda `toco jugador -> elijo que paso`.
+- Menu por jugador:
+  - `Punto`;
+  - `Lo atajaron`;
+  - `Error`.
+- `Punto` abre mapa one-frame y registra `point` con tirador, equipo y ubicacion.
+- `Lo atajaron` pide `¿Quién lo atajó?`, filtra jugadores del equipo contrario, abre mapa one-frame y registra `shot_defended` con:
+  - `playerId` como tirador;
+  - `teamId` como equipo atacante;
+  - `defenderPlayerId` como defensor;
+  - `defendingTeamId` como equipo defensor;
+  - `location` como ubicacion donde fue defendido.
+- `Error` ofrece:
+  - `Punto en contra` -> `own_point_against`, suma +1 al rival y cuenta intento errado;
+  - `Invasión` -> `errorSubtype: 'invasion'`;
+  - `Pisa la línea` -> `errorSubtype: 'line_step'`;
+  - `Perdió la pelota` -> `errorSubtype: 'turnover'`.
+- La UI live deja de crear eventos `defense` independientes.
+- `defense` queda soportado como legacy y sigue contando en stats si tiene `playerId`.
+- Stats:
+  - ataques = puntos + tiros atajados + puntos en contra;
+  - defensas = `shot_defended.defenderPlayerId` + eventos legacy `defense`;
+  - errores comunes = `error` con subtipo o legacy compatible;
+  - puntos en contra separados.
+- No se modifican partidos formales, scoring formal, reportes formales ni backup.
+
+QA manual:
+
+- Iniciar un mini partido 3v3.
+- Tocar un jugador y elegir `Punto`; confirmar que abre `¿Dónde cayó el punto?` y suma al equipo correcto.
+- Tocar un jugador y elegir `Lo atajaron`; confirmar `¿Quién lo atajó?`, elegir defensor rival y marcar `¿Dónde fue defendido el tiro?`.
+- Confirmar que `Lo atajaron` no cambia score, suma intento al tirador y defensa al defensor.
+- Tocar un jugador y elegir `Error` -> `Punto en contra`; confirmar +1 al rival.
+- Probar `Invasión`, `Pisa la línea` y `Perdió la pelota`; confirmar que no cambian score.
+- Confirmar que no aparece boton global `Defensa`.
+
+### Ajuste - Barras visuales de rendimiento training
+
+Estado: Implemented.
+
+- Crear helper puro `src/domain/trainingPerformance.ts`.
+- Crear componente `src/components/TrainingPerformanceBars.tsx`.
+- Integrar `TrainingPerformanceBars` en el detalle de `TrainingSessionsScreen`.
+- Mantener las stats derivadas desde eventos; no se persiste ningun dato visual.
+- Ataque:
+  - puntos, intentos, tiros atajados, puntos en contra y efectividad;
+  - intentos = puntos + `shot_defended` + `own_point_against`;
+  - ranking por puntos, intentos, efectividad y fallback estable;
+  - barra suave para intentos y barra fuerte para puntos.
+- Defensa:
+  - defensas desde `shot_defended.defenderPlayerId`;
+  - compatibilidad con eventos legacy `defense`;
+  - ranking por defensas, share defensivo y fallback estable.
+- Top:
+  - destacar dos primeros grupos con empates incluidos;
+  - no destacar cero intentos en ataque ni cero defensas en defensa.
+- No implementar PDF ni tocar reportes formales.
+
+QA manual:
+
+- Crear practica 3v3.
+- Jugar varios mini partidos.
+- Registrar puntos.
+- Registrar `Lo atajaron` con tirador y defensor.
+- Registrar `Punto en contra`.
+- Volver al detalle de sesion.
+- Confirmar barras de ataque con puntos/intentos/efectividad y atajados/errados.
+- Confirmar barras de defensa con defensores derivados de `Lo atajaron`.
+- Confirmar destacados `Top`.
+- Abrir sesiones antiguas con eventos legacy `defense` y confirmar que no crashean.
+
 Archivos probables:
 
 - `src/domain/backup.ts`;
@@ -435,7 +598,7 @@ UI:
 - Tipos en `types.ts` vs `trainingTypes.ts`.
 - Si MVP incluye undo.
 - Si puntos requieren ubicacion en practica.
-- Full-court map vs one-frame map.
+- Resuelto Stage 7: `TrainingGoalMapInput` one-frame separado del mapa formal full-court.
 - Si target score es configurable desde el primer release.
 - Si training sessions entran en backup en Stage 1 o Stage 6.
 
@@ -447,8 +610,8 @@ UI:
 - ¿Se pueden editar equipos mid-session?
 - ¿Target score siempre 3 o configurable?
 - ¿Winner-stays automatico o confirmado manualmente?
-- ¿Mapa one-frame o cancha completa?
-- ¿PDF desde dia uno o diferido?
+- Resuelto: one-frame para training desde Stage 7; cancha completa para partidos formales.
+- Resuelto: texto compartible Stage 8; PDF diferido.
 
 ## Criterios de salida del MVP
 

@@ -2,11 +2,11 @@
 
 ## Estado
 
-Stage 4B implemented
+Stage 6A implemented: practicas 3v3 incluidas
 
 ## Contexto
 
-La app funciona offline-first y guarda datos importantes en el dispositivo: jugadores, planteles, partidos, eventos, alineaciones y fixtures. Los reportes PDF/texto se derivan de esos datos.
+La app funciona offline-first y guarda datos importantes en el dispositivo: jugadores, planteles, partidos, eventos, alineaciones, fixtures y sesiones de practica 3v3. Los reportes PDF/texto se derivan de esos datos.
 
 El riesgo actual es que si el usuario borra almacenamiento local, cambia de dispositivo, reinstala Expo Go o pierde el estado local, se pierden jugadores, planteles y partidos cargados.
 
@@ -61,6 +61,7 @@ Flujo de importacion Stage 4B:
    - `Planteles`;
    - `Partidos`;
    - `Fixtures`;
+   - `Practicas 3v3`;
    - `Exportado`.
 7. Muestra advertencia: `Esta accion reemplazara tus datos actuales.`
 8. Usuario puede `Cancelar` o `Restaurar backup`.
@@ -73,7 +74,8 @@ Flujo de importacion Stage 4B:
   - `players`;
   - `teamPools`;
   - `matches`;
-  - `fixtures`.
+  - `fixtures`;
+  - `trainingSessions`.
 - El backup debe incluir metadata:
   - `backupVersion`;
   - `exportedAt`;
@@ -90,9 +92,13 @@ Flujo de importacion Stage 4B:
   - `players`;
   - `teamPools`;
   - `matches`;
-  - `fixtures`.
+  - `fixtures`;
+  - `trainingSessions` en su store separado.
 - La restauracion no debe restaurar `activeMatchId`.
 - La restauracion debe limpiar `activeMatchId` para evitar estado activo stale.
+- La restauracion no debe restaurar `activeTrainingSessionId` y debe limpiarlo por la misma razon.
+- Backups v1 sin `trainingSessions` deben seguir siendo compatibles y restaurar `[]`.
+- `trainingSessions` ausente o con un valor que no sea array se normaliza a `[]`; si el array contiene una sesion invalida, el backup se rechaza antes de mutar stores.
 - La restauracion debe normalizar datos restaurados con migraciones/defaults existentes.
 - Archivos con campos extra desconocidos deben tolerarse si la estructura base es valida.
 
@@ -109,11 +115,11 @@ Flujo de importacion Stage 4B:
 
 No cambia el modelo persistido.
 
-Estructura Stage 4A:
+Estructura vigente desde Stage 6A:
 
 ```ts
 {
-  backupVersion: 1,
+  backupVersion: 2,
   exportedAt: string,
   appName: 'Tchoukball Uruguay',
   dataVersion: number,
@@ -121,7 +127,8 @@ Estructura Stage 4A:
     players: Player[],
     teamPools: TeamPool[],
     matches: Match[],
-    fixtures: Fixture[]
+    fixtures: Fixture[],
+    trainingSessions: TrainingSession[]
   }
 }
 ```
@@ -145,11 +152,11 @@ Estructura Stage 4A:
 
 ## Impacto en estado/persistencia
 
-- No se agrega estado persistido nuevo.
+- No se agrega estado persistido nuevo: `useTrainingStore` ya persiste por separado.
 - El backup se construye desde el estado actual.
-- No se incluye estado transitorio como `activeMatchId`, modales, formularios o timers runtime.
-- Al restaurar, `players`, `teamPools`, `matches` y `fixtures` se reemplazan como bloque.
-- Al restaurar, `activeMatchId` se limpia.
+- No se incluye estado transitorio como `activeMatchId`, `activeTrainingSessionId`, modales, formularios o timers runtime.
+- Al restaurar, `players`, `teamPools`, `matches`, `fixtures` y `trainingSessions` se reemplazan; no hay merge.
+- Al restaurar, `activeMatchId` y `activeTrainingSessionId` se limpian.
 - Si la validacion falla, no se muta el estado actual.
 
 ## Testing plan
@@ -158,6 +165,8 @@ Estructura Stage 4A:
 - Backup incluye planteles.
 - Backup incluye partidos.
 - Backup incluye fixtures.
+- Backup incluye sesiones 3v3 completas: equipos, mini partidos, eventos, cola, settings y status.
+- Backup incluye sesiones archivadas y preserva `archivedAt`; sesiones eliminadas no se exportan.
 - Backup incluye metadata.
 - Backup excluye estado transitorio.
 - Backup se puede serializar con `JSON.stringify`.
@@ -170,6 +179,8 @@ Estructura Stage 4A:
 - `restoreBackupData` reemplaza datos persistidos.
 - `restoreBackupData` limpia `activeMatchId`.
 - `restoreBackupData` no muta estado con entrada invalida.
+- Backup v1 sin `trainingSessions` restaura sesiones como `[]`.
+- Restore de training normaliza sesiones y limpia `activeTrainingSessionId`.
 
 ## Riesgos
 
@@ -204,6 +215,9 @@ Ver `docs/plans/009-local-backup-restore-plan.md`.
 - [x] Se muestra resumen y confirmacion antes de reemplazar datos.
 - [x] Restaurar reemplaza `players`, `teamPools`, `matches` y `fixtures`.
 - [x] Restaurar limpia `activeMatchId`.
+- [x] Backup incluye y restaura `trainingSessions`.
+- [x] Backups v1 sin sesiones siguen siendo compatibles.
+- [x] Restaurar reemplaza las sesiones y limpia `activeTrainingSessionId`.
 - [x] Archivos invalidos no mutan el store.
 - [x] `npm test` pasa.
 - [x] `npx tsc --noEmit` pasa.

@@ -1,6 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { getTrainingSessionStats } from '../domain/training';
 import { STORAGE_KEYS } from '../storage/asyncStorage';
 import { useTrainingStore } from './useTrainingStore';
 
@@ -259,6 +260,8 @@ describe('useTrainingStore', () => {
       type: 'shot_defended',
       teamId: 'team-b',
       playerId: 'p4',
+      defendingTeamId: 'team-a',
+      defenderPlayerId: 'p1',
       location: { x: 0.2, y: 0.6 },
     })).toBe(true);
 
@@ -284,14 +287,104 @@ describe('useTrainingStore', () => {
     const { sessionId, miniMatchId } = createLiveMiniMatch();
 
     expect(useTrainingStore.getState().recordTrainingEvent(sessionId, miniMatchId, { type: 'defense', teamId: 'team-a', playerId: 'p1' })).toBe(true);
-    expect(useTrainingStore.getState().recordTrainingEvent(sessionId, miniMatchId, { type: 'error', teamId: 'team-a', playerId: 'p2', errorType: 'turnover' })).toBe(true);
-    expect(useTrainingStore.getState().recordTrainingEvent(sessionId, miniMatchId, { type: 'shot_defended', teamId: 'team-b', playerId: 'p4', location: { x: 0.6, y: 0.4 } })).toBe(true);
+    expect(useTrainingStore.getState().recordTrainingEvent(sessionId, miniMatchId, { type: 'error', teamId: 'team-a', playerId: 'p2', errorSubtype: 'turnover', errorType: 'turnover' })).toBe(true);
+    expect(useTrainingStore.getState().recordTrainingEvent(sessionId, miniMatchId, {
+      type: 'shot_defended',
+      teamId: 'team-b',
+      playerId: 'p4',
+      defendingTeamId: 'team-a',
+      defenderPlayerId: 'p1',
+      location: { x: 0.6, y: 0.4 },
+    })).toBe(true);
 
     expect(getMiniMatch(sessionId, miniMatchId)).toMatchObject({
       scoreA: 0,
       scoreB: 0,
     });
     expect(getMiniMatch(sessionId, miniMatchId).events).toHaveLength(3);
+  });
+
+  it('records shot defended with shooter and defender stats without changing score', () => {
+    const { sessionId, miniMatchId } = createLiveMiniMatch();
+
+    expect(useTrainingStore.getState().recordTrainingEvent(sessionId, miniMatchId, {
+      type: 'shot_defended',
+      teamId: 'team-a',
+      playerId: 'p1',
+      defendingTeamId: 'team-b',
+      defenderPlayerId: 'p4',
+      location: { x: 0.6, y: 0.4 },
+    })).toBe(true);
+
+    const miniMatch = getMiniMatch(sessionId, miniMatchId);
+    const stats = getTrainingSessionStats(getSession(sessionId));
+
+    expect(miniMatch.scoreA).toBe(0);
+    expect(miniMatch.scoreB).toBe(0);
+    expect(miniMatch.events[0]).toMatchObject({
+      type: 'shot_defended',
+      teamId: 'team-a',
+      playerId: 'p1',
+      defendingTeamId: 'team-b',
+      defenderPlayerId: 'p4',
+      scoreAfter: { teamA: 0, teamB: 0 },
+    });
+    expect(stats.playerStats.find((player) => player.playerId === 'p1')).toMatchObject({
+      attempts: 1,
+      shotsDefended: 1,
+    });
+    expect(stats.playerStats.find((player) => player.playerId === 'p4')).toMatchObject({
+      defenses: 1,
+    });
+  });
+
+  it('rejects shot defended when defender is not on the opposite team', () => {
+    const { sessionId, miniMatchId } = createLiveMiniMatch();
+
+    expect(useTrainingStore.getState().recordTrainingEvent(sessionId, miniMatchId, {
+      type: 'shot_defended',
+      teamId: 'team-a',
+      playerId: 'p1',
+      defendingTeamId: 'team-b',
+      defenderPlayerId: 'p2',
+      location: { x: 0.6, y: 0.4 },
+    })).toBe(false);
+    expect(getMiniMatch(sessionId, miniMatchId).events).toHaveLength(0);
+  });
+
+  it('records specific training errors without changing score', () => {
+    const { sessionId, miniMatchId } = createLiveMiniMatch();
+
+    expect(useTrainingStore.getState().recordTrainingEvent(sessionId, miniMatchId, {
+      type: 'error',
+      teamId: 'team-a',
+      playerId: 'p1',
+      errorSubtype: 'invasion',
+    })).toBe(true);
+    expect(useTrainingStore.getState().recordTrainingEvent(sessionId, miniMatchId, {
+      type: 'error',
+      teamId: 'team-a',
+      playerId: 'p2',
+      errorSubtype: 'line_step',
+    })).toBe(true);
+    expect(useTrainingStore.getState().recordTrainingEvent(sessionId, miniMatchId, {
+      type: 'error',
+      teamId: 'team-a',
+      playerId: 'p3',
+      errorSubtype: 'turnover',
+      errorType: 'turnover',
+    })).toBe(true);
+
+    expect(getMiniMatch(sessionId, miniMatchId)).toMatchObject({
+      scoreA: 0,
+      scoreB: 0,
+    });
+    expect(getMiniMatch(sessionId, miniMatchId).events.map((event) => event.errorSubtype)).toEqual([
+      'invasion',
+      'line_step',
+      'turnover',
+    ]);
+    expect(getTrainingSessionStats(getSession(sessionId)).mostErrors).toHaveLength(3);
   });
 
   it('rejects event if player does not belong to the event team', () => {
@@ -369,5 +462,121 @@ describe('useTrainingStore', () => {
     const sessionId = createSession();
 
     expect(useTrainingStore.getState().getActiveTrainingSession()?.id).toBe(sessionId);
+  });
+
+  it('archives active session, preserves its mini match and blocks tracking until restored', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-06-22T12:00:00.000Z'));
+    const { sessionId, miniMatchId } = createLiveMiniMatch();
+
+    expect(useTrainingStore.getState().archiveTrainingSession(sessionId)).toBe(true);
+    expect(getSession(sessionId).archivedAt).toBe('2026-06-22T12:00:00.000Z');
+    expect(getSession(sessionId).miniMatches[0].status).toBe('live');
+    expect(useTrainingStore.getState().activeTrainingSessionId).toBeUndefined();
+    expect(useTrainingStore.getState().recordTrainingEvent(sessionId, miniMatchId, {
+      type: 'point',
+      teamId: 'team-a',
+      playerId: 'p1',
+    })).toBe(false);
+  });
+
+  it('archives draft, live, finished and cancelled sessions', () => {
+    const draftId = createSession();
+    const liveId = createSession();
+    const finishedId = createSession();
+    const cancelledId = createSession();
+
+    useTrainingStore.getState().startTrainingSession(liveId);
+    useTrainingStore.getState().finishTrainingSession(finishedId);
+    useTrainingStore.getState().cancelTrainingSession(cancelledId);
+
+    [draftId, liveId, finishedId, cancelledId].forEach((sessionId) => {
+      expect(useTrainingStore.getState().archiveTrainingSession(sessionId)).toBe(true);
+      expect(getSession(sessionId).archivedAt).toBeTruthy();
+    });
+  });
+
+  it('unarchives a session without reactivating it', () => {
+    const sessionId = createSession();
+
+    useTrainingStore.getState().archiveTrainingSession(sessionId);
+    expect(useTrainingStore.getState().unarchiveTrainingSession(sessionId)).toBe(true);
+
+    expect(getSession(sessionId).archivedAt).toBeUndefined();
+    expect(useTrainingStore.getState().activeTrainingSessionId).toBeUndefined();
+  });
+
+  it('deletes only the requested session, clears active state and persists the removal', async () => {
+    const preservedSessionId = createSession();
+    const deletedSessionId = createSession();
+
+    expect(useTrainingStore.getState().activeTrainingSessionId).toBe(deletedSessionId);
+    expect(useTrainingStore.getState().deleteTrainingSession(deletedSessionId)).toBe(true);
+
+    expect(useTrainingStore.getState().activeTrainingSessionId).toBeUndefined();
+    expect(useTrainingStore.getState().trainingSessions.map((session) => session.id)).toContain(preservedSessionId);
+    expect(useTrainingStore.getState().trainingSessions.map((session) => session.id)).not.toContain(deletedSessionId);
+
+    await flushPersist();
+    const persisted = await AsyncStorage.getItem(STORAGE_KEYS.trainingState);
+
+    expect(persisted).toContain(preservedSessionId);
+    expect(persisted).not.toContain(deletedSessionId);
+  });
+
+  it('normalizes old sessions without archivedAt as unarchived', () => {
+    const sessionId = createSession();
+    const legacySession = JSON.parse(JSON.stringify(getSession(sessionId)));
+
+    useTrainingStore.getState().resetTrainingData();
+    expect(useTrainingStore.getState().restoreTrainingSessions([legacySession])).toBe(true);
+    expect(getSession(sessionId).archivedAt).toBeUndefined();
+  });
+
+  it('restore preserves archivedAt', () => {
+    const sessionId = createSession();
+
+    useTrainingStore.getState().archiveTrainingSession(sessionId);
+    const backedUpSessions = JSON.parse(JSON.stringify(useTrainingStore.getState().trainingSessions));
+    const archivedAt = getSession(sessionId).archivedAt;
+
+    useTrainingStore.getState().resetTrainingData();
+    expect(useTrainingStore.getState().restoreTrainingSessions(backedUpSessions)).toBe(true);
+    expect(getSession(sessionId).archivedAt).toBe(archivedAt);
+  });
+
+  it('restores and normalizes training sessions while clearing active runtime state', () => {
+    const { sessionId, miniMatchId } = createLiveMiniMatch();
+
+    useTrainingStore.getState().recordTrainingEvent(sessionId, miniMatchId, {
+      type: 'point',
+      teamId: 'team-a',
+      playerId: 'p1',
+    });
+    const backedUpSessions = JSON.parse(JSON.stringify(useTrainingStore.getState().trainingSessions));
+
+    useTrainingStore.getState().resetTrainingData();
+    expect(useTrainingStore.getState().restoreTrainingSessions(backedUpSessions)).toBe(true);
+
+    const restoredState = useTrainingStore.getState();
+    const restoredSession = restoredState.trainingSessions[0];
+    const stats = getTrainingSessionStats(restoredSession);
+
+    expect(restoredState.activeTrainingSessionId).toBeUndefined();
+    expect(restoredSession.teams).toEqual(teams.map((team, index) => ({ ...team, queueOrder: index })));
+    expect(restoredSession.teamQueue).toEqual(['team-a', 'team-b']);
+    expect(restoredSession.miniMatches[0].events).toHaveLength(1);
+    expect(restoredSession.miniMatches[0].scoreA).toBe(1);
+    expect(stats.totalPoints).toBe(1);
+    expect(stats.playerStats.find((player) => player.playerId === 'p1')?.points).toBe(1);
+  });
+
+  it('does not mutate training state when restore input is invalid', () => {
+    const sessionId = createSession();
+    const before = useTrainingStore.getState().trainingSessions;
+
+    expect(useTrainingStore.getState().restoreTrainingSessions(undefined as unknown as typeof before)).toBe(false);
+    expect(useTrainingStore.getState().trainingSessions).toBe(before);
+    expect(useTrainingStore.getState().activeTrainingSessionId).toBe(sessionId);
   });
 });

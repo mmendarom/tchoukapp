@@ -3,20 +3,19 @@ import { useMemo, useState } from 'react';
 import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { ActionButton } from '../components/ActionButton';
-import { CourtMapInput } from '../components/CourtMapInput';
 import { Screen } from '../components/Screen';
+import { TrainingGoalMapInput } from '../components/TrainingGoalMapInput';
 import { getSuggestedNextMiniMatch } from '../domain/training';
 import {
   formatTrainingEventLabel,
-  formatTrainingMiniMatchScore,
   getTrainingPlayerLabel,
   getTrainingTeam,
   getTrainingTeamName,
   getTrainingTeamPlayers,
   trainingStatusLabel,
 } from '../domain/trainingLive';
-import { TrainingEventType } from '../domain/training';
-import { CourtLocation } from '../domain/types';
+import { TrainingErrorSubtype } from '../domain/training';
+import { CourtLocation, Player } from '../domain/types';
 import { useMatchStore } from '../store/useMatchStore';
 import { useTrainingStore } from '../store/useTrainingStore';
 import { RootStackParamList } from '../utils/navigation';
@@ -24,14 +23,27 @@ import { fontSize, spacing } from '../utils/responsive';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'LiveTrainingMiniMatch'>;
 
-type PendingAction = {
-  type: TrainingEventType;
-  teamId?: string;
-  requiresLocation: boolean;
-  title: string;
+type SelectedPlayerAction = {
+  teamId: string;
+  playerId: string;
 };
 
-const isLocationAction = (type: TrainingEventType) => type === 'point' || type === 'shot_defended';
+type PendingShotDefended = {
+  attackingTeamId: string;
+  shooterPlayerId: string;
+  defendingTeamId: string;
+};
+
+type PendingLocationAction = {
+  type: 'point' | 'shot_defended';
+  teamId: string;
+  playerId: string;
+  defendingTeamId?: string;
+  defenderPlayerId?: string;
+};
+
+const getOppositeTeamId = (teamAId: string, teamBId: string, teamId: string) =>
+  teamId === teamAId ? teamBId : teamId === teamBId ? teamAId : undefined;
 
 export function LiveTrainingMiniMatchScreen({ navigation, route }: Props) {
   const { sessionId, miniMatchId } = route.params;
@@ -42,18 +54,22 @@ export function LiveTrainingMiniMatchScreen({ navigation, route }: Props) {
   const finishMiniMatch = useTrainingStore((state) => state.finishMiniMatch);
   const startSuggestedNextMiniMatch = useTrainingStore((state) => state.startSuggestedNextMiniMatch);
   const miniMatch = session?.miniMatches.find((item) => item.id === miniMatchId);
-  const [pendingAction, setPendingAction] = useState<PendingAction | undefined>();
-  const [selectedPlayerId, setSelectedPlayerId] = useState<string | undefined>();
+  const [selectedPlayerAction, setSelectedPlayerAction] = useState<SelectedPlayerAction | undefined>();
+  const [pendingShotDefended, setPendingShotDefended] = useState<PendingShotDefended | undefined>();
+  const [pendingErrorPlayer, setPendingErrorPlayer] = useState<SelectedPlayerAction | undefined>();
+  const [pendingLocationAction, setPendingLocationAction] = useState<PendingLocationAction | undefined>();
   const [pendingLocation, setPendingLocation] = useState<CourtLocation | undefined>();
   const [feedback, setFeedback] = useState('');
   const teamA = session && miniMatch ? getTrainingTeam(session, miniMatch.teamAId) : undefined;
   const teamB = session && miniMatch ? getTrainingTeam(session, miniMatch.teamBId) : undefined;
-  const selectedTeam = session && pendingAction?.teamId ? getTrainingTeam(session, pendingAction.teamId) : undefined;
-  const selectedTeamPlayers = useMemo(() => getTrainingTeamPlayers(selectedTeam, players), [players, selectedTeam]);
+  const teamAPlayers = useMemo(() => getTrainingTeamPlayers(teamA, players), [players, teamA]);
+  const teamBPlayers = useMemo(() => getTrainingTeamPlayers(teamB, players), [players, teamB]);
   const recentEvents = miniMatch?.events.slice(-8).reverse() ?? [];
   const targetReached = Boolean(miniMatch?.winnerTeamId);
   const canUndo = Boolean(miniMatch && miniMatch.status === 'live' && miniMatch.events.length > 0);
   const suggestedNextMiniMatch = session ? getSuggestedNextMiniMatch(session) : undefined;
+  const defenderTeam = session && pendingShotDefended ? getTrainingTeam(session, pendingShotDefended.defendingTeamId) : undefined;
+  const defenderPlayers = useMemo(() => getTrainingTeamPlayers(defenderTeam, players), [defenderTeam, players]);
 
   if (!session || !miniMatch || !teamA || !teamB) {
     return (
@@ -64,57 +80,136 @@ export function LiveTrainingMiniMatchScreen({ navigation, route }: Props) {
     );
   }
 
-  const closePicker = () => {
-    setPendingAction(undefined);
-    setSelectedPlayerId(undefined);
+  const closeAllModals = () => {
+    setSelectedPlayerAction(undefined);
+    setPendingShotDefended(undefined);
+    setPendingErrorPlayer(undefined);
+    setPendingLocationAction(undefined);
     setPendingLocation(undefined);
   };
-  const openAction = (action: PendingAction) => {
+  const ensureCanRecord = () => {
     if (miniMatch.status !== 'live') {
       setFeedback('El mini partido no está en vivo.');
-      return;
+      return false;
     }
 
     if (targetReached) {
       setFeedback('El mini partido llegó al puntaje objetivo. Deshacé o finalizá.');
+      return false;
+    }
+
+    return true;
+  };
+  const openPlayerActions = (teamId: string, playerId: string) => {
+    if (!ensureCanRecord()) {
       return;
     }
 
     setFeedback('');
-    setSelectedPlayerId(undefined);
-    setPendingLocation(undefined);
-    setPendingAction(action);
+    setSelectedPlayerAction({ teamId, playerId });
   };
-  const recordAction = (location?: CourtLocation) => {
-    if (!pendingAction?.teamId || !selectedPlayerId) {
+  const openPointLocation = () => {
+    if (!selectedPlayerAction) {
+      return;
+    }
+
+    setSelectedPlayerAction(undefined);
+    setPendingLocation(undefined);
+    setPendingLocationAction({
+      type: 'point',
+      teamId: selectedPlayerAction.teamId,
+      playerId: selectedPlayerAction.playerId,
+    });
+  };
+  const openDefenderPicker = () => {
+    if (!selectedPlayerAction) {
+      return;
+    }
+
+    const defendingTeamId = getOppositeTeamId(miniMatch.teamAId, miniMatch.teamBId, selectedPlayerAction.teamId);
+
+    if (!defendingTeamId) {
+      setFeedback('No se pudo identificar el equipo defensor.');
+      closeAllModals();
+      return;
+    }
+
+    setSelectedPlayerAction(undefined);
+    setPendingShotDefended({
+      attackingTeamId: selectedPlayerAction.teamId,
+      shooterPlayerId: selectedPlayerAction.playerId,
+      defendingTeamId,
+    });
+  };
+  const openErrorActions = () => {
+    if (!selectedPlayerAction) {
+      return;
+    }
+
+    setPendingErrorPlayer(selectedPlayerAction);
+    setSelectedPlayerAction(undefined);
+  };
+  const selectDefender = (defenderPlayerId: string) => {
+    if (!pendingShotDefended) {
+      return;
+    }
+
+    setPendingLocation(undefined);
+    setPendingLocationAction({
+      type: 'shot_defended',
+      teamId: pendingShotDefended.attackingTeamId,
+      playerId: pendingShotDefended.shooterPlayerId,
+      defendingTeamId: pendingShotDefended.defendingTeamId,
+      defenderPlayerId,
+    });
+    setPendingShotDefended(undefined);
+  };
+  const recordLocationAction = () => {
+    if (!pendingLocationAction || !pendingLocation) {
       return;
     }
 
     const recorded = recordTrainingEvent(session.id, miniMatch.id, {
-      type: pendingAction.type,
-      teamId: pendingAction.teamId,
-      playerId: selectedPlayerId,
-      location,
-      errorType: pendingAction.type === 'error' ? 'turnover' : undefined,
+      type: pendingLocationAction.type,
+      teamId: pendingLocationAction.teamId,
+      playerId: pendingLocationAction.playerId,
+      location: pendingLocation,
+      defendingTeamId: pendingLocationAction.defendingTeamId,
+      defenderPlayerId: pendingLocationAction.defenderPlayerId,
     });
 
     setFeedback(recorded ? 'Acción registrada.' : 'No se pudo registrar la acción.');
-    closePicker();
+    closeAllModals();
   };
-  const handlePlayerSelected = (playerId: string) => {
-    setSelectedPlayerId(playerId);
-
-    if (pendingAction && !pendingAction.requiresLocation) {
-      const recorded = recordTrainingEvent(session.id, miniMatch.id, {
-        type: pendingAction.type,
-        teamId: pendingAction.teamId ?? '',
-        playerId,
-        errorType: pendingAction.type === 'error' ? 'turnover' : undefined,
-      });
-
-      setFeedback(recorded ? 'Acción registrada.' : 'No se pudo registrar la acción.');
-      closePicker();
+  const recordOwnPointAgainst = () => {
+    if (!pendingErrorPlayer) {
+      return;
     }
+
+    const recorded = recordTrainingEvent(session.id, miniMatch.id, {
+      type: 'own_point_against',
+      teamId: pendingErrorPlayer.teamId,
+      playerId: pendingErrorPlayer.playerId,
+    });
+
+    setFeedback(recorded ? 'Punto en contra registrado.' : 'No se pudo registrar la acción.');
+    closeAllModals();
+  };
+  const recordErrorSubtype = (errorSubtype: TrainingErrorSubtype) => {
+    if (!pendingErrorPlayer) {
+      return;
+    }
+
+    const recorded = recordTrainingEvent(session.id, miniMatch.id, {
+      type: 'error',
+      teamId: pendingErrorPlayer.teamId,
+      playerId: pendingErrorPlayer.playerId,
+      errorSubtype,
+      errorType: errorSubtype === 'turnover' ? 'turnover' : 'other',
+    });
+
+    setFeedback(recorded ? 'Error registrado.' : 'No se pudo registrar la acción.');
+    closeAllModals();
   };
   const handleUndo = () => {
     const undone = undoLastTrainingEvent(session.id, miniMatch.id);
@@ -137,6 +232,9 @@ export function LiveTrainingMiniMatchScreen({ navigation, route }: Props) {
     navigation.navigate('LiveTrainingMiniMatch', { sessionId: session.id, miniMatchId: nextMiniMatchId });
   };
   const winnerName = miniMatch.winnerTeamId ? getTrainingTeamName(session, miniMatch.winnerTeamId) : '';
+  const selectedPlayerLabel = getTrainingPlayerLabel(players, selectedPlayerAction?.playerId);
+  const errorPlayerLabel = getTrainingPlayerLabel(players, pendingErrorPlayer?.playerId);
+  const shooterLabel = getTrainingPlayerLabel(players, pendingShotDefended?.shooterPlayerId);
 
   return (
     <Screen>
@@ -148,21 +246,19 @@ export function LiveTrainingMiniMatchScreen({ navigation, route }: Props) {
         {winnerName ? <Text style={styles.winner}>Ganador: {winnerName}</Text> : <Text style={styles.live}>En vivo</Text>}
       </View>
 
-      <View style={styles.card}>
-        <Text style={styles.sectionTitle}>Acciones</Text>
-        <View style={styles.teamActionRow}>
-          <TrainingActionButton label={`Punto ${teamA.name}`} tone="blue" onPress={() => openAction({ type: 'point', teamId: teamA.id, requiresLocation: true, title: `Punto ${teamA.name}` })} />
-          <TrainingActionButton label={`En contra ${teamA.name}`} tone="green" onPress={() => openAction({ type: 'own_point_against', teamId: teamA.id, requiresLocation: false, title: `En contra ${teamA.name}` })} />
-        </View>
-        <View style={styles.teamActionRow}>
-          <TrainingActionButton label={`Punto ${teamB.name}`} tone="red" onPress={() => openAction({ type: 'point', teamId: teamB.id, requiresLocation: true, title: `Punto ${teamB.name}` })} />
-          <TrainingActionButton label={`En contra ${teamB.name}`} tone="green" onPress={() => openAction({ type: 'own_point_against', teamId: teamB.id, requiresLocation: false, title: `En contra ${teamB.name}` })} />
-        </View>
-        <View style={styles.teamActionRow}>
-          <TrainingActionButton label="Defensa" tone="teal" onPress={() => openAction({ type: 'defense', requiresLocation: false, title: 'Defensa' })} />
-          <TrainingActionButton label="Tiro defendido" tone="purple" onPress={() => openAction({ type: 'shot_defended', requiresLocation: true, title: 'Tiro defendido' })} />
-          <TrainingActionButton label="Error" tone="orange" onPress={() => openAction({ type: 'error', requiresLocation: false, title: 'Error' })} />
-        </View>
+      <View style={styles.teamsGrid}>
+        <TeamPlayerPanel
+          players={teamAPlayers}
+          teamName={teamA.name}
+          tone="blue"
+          onPlayerPress={(playerId) => openPlayerActions(teamA.id, playerId)}
+        />
+        <TeamPlayerPanel
+          players={teamBPlayers}
+          teamName={teamB.name}
+          tone="red"
+          onPlayerPress={(playerId) => openPlayerActions(teamB.id, playerId)}
+        />
       </View>
 
       <View style={styles.controlRow}>
@@ -202,60 +298,62 @@ export function LiveTrainingMiniMatchScreen({ navigation, route }: Props) {
         )}
       </View>
 
-      {pendingAction && !pendingAction.teamId && (
-        <Modal visible transparent animationType="fade" onRequestClose={closePicker}>
+      {selectedPlayerAction && (
+        <Modal visible transparent animationType="fade" onRequestClose={closeAllModals}>
           <View style={styles.modalBackdrop}>
             <View style={styles.modalCard}>
-              <Text style={styles.modalTitle}>{pendingAction.title}</Text>
-              <Text style={styles.meta}>Elegí el equipo.</Text>
-              <View style={styles.teamActionRow}>
-                {[teamA, teamB].map((team) => (
-                  <TrainingActionButton
-                    key={team.id}
-                    label={team.name}
-                    tone="dark"
-                    onPress={() => setPendingAction((current) => current ? { ...current, teamId: team.id } : current)}
-                  />
-                ))}
+              <Text style={styles.modalTitle}>{selectedPlayerLabel}</Text>
+              <Text style={styles.meta}>¿Qué pasó?</Text>
+              <View style={styles.modalActions}>
+                <TrainingActionButton label="Punto" tone="blue" onPress={openPointLocation} />
+                <TrainingActionButton label="Lo atajaron" tone="purple" onPress={openDefenderPicker} />
+                <TrainingActionButton label="Error" tone="orange" onPress={openErrorActions} />
               </View>
-              <ActionButton label="Cancelar" onPress={closePicker} variant="secondary" />
+              <ActionButton label="Cancelar" onPress={closeAllModals} variant="secondary" />
             </View>
           </View>
         </Modal>
       )}
 
-      {pendingAction?.teamId && !selectedPlayerId && (
-        <Modal visible transparent animationType="fade" onRequestClose={closePicker}>
+      {pendingShotDefended && (
+        <Modal visible transparent animationType="fade" onRequestClose={closeAllModals}>
           <View style={styles.modalBackdrop}>
             <View style={styles.modalCard}>
-              <Text style={styles.modalTitle}>{pendingAction.title}</Text>
-              <Text style={styles.meta}>Elegí jugador de {getTrainingTeamName(session, pendingAction.teamId)}.</Text>
+              <Text style={styles.modalTitle}>¿Quién lo atajó?</Text>
+              <Text style={styles.meta}>Tiro de {shooterLabel}. Elegí defensor de {defenderTeam?.name ?? 'el otro equipo'}.</Text>
               <ScrollView contentContainerStyle={styles.playerList}>
-                {selectedTeamPlayers.map((player) => (
-                  <Pressable
-                    key={player.id}
-                    onPress={() => handlePlayerSelected(player.id)}
-                    style={({ pressed }) => [styles.playerButton, pressed && styles.pressed]}
-                  >
-                    <Text style={styles.playerButtonText}>{getTrainingPlayerLabel(players, player.id)}</Text>
-                  </Pressable>
+                {defenderPlayers.map((player) => (
+                  <PlayerChoiceButton key={player.id} player={player} onPress={() => selectDefender(player.id)} />
                 ))}
               </ScrollView>
-              <ActionButton label="Cancelar" onPress={closePicker} variant="secondary" />
+              <ActionButton label="Cancelar" onPress={closeAllModals} variant="secondary" />
             </View>
           </View>
         </Modal>
       )}
 
-      {pendingAction?.requiresLocation && selectedPlayerId && (
-        <CourtMapInput
-          mode={pendingAction.type === 'point' ? 'training_point' : 'training_shot_defended'}
-          onCancel={closePicker}
-          onConfirm={() => {
-            if (pendingLocation) {
-              recordAction(pendingLocation);
-            }
-          }}
+      {pendingErrorPlayer && (
+        <Modal visible transparent animationType="fade" onRequestClose={closeAllModals}>
+          <View style={styles.modalBackdrop}>
+            <View style={styles.modalCard}>
+              <Text style={styles.modalTitle}>Error de {errorPlayerLabel}</Text>
+              <View style={styles.modalActions}>
+                <TrainingActionButton label="Punto en contra" tone="red" onPress={recordOwnPointAgainst} />
+                <TrainingActionButton label="Invasión" tone="orange" onPress={() => recordErrorSubtype('invasion')} />
+                <TrainingActionButton label="Pisa la línea" tone="orange" onPress={() => recordErrorSubtype('line_step')} />
+                <TrainingActionButton label="Perdió la pelota" tone="orange" onPress={() => recordErrorSubtype('turnover')} />
+              </View>
+              <ActionButton label="Cancelar" onPress={closeAllModals} variant="secondary" />
+            </View>
+          </View>
+        </Modal>
+      )}
+
+      {pendingLocationAction && (
+        <TrainingGoalMapInput
+          eventType={pendingLocationAction.type === 'point' ? 'point' : 'shot_defended'}
+          onCancel={closeAllModals}
+          onConfirm={recordLocationAction}
           onSelectLocation={setPendingLocation}
           selectedLocation={pendingLocation}
         />
@@ -264,7 +362,54 @@ export function LiveTrainingMiniMatchScreen({ navigation, route }: Props) {
   );
 }
 
-function TrainingActionButton({ label, onPress, tone }: { label: string; onPress: () => void; tone: 'blue' | 'red' | 'green' | 'teal' | 'purple' | 'orange' | 'dark' }) {
+function TeamPlayerPanel({
+  onPlayerPress,
+  players,
+  teamName,
+  tone,
+}: {
+  onPlayerPress: (playerId: string) => void;
+  players: Player[];
+  teamName: string;
+  tone: 'blue' | 'red';
+}) {
+  return (
+    <View style={[styles.teamPanel, tone === 'blue' ? styles.teamPanelBlue : styles.teamPanelRed]}>
+      <Text style={styles.teamName}>{teamName}</Text>
+      <View style={styles.playerGrid}>
+        {players.map((player) => (
+          <Pressable
+            key={player.id}
+            accessibilityRole="button"
+            onPress={() => onPlayerPress(player.id)}
+            style={({ pressed }) => [styles.playerButton, pressed && styles.pressed]}
+          >
+            <Text style={styles.playerNumber}>#{player.number}</Text>
+            <Text numberOfLines={1} style={styles.playerName}>{player.lastName || player.firstName}</Text>
+          </Pressable>
+        ))}
+      </View>
+    </View>
+  );
+}
+
+function PlayerChoiceButton({ onPress, player }: { onPress: () => void; player: Player }) {
+  return (
+    <Pressable accessibilityRole="button" onPress={onPress} style={({ pressed }) => [styles.playerChoiceButton, pressed && styles.pressed]}>
+      <Text style={styles.playerChoiceText}>#{player.number} {player.lastName || player.firstName}</Text>
+    </Pressable>
+  );
+}
+
+function TrainingActionButton({
+  label,
+  onPress,
+  tone,
+}: {
+  label: string;
+  onPress: () => void;
+  tone: 'blue' | 'red' | 'purple' | 'orange';
+}) {
   return (
     <Pressable accessibilityRole="button" onPress={onPress} style={({ pressed }) => [styles.actionButton, styles[`${tone}Action`], pressed && styles.pressed]}>
       <Text style={styles.actionText}>{label}</Text>
@@ -314,6 +459,54 @@ const styles = StyleSheet.create({
     fontSize: fontSize.body,
     fontWeight: '900',
   },
+  teamsGrid: {
+    gap: spacing.sm,
+  },
+  teamPanel: {
+    borderRadius: 8,
+    borderWidth: 1,
+    padding: spacing.md,
+    gap: spacing.sm,
+  },
+  teamPanelBlue: {
+    backgroundColor: '#eef6ff',
+    borderColor: '#bfdbfe',
+  },
+  teamPanelRed: {
+    backgroundColor: '#fff1f2',
+    borderColor: '#fecdd3',
+  },
+  teamName: {
+    color: '#0b1f33',
+    fontSize: fontSize.section,
+    fontWeight: '900',
+  },
+  playerGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
+  },
+  playerButton: {
+    flexGrow: 1,
+    flexBasis: 118,
+    minHeight: 74,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#c9d7e5',
+    backgroundColor: '#ffffff',
+    justifyContent: 'center',
+    padding: spacing.sm,
+  },
+  playerNumber: {
+    color: '#0b6bcb',
+    fontSize: fontSize.small,
+    fontWeight: '900',
+  },
+  playerName: {
+    color: '#0b1f33',
+    fontSize: fontSize.body,
+    fontWeight: '900',
+  },
   card: {
     borderRadius: 8,
     backgroundColor: '#ffffff',
@@ -327,15 +520,10 @@ const styles = StyleSheet.create({
     fontSize: fontSize.section,
     fontWeight: '900',
   },
-  teamActionRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacing.sm,
-  },
   actionButton: {
     flexGrow: 1,
-    flexBasis: 120,
-    minHeight: 58,
+    flexBasis: 148,
+    minHeight: 64,
     borderRadius: 8,
     alignItems: 'center',
     justifyContent: 'center',
@@ -353,20 +541,11 @@ const styles = StyleSheet.create({
   redAction: {
     backgroundColor: '#b42318',
   },
-  greenAction: {
-    backgroundColor: '#188038',
-  },
-  tealAction: {
-    backgroundColor: '#0b6b61',
-  },
   purpleAction: {
     backgroundColor: '#7c3aed',
   },
   orangeAction: {
     backgroundColor: '#c2410c',
-  },
-  darkAction: {
-    backgroundColor: '#0b1f33',
   },
   controlRow: {
     gap: spacing.sm,
@@ -410,11 +589,16 @@ const styles = StyleSheet.create({
     fontWeight: '900',
     textAlign: 'center',
   },
+  modalActions: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
+  },
   playerList: {
     gap: spacing.sm,
   },
-  playerButton: {
-    minHeight: 44,
+  playerChoiceButton: {
+    minHeight: 56,
     borderRadius: 8,
     borderWidth: 1,
     borderColor: '#c9d7e5',
@@ -422,7 +606,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingHorizontal: spacing.sm,
   },
-  playerButtonText: {
+  playerChoiceText: {
     color: '#0b1f33',
     fontSize: fontSize.body,
     fontWeight: '900',

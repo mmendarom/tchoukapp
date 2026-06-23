@@ -50,6 +50,7 @@ export function formatTrainingMiniMatchScore(session: TrainingSession, miniMatch
 export function formatTrainingEventLabel(event: TrainingEvent, session: TrainingSession, players: Player[]) {
   const playerLabel = getTrainingPlayerLabel(players, event.playerId);
   const teamName = getTrainingTeamName(session, event.teamId);
+  const defenderLabel = getTrainingPlayerLabel(players, event.defenderPlayerId);
 
   switch (event.type) {
     case 'point':
@@ -59,8 +60,22 @@ export function formatTrainingEventLabel(event: TrainingEvent, session: Training
     case 'defense':
       return `${playerLabel} defensa`;
     case 'shot_defended':
-      return `${playerLabel} tiro defendido`;
+      return event.defenderPlayerId
+        ? `${playerLabel} tiro atajado por ${defenderLabel}`
+        : `${playerLabel} tiro defendido`;
     case 'error':
+      if (event.errorSubtype === 'invasion') {
+        return `${playerLabel} invasión`;
+      }
+
+      if (event.errorSubtype === 'line_step') {
+        return `${playerLabel} pisa la línea`;
+      }
+
+      if (event.errorSubtype === 'turnover' || event.errorType === 'turnover') {
+        return `${playerLabel} perdió la pelota`;
+      }
+
       return `${playerLabel} error`;
   }
 }
