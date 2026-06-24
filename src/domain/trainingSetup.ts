@@ -1,4 +1,5 @@
 import { buildTrainingSettings, TrainingSessionSettings } from './training';
+import { Player } from './types';
 
 export type TrainingTeamAssignment = Record<string, string | undefined>;
 
@@ -17,10 +18,39 @@ export function createTrainingSetupTeamIds(teamCount: number) {
   return Array.from({ length: Math.max(Math.min(Math.floor(teamCount), 4), 2) }, (_, index) => `team-${index + 1}`);
 }
 
-export function buildTrainingTeamsFromAssignments(teamIds: string[], assignments: TrainingTeamAssignment): TrainingSetupTeamInput[] {
+const normalizeTrainingTeamNamePart = (value: string) =>
+  value
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, '')
+    .slice(0, 3);
+
+export function generateTrainingTeamName(players: Pick<Player, 'firstName' | 'lastName'>[], fallback = 'equipo') {
+  const generated = players
+    .map((player) => normalizeTrainingTeamNamePart(player.firstName || player.lastName))
+    .filter(Boolean)
+    .join('');
+
+  return generated || fallback;
+}
+
+export function buildTrainingTeamsFromAssignments(
+  teamIds: string[],
+  assignments: TrainingTeamAssignment,
+  players: Pick<Player, 'id' | 'firstName' | 'lastName'>[] = [],
+): TrainingSetupTeamInput[] {
+  const playersById = new Map(players.map((player) => [player.id, player]));
+
   return teamIds.map((teamId, index) => ({
     id: teamId,
-    name: `Equipo ${index + 1}`,
+    name: generateTrainingTeamName(
+      Object.entries(assignments)
+        .filter(([, assignedTeamId]) => assignedTeamId === teamId)
+        .map(([playerId]) => playersById.get(playerId))
+        .filter((player): player is Pick<Player, 'id' | 'firstName' | 'lastName'> => Boolean(player)),
+      `equipo${index + 1}`,
+    ),
     queueOrder: index,
     playerIds: Object.entries(assignments)
       .filter(([, assignedTeamId]) => assignedTeamId === teamId)

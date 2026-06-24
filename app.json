@@ -1,7 +1,7 @@
 {
   "expo": {
-    "name": "create-a-react-native-expo-app",
-    "slug": "create-a-react-native-expo-app",
+    "name": "Tchoukball Uruguay",
+    "slug": "tchoukball-uruguay",
     "version": "1.0.0",
     "orientation": "default",
     "icon": "./assets/icon.png",
@@ -13,9 +13,11 @@
       "backgroundColor": "#ffffff"
     },
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.mauromendaro.tchoukballuruguay"
     },
     "android": {
+      "package": "com.mauromendaro.tchoukballuruguay",
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
@@ -25,6 +27,12 @@
     },
     "web": {
       "favicon": "./assets/favicon.png"
-    }
+    },
+    "extra": {
+      "eas": {
+        "projectId": "5de29f70-3e4f-409e-9589-a27faa16a425"
+      }
+    },
+    "owner": "mendarini"
   }
 }

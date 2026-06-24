@@ -2,7 +2,7 @@
 
 ## Estado
 
-Draft - Stages 1-8 implemented; single-goal tactical model unified
+Draft - Stages 1-8 implemented; training PDF export implemented
 
 ## Problema
 
@@ -234,6 +234,10 @@ Stage 7 implementado:
 
 - `TrainingGoalMapInput` muestra un solo marco, area semicircular y guias `0° fondo`, `45° intermedio`, `90° centro del area`.
 - `point` usa `¿Donde cayo el punto?`; `shot_defended` usa `¿Donde fue defendido el tiro?`.
+- El mapa de captura se muestra desde atras del marco:
+  - fondo/base y marco abajo;
+  - area de juego hacia arriba;
+  - leyenda compacta `Guía: 0° fondo · 45° intermedio · 90° centro del área`.
 - Las coordenadas siguen siendo `CourtLocation { x, y }` normalizadas entre 0 y 1, pero en training representan el area one-frame.
 - No se agrega migracion ni metadata obligatoria: eventos training legacy sin scope siguen cargando y calculando stats.
 - Los mapas formales continúan full-court y sus coordenadas conservan la semantica anterior.
@@ -246,6 +250,7 @@ Stage 7 implementado:
   - `lado derecho · 0°-30°`.
 - Training no usa `marco izquierdo`, `marco derecho`, `zona izquierda`, `zona derecha` ni angulos mayores a 90°.
 - Eventos training antiguos con `{x,y}` capturados antes del mapa one-frame no se migran; desde este ajuste se interpretan como relativos a un solo marco para cualquier texto/resumen training.
+- Eventos training capturados antes de la orientacion behind-goal pueden no coincidir visualmente perfecto en mapas nuevos; se mantienen sin migracion porque no existe metadata suficiente.
 
 ## Rotacion
 
@@ -315,7 +320,7 @@ Formula MVP:
   - muestra texto compacto como `3 defensas · 43%`.
 - Se destacan los dos primeros grupos de ranking con empates incluidos.
 - Jugadores con cero intentos no se destacan en ataque; jugadores con cero defensas no se destacan en defensa.
-- PDF de practica sigue diferido.
+- PDF de practica disponible desde la etapa de export PDF; las barras se reutilizan conceptualmente en el reporte imprimible.
 
 ### Por equipo
 
@@ -446,23 +451,80 @@ Stage 8 implementado:
 - Sesiones vacias, activas, archivadas o con pocos datos generan texto seguro.
 - No cambia scoring, persistencia, backup, mapas ni reportes formales.
 
-PDF de practica sigue diferido.
+PDF de practica implementado:
+
+- El detalle de sesion permite `Exportar PDF` y usa el flujo nativo de Expo Print/Sharing, separado del PDF formal de partidos.
+- `src/domain/trainingReportData.ts` arma datos imprimibles puros desde `TrainingSession`, jugadores y stats existentes.
+- `src/export/trainingReportHtml.ts` renderiza HTML print-safe con:
+  - resumen ejecutivo de la practica;
+  - `Equipos` con composicion de jugadores;
+  - tabla de equipos;
+  - rendimiento de jugadores con barras de ataque/defensa;
+  - alertas de errores y puntos en contra;
+  - historial de mini partidos;
+  - mapas one-frame `Dónde convertimos` y `Dónde nos defendieron`;
+  - tablas `Zonas donde más convertimos` y `Zonas donde más nos defendieron`.
+- Ataque usa puntos, intentos, tiros atajados, puntos en contra y efectividad ya definidos para training.
+- Defensa usa `shot_defended.defenderPlayerId` y mantiene compatibilidad con eventos legacy `defense`.
+- Mini partidos cancelados no afectan standings ni mapas/stats agregados, pero pueden aparecer en historial como registros de sesion.
+- Los mapas PDF son one-frame de training, con coordenadas `{x,y}` normalizadas y labels hasta 90°.
+- El PDF no usa mapas full-court ni labels `marco izquierdo`, `marco derecho`, `zona izquierda`, `zona derecha`.
+- No cambia scoring, persistencia, backup, mapa de captura ni reportes formales.
+
+Ajuste PDF implementado:
+
+- El renderer HTML del mapa one-frame usa una geometria base unica para mapas globales y mapas individuales:
+  - marco superior proporcionado;
+  - semicirculo consistente con `TrainingGoalMapInput`;
+  - guias discretas 0°/45°/90°;
+  - fondo limpio y print-safe.
+- Se agrega `Detalle por jugador` al PDF.
+- Cada jugador incluye:
+  - equipo;
+  - mini partidos jugados;
+  - puntos, intentos, tiros atajados, puntos en contra y efectividad;
+  - defensas, errores y win rate;
+  - bloque visual de ataque/defensa;
+  - `Mapa de tiros`;
+  - `Mapa de defensas`.
+- `Mapa de tiros` del jugador combina:
+  - `point` donde el jugador fue tirador, como tiro convertido;
+  - `shot_defended` donde el jugador fue tirador, como tiro atajado/defendido.
+- `Mapa de defensas` usa solo `shot_defended` con `defenderPlayerId` igual al jugador.
+- Eventos `shot_defended` legacy sin `defenderPlayerId` siguen contando como tiro atajado del tirador, pero no aparecen en mapa de defensas individual.
+- Eventos legacy `defense` pueden seguir contando en stats defensivas, pero no generan ubicaciones de defensa si no tienen una ubicacion confiable.
+- El boton `Exportar PDF` no cambia.
+
+Bugfix de geometria PDF:
+
+- La geometria one-frame del PDF queda centralizada en una unica configuracion dentro del renderer HTML.
+- El semicirculo se redujo y reposiciono para evitar que se vea estirado, cortado o demasiado bajo.
+- Las etiquetas 0°/45°/90° salen del area de juego y pasan a una leyenda compacta:
+  - `Guía: 0° fondo · 45° intermedio · 90° centro del área`.
+- Los marcadores conservan `data-x`/`data-y` con la coordenada normalizada original y solo se ajusta su posicion visual cerca de bordes para que no queden cortados.
+- Todos los mapas PDF training usan la misma geometria; reportes formales y coordenadas persistidas no cambian.
+
+### Nombres generados de equipos
+
+- En setup, los equipos nuevos generan nombre por defecto desde los jugadores asignados.
+- Regla:
+  - tomar las primeras 3 letras del `firstName` visible de cada jugador;
+  - pasar a minuscula;
+  - quitar acentos, espacios y puntuacion;
+  - concatenar en el orden de jugadores del equipo;
+  - usar `equipo1`, `equipo2`, etc. si no hay nombres validos.
+- Ejemplos:
+  - Mauro + Vladi + Nicolas -> `mauvlanic`;
+  - Mathias + Errazquin + Juan -> `materrjua`;
+  - Nicolás -> `nic`.
+- Sesiones existentes conservan sus nombres guardados; no hay renombrado automatico post-creacion.
 
 Prioridad:
 
 1. resumen in-app;
 2. persistencia/backup;
 3. texto compartible corto - implementado Stage 8;
-4. PDF de sesion - diferido.
-
-PDF futuro:
-
-- `Resumen de practica`;
-- equipos;
-- standings;
-- stats por jugador;
-- mini matches;
-- mapas/sectores si hay ubicaciones.
+4. PDF de sesion - implementado.
 
 ## Compatibilidad
 
@@ -780,6 +842,13 @@ Limitaciones:
 - Mapa training permite registrar punto/tiro defendido en lado izquierdo 0°, lado izquierdo 45°, centro 90°, lado derecho 45° y lado derecho 0°.
 - Resumen compartible training usa `lado izquierdo`, `centro`, `lado derecho` y bandas hasta 90°.
 - Ningun texto de training debe mostrar `marco izquierdo` o `marco derecho`; los reportes formales si conservan su modelo full-court.
+- Exportar PDF desde el detalle y confirmar composicion de equipos, standings, rendimiento, historial y mapas one-frame.
+- Confirmar que el PDF training muestra `Dónde convertimos`, `Dónde nos defendieron` y labels one-goal, sin mapa full-court.
+- Confirmar que `Detalle por jugador` muestra stats, `Mapa de tiros` y `Mapa de defensas` para cada jugador.
+- Confirmar que los mapas globales y los mapas individuales usan la misma geometria one-frame.
+- Confirmar que el semicírculo, el marco y las guias 0°/45°/90° se ven claros.
+- Confirmar que el mapa live y el PDF muestran fondo/marco abajo.
+- Confirmar que los equipos nuevos muestran nombres generados como `mauvlanic` y `materrjua`.
 - Al llegar a 3, se confirma ganador.
 - Proximo partido se puede seleccionar manualmente.
 - Resumen muestra standings y rankings.
@@ -805,7 +874,7 @@ Limitaciones:
 - ¿Winner-stays debe ser automatico o confirmado manualmente?
 - Resuelto Stage 7: nuevas capturas training usan mapa one-frame; mapas formales siguen full-court.
 - ¿Tracking de ubicacion es obligatorio para puntos o opcional en practica?
-- Resuelto: texto compartible en Stage 8; PDF sigue diferido.
+- Resuelto: texto compartible en Stage 8; PDF de practica implementado con mapas one-frame y sin tocar reporte formal.
 - ¿Hace falta undo en mini partidos desde el MVP?
 
 ## Checklist de aceptacion para implementar

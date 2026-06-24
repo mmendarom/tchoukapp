@@ -97,4 +97,15 @@ describe('training goal map', () => {
     expect(formalMapSource).not.toContain('training_point');
     expect(formalMapSource).not.toContain('training_shot_defended');
   });
+
+  it('renders the training input from behind the goal with a compact degree legend', () => {
+    const root = process.cwd();
+    const trainingGoalMapSource = readFileSync(join(root, 'src/components/TrainingGoalMapInput.tsx'), 'utf8');
+
+    expect(trainingGoalMapSource).toContain('bottom: 0');
+    expect(trainingGoalMapSource).toContain("bottom: '-38%'");
+    expect(trainingGoalMapSource).toContain('Guía: 0° fondo · 45° intermedio · 90° centro del área');
+    expect(trainingGoalMapSource).not.toContain('degreeZeroLeft');
+    expect(trainingGoalMapSource).not.toContain('degreeZeroRight');
+  });
 });

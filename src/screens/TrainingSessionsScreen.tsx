@@ -28,7 +28,9 @@ import {
   TrainingTeamAssignment,
 } from '../domain/trainingSetup';
 import { buildTrainingPerformance } from '../domain/trainingPerformance';
+import { buildTrainingReportData } from '../domain/trainingReportData';
 import { Player, TeamPool } from '../domain/types';
+import { exportTrainingReportPdf } from '../export/exportTrainingReport';
 import { buildTrainingShareText } from '../export/trainingShareText';
 import { useMatchStore } from '../store/useMatchStore';
 import { useTrainingStore } from '../store/useTrainingStore';
@@ -97,6 +99,8 @@ export function TrainingSessionsScreen({ navigation }: Props) {
   const [sessionFilter, setSessionFilter] = useState<TrainingSessionFilter>('active');
   const [sharingSummary, setSharingSummary] = useState(false);
   const [shareStatus, setShareStatus] = useState('');
+  const [exportingPdf, setExportingPdf] = useState(false);
+  const [pdfStatus, setPdfStatus] = useState('');
   const selectedTeamPool = useMemo(
     () => teamPools.find((pool) => pool.id === selectedTeamPoolId) ?? teamPools[0],
     [selectedTeamPoolId, teamPools],
@@ -112,7 +116,10 @@ export function TrainingSessionsScreen({ navigation }: Props) {
   const teamIds = useMemo(() => createTrainingSetupTeamIds(teamCount), [teamCount]);
   const targetScore = parseTrainingTargetScore(targetScoreInput);
   const teamCountOptions = getTrainingTeamCountOptions(participantIds.length);
-  const teamsPreview = useMemo(() => buildTrainingTeamsFromAssignments(teamIds, assignments), [assignments, teamIds]);
+  const teamsPreview = useMemo(
+    () => buildTrainingTeamsFromAssignments(teamIds, assignments, players),
+    [assignments, players, teamIds],
+  );
   const unassignedParticipantIds = participantIds.filter((playerId) => !assignments[playerId]);
   const validationMessage = buildTrainingSetupValidation({
     participantCount: participantIds.length,
@@ -357,6 +364,24 @@ export function TrainingSessionsScreen({ navigation }: Props) {
       setSharingSummary(false);
     }
   };
+  const handleExportPdf = async () => {
+    if (!selectedSession || exportingPdf) {
+      return;
+    }
+
+    setExportingPdf(true);
+    setPdfStatus('');
+
+    try {
+      const report = buildTrainingReportData(selectedSession, players);
+      await exportTrainingReportPdf(report);
+      setPdfStatus('PDF generado.');
+    } catch {
+      setPdfStatus('No se pudo exportar el PDF.');
+    } finally {
+      setExportingPdf(false);
+    }
+  };
 
   return (
     <Screen>
@@ -399,6 +424,7 @@ export function TrainingSessionsScreen({ navigation }: Props) {
                 onPress={() => {
                   setSelectedSessionId(session.id);
                   setShareStatus('');
+                  setPdfStatus('');
                 }}
                 style={({ pressed }) => [styles.sessionCard, selectedSessionId === session.id && styles.sessionCardSelected, pressed && styles.pressed]}
               >
@@ -431,6 +457,12 @@ export function TrainingSessionsScreen({ navigation }: Props) {
               onPress={handleShareSummary}
               variant="secondary"
             />
+            <ActionButton
+              disabled={exportingPdf}
+              label={exportingPdf ? 'Generando PDF...' : 'Exportar PDF'}
+              onPress={handleExportPdf}
+              variant="secondary"
+            />
             {selectedSession.archivedAt ? (
               <ActionButton label="Restaurar" onPress={handleUnarchiveSession} variant="secondary" />
             ) : (
@@ -446,6 +478,9 @@ export function TrainingSessionsScreen({ navigation }: Props) {
           </View>
           {shareStatus ? (
             <Text style={[styles.statusText, shareStatus.startsWith('No ') && styles.errorText]}>{shareStatus}</Text>
+          ) : null}
+          {pdfStatus ? (
+            <Text style={[styles.statusText, pdfStatus.startsWith('No ') && styles.errorText]}>{pdfStatus}</Text>
           ) : null}
           <View style={styles.teamPreviewGrid}>
             {selectedSession.teams.map((team) => (
@@ -754,12 +789,13 @@ export function TrainingSessionsScreen({ navigation }: Props) {
         </View>
 
         <View style={styles.teamPreviewGrid}>
-          {teamsPreview.map((team) => {
+          {teamsPreview.map((team, index) => {
             const validSize = team.playerIds.length >= 3 && team.playerIds.length <= 4;
 
             return (
               <View key={team.id} style={[styles.teamPreviewCard, !validSize && styles.invalidTeamCard]}>
-                <Text style={styles.teamTitle}>{team.name} · {team.playerIds.length} jugadores</Text>
+                <Text style={styles.teamTitle}>{team.name}</Text>
+                <Text style={styles.teamPlayers}>Equipo {index + 1} · {team.playerIds.length} jugadores</Text>
                 <Text style={styles.teamPlayers}>
                   {team.playerIds.length > 0
                     ? team.playerIds.map((playerId) => playersById.get(playerId)).filter((player): player is Player => Boolean(player)).map(getPlayerLabel).join(' · ')

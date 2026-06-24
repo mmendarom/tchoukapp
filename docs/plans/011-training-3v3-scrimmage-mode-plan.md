@@ -2,7 +2,7 @@
 
 Spec relacionada: `docs/specs/011-training-3v3-scrimmage-mode.md`
 
-Estado: Draft - Stages 1-8 implemented; single-goal tactical model unified
+Estado: Draft - Stages 1-8 implemented; training PDF export implemented
 
 ## Objetivo del plan
 
@@ -480,7 +480,133 @@ Estado: Implemented.
 - Top:
   - destacar dos primeros grupos con empates incluidos;
   - no destacar cero intentos en ataque ni cero defensas en defensa.
-- No implementar PDF ni tocar reportes formales.
+- Las barras quedan disponibles para el detalle; el PDF de training se implementa luego con HTML/export separados y sin tocar reportes formales.
+
+### Ajuste - PDF export de sesiones training
+
+Estado: Implemented.
+
+- Crear builder puro `src/domain/trainingReportData.ts` para transformar una `TrainingSession` en datos imprimibles.
+- Crear `src/export/trainingReportHtml.ts` con HTML print-safe especifico de `Practica 3v3`.
+- Crear `src/export/exportTrainingReport.ts` usando el mismo patron Expo Print/Sharing del reporte formal, pero con dialogo y HTML propios de training.
+- Agregar `Exportar PDF` al detalle de `TrainingSessionsScreen`, con estado `Generando PDF...` y mensaje de error seguro.
+- Incluir en el PDF:
+  - resumen ejecutivo;
+  - composicion de `Equipos`;
+  - tabla de equipos;
+  - rendimiento de jugadores con barras de ataque/defensa;
+  - top ataque/top defensa via stats existentes;
+  - errores y puntos en contra;
+  - historial de mini partidos;
+  - mapas one-frame `Dónde convertimos` y `Dónde nos defendieron`;
+  - tablas de sectores one-goal.
+- Mini partidos cancelados no alimentan standings, rendimiento ni mapas agregados; pueden quedar visibles en historial.
+- Mantener `{x,y}` normalizado, modelo one-goal de training y compatibilidad con eventos legacy `defense`.
+- No tocar PDF formal, scoring formal, scoring training, backup ni mapa de captura.
+
+QA manual:
+
+- Crear practica con 3 equipos.
+- Jugar varios mini partidos.
+- Registrar puntos con ubicacion.
+- Registrar `Lo atajaron` con tirador, defensor y ubicacion.
+- Registrar errores y puntos en contra.
+- Tocar `Exportar PDF`.
+- Confirmar equipos/jugadores, standings, rendimiento, mini partidos y mapas one-frame.
+- Confirmar `Dónde convertimos`, `Dónde nos defendieron`, `lado izquierdo`, `centro`, `lado derecho` y angulos hasta 90°.
+- Confirmar ausencia de `marco izquierdo`, `marco derecho` y mapas full-court.
+- Confirmar que PDF formal de partidos sigue funcionando.
+
+### Ajuste - PDF training mapas corregidos y detalle por jugador
+
+Estado: Implemented.
+
+- Corregir el renderer del mapa one-frame en `trainingReportHtml` para que use una geometria base unica, mas cercana a `TrainingGoalMapInput`.
+- Mantener un solo marco, semicirculo superior proporcionado, bandas discretas 0°/45°/90° y etiquetas limpias.
+- Reutilizar esa misma base en:
+  - `Dónde convertimos`;
+  - `Dónde nos defendieron`;
+  - `Mapa de tiros` por jugador;
+  - `Mapa de defensas` por jugador.
+- Extender `trainingReportData` con `playerDetails`.
+- Por jugador, incluir identidad, equipo, mini partidos, puntos, intentos, tiros atajados, puntos en contra, efectividad, defensas, errores, win rate, share defensivo y ubicaciones.
+- `Mapa de tiros`:
+  - incluye `point` como convertidos;
+  - incluye `shot_defended` como atajados/defendidos cuando el jugador fue tirador;
+  - diferencia marcadores por color print-safe.
+- `Mapa de defensas`:
+  - incluye solo `shot_defended` donde `defenderPlayerId` coincide con el jugador;
+  - eventos legacy `defense` siguen en stats, pero no generan mapa si no tienen ubicacion confiable.
+- Mantener intactos PDF formal, scoring, backup, share text y coordenadas persistidas.
+
+QA manual:
+
+- Crear practica.
+- Jugar mini partidos.
+- Registrar puntos y `Lo atajaron` con ubicaciones.
+- Exportar PDF.
+- Confirmar geometria clara del semicírculo, marco y guias 0°/45°/90°.
+- Confirmar que mapas globales e individuales usan la misma geometria.
+- Confirmar que cada jugador muestra stats, `Mapa de tiros` y `Mapa de defensas`.
+- Confirmar que tiros convertidos y atajados se distinguen visualmente.
+- Confirmar que defensas individuales salen de `shot_defended.defenderPlayerId`.
+- Confirmar que PDF formal sigue funcionando.
+
+### Bugfix - Geometria visual del mapa one-frame en PDF training
+
+Estado: Implemented.
+
+- Limitar el cambio a `trainingReportHtml` y tests/docs relacionados.
+- Mantener scoring, coordenadas `{x,y}`, backup, share text y PDF formal sin cambios.
+- Reajustar la geometria centralizada del PDF:
+  - contenedor con altura fija print-safe;
+  - marco superior claro;
+  - semicirculo menos alto y menos recortado;
+  - guias de banda discretas;
+  - labels de grados movidos a leyenda compacta.
+- Agregar `data-x` y `data-y` normalizados a marcadores para auditar que la ubicacion original no cambia.
+- Ajustar visualmente marcadores cerca de bordes para evitar clipping sin mutar coordenadas.
+
+QA manual:
+
+- Registrar puntos en fondo izquierdo/derecho, intermedios y centro 90°.
+- Registrar `Lo atajaron` con ubicacion.
+- Exportar PDF.
+- Confirmar que el semicirculo se ve natural, los grados no ensucian el mapa y los puntos no se cortan.
+- Confirmar que mapas globales e individuales usan la misma geometria.
+- Confirmar que PDF formal sigue funcionando.
+
+### Ajuste UX - Orientacion behind-goal y nombres generados
+
+Estado: Implemented.
+
+- Cambiar `TrainingGoalMapInput` para mostrarse desde atras del marco:
+  - fondo/base abajo;
+  - marco abajo al centro;
+  - semicirculo extendido hacia arriba;
+  - leyenda compacta 0°/45°/90°.
+- Mantener coordenadas `{x,y}` normalizadas y sector math existente:
+  - `y=1` -> fondo/0°;
+  - `y=0` -> centro del area/90°.
+- Actualizar el renderer PDF para usar la misma orientacion behind-goal en mapas globales e individuales.
+- No migrar eventos anteriores; documentar que ubicaciones legacy pueden no coincidir visualmente perfecto.
+- Agregar `generateTrainingTeamName` en `trainingSetup`.
+- Usar nombres generados en sesiones nuevas desde la UI de setup:
+  - primeras 3 letras del nombre;
+  - minusculas;
+  - sin acentos ni puntuacion;
+  - fallback `equipoN`.
+- Mantener nombres existentes de sesiones guardadas sin renombrado automatico.
+
+QA manual:
+
+- Crear practica con Mauro/Vladi/Nicolas y Mathias/Errazquin/Juan.
+- Confirmar `mauvlanic` y `materrjua`.
+- Iniciar mini partido.
+- Registrar punto abajo/fondo y arriba/centro.
+- Confirmar sectores 0° abajo y 90° arriba.
+- Exportar PDF y confirmar misma orientacion behind-goal.
+- Confirmar que partidos formales y PDF formal no cambian.
 
 QA manual:
 
@@ -611,7 +737,7 @@ UI:
 - ¿Target score siempre 3 o configurable?
 - ¿Winner-stays automatico o confirmado manualmente?
 - Resuelto: one-frame para training desde Stage 7; cancha completa para partidos formales.
-- Resuelto: texto compartible Stage 8; PDF diferido.
+- Resuelto: texto compartible Stage 8; PDF de practica implementado con export separado del reporte formal.
 
 ## Criterios de salida del MVP
 

@@ -1,5 +1,171 @@
 # Implementation Log
 
+## 2026-06-23 - Practica 3v3 orientacion behind-goal y nombres de equipos
+
+Se ajustaron dos puntos de UX para que `Practica 3v3` sea mas natural en campo.
+
+Implementado:
+
+- `TrainingGoalMapInput` ahora se muestra desde la perspectiva del planillero detras del marco:
+  - fondo/base abajo;
+  - marco abajo al centro;
+  - semicirculo hacia arriba;
+  - leyenda compacta `Guía: 0° fondo · 45° intermedio · 90° centro del área`.
+- `trainingReportHtml` usa la misma orientacion behind-goal para mapas PDF training globales e individuales.
+- No se cambio el significado persistido de `{x,y}`:
+  - `x=0` izquierda, `x=1` derecha;
+  - `y=1` fondo/0°;
+  - `y=0` centro del area/90°.
+- `trainingGoalMap` conserva labels one-goal y no emite terminos full-court.
+- `trainingSetup` agrega `generateTrainingTeamName`.
+- La UI de setup usa nombres generados para equipos nuevos:
+  - primeras 3 letras del nombre;
+  - minusculas;
+  - sin acentos ni puntuacion;
+  - fallback `equipoN`.
+- Ejemplos cubiertos: `mauvlanic`, `materrjua`, `Nicolás -> nic`.
+- Sesiones existentes conservan los nombres ya guardados.
+- No se modificaron partidos formales, scoring, backup/import ni PDF formal.
+
+Compatibilidad:
+
+- Eventos training antiguos no se migran.
+- Ubicaciones capturadas antes de la orientacion behind-goal pueden no coincidir visualmente perfecto en mapas nuevos porque no existe metadata de orientacion.
+
+Tests:
+
+- Orientacion visual behind-goal en el input.
+- Sectores 0° abajo y 90° arriba.
+- PDF usa geometria bottom/fondo y no emite angulos >90°.
+- Generacion de nombres con ejemplos, acentos, nombres cortos y fallback.
+- Equipos nuevos usan nombres generados cuando hay jugadores disponibles.
+
+QA manual pendiente:
+
+- Crear practica con Mauro/Vladi/Nicolas y Mathias/Errazquin/Juan.
+- Confirmar `mauvlanic` y `materrjua`.
+- Registrar puntos abajo/fondo, intermedio y arriba/centro.
+- Exportar PDF y confirmar misma orientacion.
+- Confirmar que PDF formal y mapas formales siguen funcionando.
+
+## 2026-06-23 - Fix geometria PDF one-frame de Practica 3v3
+
+Se corrigio el maquetado visual del mapa one-frame usado en el PDF de `Practica 3v3`.
+
+Implementado:
+
+- Se mantuvo una unica geometria compartida para todos los mapas PDF training.
+- El semicirculo se redujo y reposiciono para evitar que se vea demasiado estirado, bajo o recortado.
+- Las referencias de grados dejan de ocupar el area de juego y pasan a una leyenda compacta: `Guía: 0° fondo · 45° intermedio · 90° centro del área`.
+- El contenedor usa altura fija y `print-color-adjust` para mejorar consistencia en Expo Print.
+- Los marcadores mantienen atributos `data-x` y `data-y` con coordenadas normalizadas originales.
+- Los marcadores se limitan visualmente cerca de bordes para evitar clipping sin cambiar la coordenada guardada.
+- No se modificaron scoring, datos persistidos, backup/import, share text, PDF formal ni mapas formales.
+
+Tests:
+
+- HTML conserva wrapper one-frame.
+- Geometria compartida actualizada.
+- Leyenda 0°/45°/90° sin angulos mayores a 90°.
+- Marcadores exponen coordenadas normalizadas.
+- Empty state seguro.
+
+QA manual pendiente:
+
+- Crear practica 3v3.
+- Registrar puntos en fondo, intermedio y centro del area.
+- Registrar `Lo atajaron` con ubicacion.
+- Exportar PDF.
+- Confirmar semicirculo natural, leyenda clara, mapas consistentes y puntos no recortados.
+- Confirmar que el PDF formal sigue funcionando.
+
+## 2026-06-23 - Practica 3v3 PDF mapa one-frame y detalle por jugador
+
+Se mejoro el PDF de `Practica 3v3` en dos frentes: geometria visual del mapa one-frame y detalle individual por jugador.
+
+Implementado:
+
+- `trainingReportHtml` ahora usa una geometria base unica para mapas PDF training.
+- El mapa one-frame del PDF queda alineado conceptualmente con `TrainingGoalMapInput`: marco superior, semicirculo, guias 0°/45°/90° y etiquetas discretas.
+- Los mapas globales `Dónde convertimos` y `Dónde nos defendieron` usan esa misma base.
+- Los nuevos mapas individuales tambien usan la misma base.
+- `trainingReportData` agrega `playerDetails` con stats individuales y ubicaciones listas para render.
+- Cada jugador en el PDF muestra:
+  - equipo;
+  - mini partidos;
+  - puntos, intentos, tiros atajados, puntos en contra y efectividad;
+  - defensas, errores y win rate;
+  - bloque visual ataque/defensa;
+  - `Mapa de tiros`;
+  - `Mapa de defensas`.
+- `Mapa de tiros` combina `point` del jugador como convertidos y `shot_defended` del jugador como atajados.
+- `Mapa de defensas` usa `shot_defended.defenderPlayerId` para ubicar defensas realizadas.
+- Eventos legacy `defense` siguen contando en stats, pero no generan puntos de mapa si no tienen ubicacion confiable.
+- No se modificaron PDF formal, scoring, backup, share text ni coordenadas persistidas.
+
+Tests agregados/actualizados:
+
+- detalle por jugador en report data;
+- mapas de tiros del jugador con `point` y `shot_defended`;
+- mapas de defensas por `defenderPlayerId`;
+- jugadores sin tiros o defensas no rompen;
+- HTML incluye `Detalle por jugador`, `Mapa de tiros` y `Mapa de defensas`;
+- HTML usa una unica geometria base one-frame y no emite angulos mayores a 90°;
+- mapas vacios muestran estados seguros.
+
+QA manual pendiente:
+
+- Crear practica con varios jugadores.
+- Jugar mini partidos.
+- Registrar puntos y tiros atajados con ubicaciones.
+- Exportar PDF.
+- Revisar semicírculo, marco y guias 0°/45°/90°.
+- Confirmar consistencia entre mapas globales e individuales.
+- Confirmar que cada jugador tiene stats, mapa de tiros y mapa de defensas.
+- Confirmar que tiros convertidos/atajados se distinguen visualmente.
+- Confirmar que el PDF formal de partidos sigue funcionando.
+
+## 2026-06-23 - Practica 3v3 PDF export
+
+Se agrego exportacion PDF para sesiones de `Practica 3v3`, separada del reporte formal de partidos.
+
+Implementado:
+
+- Nuevo builder puro `src/domain/trainingReportData.ts`.
+- Nuevo HTML imprimible `src/export/trainingReportHtml.ts`.
+- Nuevo exportador `src/export/exportTrainingReport.ts` con Expo Print/Sharing.
+- `TrainingSessionsScreen` agrega `Exportar PDF`, estado `Generando PDF...` y mensaje de resultado/error.
+- El PDF incluye resumen ejecutivo, composicion de equipos, tabla de equipos, rendimiento con barras, alertas, historial de mini partidos, mapas one-frame y sectores tacticos one-goal.
+- `Dónde convertimos` usa ubicaciones de eventos `point`.
+- `Dónde nos defendieron` usa ubicaciones de eventos `shot_defended` e incluye tirador/defensor cuando estan disponibles.
+- Mini partidos cancelados no afectan standings ni mapas/stats agregados.
+- Los labels tacticos training siguen limitados a `lado izquierdo`, `centro`, `lado derecho` y bandas hasta 90°.
+- No se modificaron PDF formal, scoring formal, scoring training, backup ni forma persistida de coordenadas.
+
+Tests agregados:
+
+- datos de reporte incluyen equipos y jugadores;
+- standings excluye cancelados;
+- top ataque/top defensa, errores y puntos en contra;
+- historial de mini partidos;
+- ubicaciones de puntos y tiros defendidos;
+- HTML contiene `Equipos`, nombres de jugadores, `Dónde convertimos`, `Dónde nos defendieron` y wrapper one-frame;
+- HTML no contiene labels formales prohibidos ni angulos mayores a 90°;
+- mapas vacios muestran `Sin ubicaciones registradas.`.
+
+QA manual pendiente:
+
+- Crear practica 3v3 con 3 equipos.
+- Jugar varios mini partidos.
+- Registrar puntos con ubicacion.
+- Registrar `Lo atajaron` con tirador, defensor y ubicacion.
+- Registrar errores y puntos en contra.
+- Exportar PDF desde el detalle.
+- Confirmar composicion de equipos, standings, rendimiento, historial y mapas one-frame.
+- Confirmar que no aparecen mapas full-court ni `marco izquierdo/derecho`.
+- Compartir PDF via WhatsApp/Drive si esta disponible.
+- Confirmar que el PDF formal de partidos sigue funcionando.
+
 ## 2026-06-23 - Practica 3v3 barras visuales de rendimiento
 
 Se agregaron barras visuales de rendimiento para que el resumen de `Practica 3v3` sea mas facil de leer que una lista de numeros.

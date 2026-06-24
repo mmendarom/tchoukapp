@@ -122,10 +122,6 @@ export function TrainingGoalMapInput({
               <View style={[styles.bandGuide, styles.bandGuideThirty]} />
               <View style={[styles.bandGuide, styles.bandGuideSixty]} />
               <View style={styles.centerGuide} />
-              <Text style={[styles.degreeLabel, styles.degreeZeroLeft]}>0° fondo</Text>
-              <Text style={[styles.degreeLabel, styles.degreeZeroRight]}>0° fondo</Text>
-              <Text style={[styles.degreeLabel, styles.degreeFortyFive]}>45° intermedio</Text>
-              <Text style={[styles.degreeLabel, styles.degreeNinety]}>90° centro del área</Text>
             </View>
             <Pressable accessibilityLabel="Marcar ubicación en el área" onPressIn={handlePress} style={StyleSheet.absoluteFill} />
             {markerLocation ? (
@@ -135,6 +131,8 @@ export function TrainingGoalMapInput({
               }]} />
             ) : null}
           </View>
+
+          <Text style={styles.degreeLegend}>Guía: 0° fondo · 45° intermedio · 90° centro del área</Text>
 
           <Text style={styles.help}>
             {selectedLocation ? 'Podés cambiar la ubicación tocando otra zona.' : 'Elegí una ubicación para continuar.'}
@@ -204,22 +202,22 @@ const styles = StyleSheet.create({
   frame: {
     position: 'absolute',
     left: '33%',
-    top: 0,
+    bottom: 0,
     width: '34%',
     height: 18,
-    borderBottomLeftRadius: 8,
-    borderBottomRightRadius: 8,
+    borderTopLeftRadius: 8,
+    borderTopRightRadius: 8,
     borderWidth: 3,
-    borderTopWidth: 0,
+    borderBottomWidth: 0,
     borderColor: '#0b1f33',
     backgroundColor: '#d7e5f2',
   },
   forbiddenSemicircle: {
     position: 'absolute',
-    left: '12%',
-    top: '-48%',
-    width: '76%',
-    height: '96%',
+    left: '14%',
+    bottom: '-38%',
+    width: '72%',
+    height: '76%',
     borderRadius: 999,
     borderWidth: 3,
     borderColor: 'rgba(180, 35, 24, 0.58)',
@@ -241,37 +239,22 @@ const styles = StyleSheet.create({
   centerGuide: {
     position: 'absolute',
     left: '50%',
-    top: 18,
-    bottom: 0,
+    top: 0,
+    bottom: 18,
     width: 1,
     backgroundColor: 'rgba(24, 128, 56, 0.22)',
   },
-  degreeLabel: {
-    position: 'absolute',
+  degreeLegend: {
+    alignSelf: 'center',
     borderRadius: 6,
     backgroundColor: 'rgba(255, 255, 255, 0.82)',
+    borderWidth: 1,
+    borderColor: '#dbe4ef',
     color: '#36546f',
     fontSize: fontSize.tiny,
     fontWeight: '900',
     paddingHorizontal: 5,
     paddingVertical: 2,
-  },
-  degreeZeroLeft: {
-    left: spacing.xs,
-    bottom: spacing.xs,
-  },
-  degreeZeroRight: {
-    right: spacing.xs,
-    bottom: spacing.xs,
-  },
-  degreeFortyFive: {
-    right: spacing.xs,
-    top: '48%',
-  },
-  degreeNinety: {
-    left: '34%',
-    right: '34%',
-    top: 26,
     textAlign: 'center',
   },
   marker: {

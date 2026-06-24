@@ -16,6 +16,12 @@ Los eventos de `Practica 3v3` ya guardan ubicaciones como `{ x, y }` normalizado
 
 - Crear `TrainingGoalMapInput` separado de `CourtMapInput` y `CourtField`.
 - Mantener `CourtLocation { x, y }` con valores 0-1, relativo al area one-frame para nuevas capturas training.
+- Mostrar el mapa training desde la perspectiva del planillero parado detras del marco:
+  - fondo/base y marco abajo;
+  - area de juego hacia arriba;
+  - `0° fondo` abajo;
+  - `45° intermedio`;
+  - `90° centro del area` hacia arriba/centro.
 - No agregar `locationScope` ni migracion en Stage 7.
 - Mantener eventos training antiguos sin scope como datos validos.
 - Limitar interpretacion training a un modelo tactico de un solo marco, con labels:
@@ -32,6 +38,7 @@ Los eventos de `Practica 3v3` ya guardan ubicaciones como `{ x, y }` normalizado
 - El flujo formal queda aislado y conserva semantica full-court.
 - Scoring, stats, persistencia y backup no cambian.
 - Eventos legacy no pueden distinguir automaticamente si su ubicacion provino del mapa full-court anterior; para MVP se muestran como one-goal-relative para unificar lenguaje de campo.
+- Eventos capturados antes del ajuste behind-goal pueden no coincidir visualmente perfecto con la nueva orientacion; no se migran por falta de metadata confiable.
 - Heatmaps training futuros deberan considerar esa ambiguedad legacy o introducir metadata versionada.
 
 ## Alternatives considered
