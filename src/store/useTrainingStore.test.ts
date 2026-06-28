@@ -496,6 +496,94 @@ describe('useTrainingStore', () => {
     });
   });
 
+  it('updates full training setup before mini matches exist', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-06-27T14:00:00.000Z'));
+    const sessionId = createSession();
+
+    expect(useTrainingStore.getState().updateTrainingSessionSetup(sessionId, {
+      teamPoolId: 'juveniles',
+      teamPoolName: 'Juveniles',
+      participantPlayerIds: [...participants, 'p7', 'p8'],
+      teams: [
+        { id: 'team-a', name: 'Rojo', playerIds: ['p1', 'p2', 'p7', 'p8'], queueOrder: 1 },
+        { id: 'team-b', name: 'Azul', playerIds: ['p3', 'p4', 'p5', 'p6'], queueOrder: 0 },
+      ],
+      settings: { targetScore: 5, winnerStays: false },
+    })).toBe(true);
+
+    expect(getSession(sessionId)).toMatchObject({
+      teamPoolId: 'juveniles',
+      teamPoolName: 'Juveniles',
+      participantPlayerIds: [...participants, 'p7', 'p8'],
+      settings: { targetScore: 5, winnerStays: false },
+      updatedAt: '2026-06-27T14:00:00.000Z',
+    });
+    expect(getSession(sessionId).teams.map((team) => [team.id, team.name, team.playerIds])).toEqual([
+      ['team-a', 'Rojo', ['p1', 'p2', 'p7', 'p8']],
+      ['team-b', 'Azul', ['p3', 'p4', 'p5', 'p6']],
+    ]);
+    expect(getSession(sessionId).teamQueue).toEqual(['team-b', 'team-a']);
+  });
+
+  it('rejects full setup edits after mini match history exists', () => {
+    const { sessionId, miniMatchId } = createLiveMiniMatch();
+
+    useTrainingStore.getState().recordTrainingEvent(sessionId, miniMatchId, {
+      type: 'point',
+      teamId: 'team-a',
+      playerId: 'p1',
+    });
+    expect(useTrainingStore.getState().undoLastTrainingEvent(sessionId, miniMatchId)).toBe(true);
+    expect(useTrainingStore.getState().cancelMiniMatch(sessionId, miniMatchId)).toBe(true);
+
+    expect(useTrainingStore.getState().updateTrainingSessionSetup(sessionId, {
+      participantPlayerIds: participants,
+      teams,
+      settings: { targetScore: 5 },
+    })).toBe(false);
+    expect(getSession(sessionId).settings.targetScore).toBe(3);
+  });
+
+  it('renames teams with history without changing players or events', () => {
+    const { sessionId, miniMatchId } = createLiveMiniMatch();
+
+    useTrainingStore.getState().recordTrainingEvent(sessionId, miniMatchId, {
+      type: 'point',
+      teamId: 'team-a',
+      playerId: 'p1',
+    });
+    expect(useTrainingStore.getState().cancelMiniMatch(sessionId, miniMatchId)).toBe(true);
+
+    expect(useTrainingStore.getState().updateTrainingTeamDetails(sessionId, [
+      { teamId: 'team-a', name: 'Mauro-Vladi-Nico', color: '#1d4ed8' },
+      { teamId: 'team-b', name: 'Mate-Erraz-Juan' },
+    ])).toBe(true);
+
+    expect(getSession(sessionId).teams).toEqual([
+      { id: 'team-a', name: 'Mauro-Vladi-Nico', playerIds: ['p1', 'p2', 'p3'], queueOrder: 0, color: '#1d4ed8' },
+      { id: 'team-b', name: 'Mate-Erraz-Juan', playerIds: ['p4', 'p5', 'p6'], queueOrder: 1, color: undefined },
+    ]);
+    expect(getMiniMatch(sessionId, miniMatchId).events).toHaveLength(1);
+  });
+
+  it('blocks team detail edits while archived or with a live mini match', () => {
+    const { sessionId } = createLiveMiniMatch();
+
+    expect(useTrainingStore.getState().updateTrainingTeamDetails(sessionId, [
+      { teamId: 'team-a', name: 'No entra' },
+    ])).toBe(false);
+    expect(getSession(sessionId).teams[0].name).toBe('Equipo A');
+
+    const draftId = createSession();
+
+    useTrainingStore.getState().archiveTrainingSession(draftId);
+    expect(useTrainingStore.getState().updateTrainingTeamDetails(draftId, [
+      { teamId: 'team-a', name: 'Archivada' },
+    ])).toBe(false);
+    expect(getSession(draftId).teams[0].name).toBe('Equipo A');
+  });
+
   it('unarchives a session without reactivating it', () => {
     const sessionId = createSession();
 

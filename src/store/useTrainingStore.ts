@@ -4,6 +4,7 @@ import { createJSONStorage, persist } from 'zustand/middleware';
 import {
   advanceTrainingQueueAfterMiniMatch,
   buildTrainingSettings,
+  getTrainingSessionEditPermissions,
   getSuggestedNextMiniMatch,
   getTrainingQueue,
   recalculateTrainingMiniMatch,
@@ -36,6 +37,20 @@ type CreateTrainingSessionInput = {
   settings?: Partial<TrainingSessionSettings>;
 };
 
+type UpdateTrainingSessionSetupInput = {
+  teamPoolId?: string;
+  teamPoolName?: string;
+  participantPlayerIds: string[];
+  teams: CreateTrainingTeamInput[];
+  settings?: Partial<TrainingSessionSettings>;
+};
+
+type UpdateTrainingTeamDetailsInput = {
+  teamId: string;
+  name?: string;
+  color?: string;
+};
+
 type TrainingEventInput = {
   type: TrainingEventType;
   teamId: string;
@@ -59,6 +74,8 @@ type TrainingState = {
   archiveTrainingSession: (id: string) => boolean;
   unarchiveTrainingSession: (id: string) => boolean;
   deleteTrainingSession: (id: string) => boolean;
+  updateTrainingSessionSetup: (id: string, input: UpdateTrainingSessionSetupInput) => boolean;
+  updateTrainingTeamDetails: (id: string, teams: UpdateTrainingTeamDetailsInput[]) => boolean;
   startTrainingSession: (id: string) => boolean;
   startMiniMatch: (sessionId: string, teamAId: string, teamBId: string) => string;
   startSuggestedNextMiniMatch: (sessionId: string) => string;
@@ -109,6 +126,29 @@ const createTeams = (teams: CreateTrainingTeamInput[]): TrainingTeam[] =>
     queueOrder: team.queueOrder ?? index,
     color: team.color,
   }));
+
+const updateTrainingTeamDetailsById = (
+  teams: TrainingTeam[],
+  updates: UpdateTrainingTeamDetailsInput[],
+): TrainingTeam[] => {
+  const updatesById = new Map(updates.map((team) => [team.teamId, team]));
+
+  return teams.map((team) => {
+    const update = updatesById.get(team.id);
+
+    if (!update) {
+      return team;
+    }
+
+    const name = update.name?.trim();
+
+    return {
+      ...team,
+      name: name || team.name,
+      color: update.color ?? team.color,
+    };
+  });
+};
 
 const isSessionClosed = (session: TrainingSession) =>
   session.status === 'finished' || session.status === 'cancelled' || Boolean(session.archivedAt);
@@ -342,6 +382,74 @@ export const useTrainingStore = create<TrainingState>()(
           activeTrainingSessionId: state.activeTrainingSessionId === id ? undefined : state.activeTrainingSessionId,
           trainingSessions: state.trainingSessions.filter((session) => session.id !== id),
         }));
+        return true;
+      },
+      updateTrainingSessionSetup: (id, input) => {
+        const session = findSession(get().trainingSessions, id);
+
+        if (!session || !getTrainingSessionEditPermissions(session).canEditSetup) {
+          return false;
+        }
+
+        const participantPlayerIds = uniqueTrainingIds(input.participantPlayerIds);
+        const teams = createTeams(input.teams);
+        const validation = validateTrainingTeams(participantPlayerIds, teams);
+
+        if (!validation.valid) {
+          return false;
+        }
+
+        const updatedAt = nowIso();
+
+        set((state) => ({
+          trainingSessions: state.trainingSessions.map((item) =>
+            item.id === id
+              ? {
+                  ...item,
+                  teamPoolId: input.teamPoolId,
+                  teamPoolName: input.teamPoolName,
+                  participantPlayerIds,
+                  teams,
+                  teamQueue: teams
+                    .slice()
+                    .sort((a, b) => a.queueOrder - b.queueOrder)
+                    .map((team) => team.id),
+                  settings: buildTrainingSettings({ ...item.settings, ...input.settings }),
+                  updatedAt,
+                }
+              : item,
+          ),
+        }));
+
+        return true;
+      },
+      updateTrainingTeamDetails: (id, teamUpdates) => {
+        const session = findSession(get().trainingSessions, id);
+
+        if (!session || !getTrainingSessionEditPermissions(session).canEditTeamDetails) {
+          return false;
+        }
+
+        const knownTeamIds = new Set(session.teams.map((team) => team.id));
+
+        if (teamUpdates.some((team) => !knownTeamIds.has(team.teamId))) {
+          return false;
+        }
+
+        const updatedAt = nowIso();
+
+        set((state) => ({
+          trainingSessions: state.trainingSessions.map((item) =>
+            item.id === id
+              ? {
+                  ...item,
+                  teams: updateTrainingTeamDetailsById(item.teams, teamUpdates),
+                  updatedAt,
+                }
+              : item,
+          ),
+        }));
+
         return true;
       },
       startTrainingSession: (id) => {

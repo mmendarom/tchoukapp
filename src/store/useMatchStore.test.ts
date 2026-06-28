@@ -872,6 +872,7 @@ describe('useMatchStore period stability', () => {
         matches: [],
         fixtures: [],
         trainingSessions: [],
+        practiceSessions: [],
       },
       { dataVersion: 8 },
     );

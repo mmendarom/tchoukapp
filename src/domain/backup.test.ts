@@ -10,6 +10,7 @@ import {
   validateBackupData,
 } from './backup';
 import { initialMatches, teamPools, upcomingFixtures, uruguayPlayers } from './mockData';
+import { TrainingPracticeSession } from './practice';
 import { TrainingSession } from './training';
 
 describe('backup', () => {
@@ -48,14 +49,57 @@ describe('backup', () => {
     status: 'live',
     archivedAt: '2026-06-22T12:00:00.000Z',
   };
+  const practiceSession: TrainingPracticeSession = {
+    id: 'practice-session-1',
+    date: '2026-06-27T18:00:00.000Z',
+    createdAt: '2026-06-27T18:00:00.000Z',
+    updatedAt: '2026-06-27T18:15:00.000Z',
+    teamPoolId: 'mayores',
+    teamPoolName: 'Mayores',
+    participantPlayerIds: ['p1', 'p2'],
+    objective: 'Mejorar defensa/recepcion',
+    notes: 'Buen ritmo general.',
+    status: 'live',
+    blocks: [{
+      id: 'practice-block-1',
+      sessionId: 'practice-session-1',
+      title: 'Defensa/recepcion',
+      type: 'defense',
+      durationMinutes: 25,
+      objective: 'Leer rebotes y ordenar coberturas',
+      participantPlayerIds: ['p1', 'p2'],
+      notes: 'Subir intensidad.',
+      order: 0,
+      status: 'completed',
+      startedAt: '2026-06-27T18:05:00.000Z',
+      endedAt: '2026-06-27T18:30:00.000Z',
+      events: [{
+        id: 'practice-event-1',
+        blockId: 'practice-block-1',
+        createdAt: '2026-06-27T18:12:00.000Z',
+        type: 'player_highlight',
+        playerId: 'p1',
+        note: 'Buena lectura defensiva.',
+      }],
+      metrics: [{
+        id: 'practice-metric-1',
+        playerId: 'p1',
+        label: 'Recepciones limpias',
+        value: 8,
+        unit: 'successes',
+      }],
+    }],
+  };
   const sourceState = {
     players: uruguayPlayers,
     teamPools,
     matches: initialMatches,
     fixtures: upcomingFixtures,
     trainingSessions: [trainingSession],
+    practiceSessions: [practiceSession],
     activeMatchId: 'transient-match',
     activeTrainingSessionId: 'transient-training-session',
+    activePracticeSessionId: 'transient-practice-session',
   };
 
   it('builds a backup with metadata and persisted domain data', () => {
@@ -75,7 +119,9 @@ describe('backup', () => {
     expect(backup.data.matches).toEqual(initialMatches);
     expect(backup.data.fixtures).toEqual(upcomingFixtures);
     expect(backup.data.trainingSessions).toEqual([trainingSession]);
+    expect(backup.data.practiceSessions).toEqual([practiceSession]);
     expect(backup.data.trainingSessions[0]).not.toBe(trainingSession);
+    expect(backup.data.practiceSessions[0]).not.toBe(practiceSession);
   });
 
   it('excludes transient UI/runtime state', () => {
@@ -83,6 +129,7 @@ describe('backup', () => {
 
     expect('activeMatchId' in backup.data).toBe(false);
     expect('activeTrainingSessionId' in backup.data).toBe(false);
+    expect('activePracticeSessionId' in backup.data).toBe(false);
   });
 
   it('can be JSON stringified safely', () => {
@@ -105,6 +152,7 @@ describe('backup', () => {
       matches: [],
       fixtures: [],
       trainingSessions: [],
+      practiceSessions: [],
     });
 
     expect(backup.data).toEqual({
@@ -113,6 +161,7 @@ describe('backup', () => {
       matches: [],
       fixtures: [],
       trainingSessions: [],
+      practiceSessions: [],
     });
   });
 
@@ -130,6 +179,7 @@ describe('backup', () => {
     expect(validation.valid).toBe(true);
     if (validation.valid) {
       expect(validation.backup.data.players).toEqual(uruguayPlayers);
+      expect(validation.backup.data.practiceSessions).toEqual([practiceSession]);
     }
   });
 
@@ -158,24 +208,45 @@ describe('backup', () => {
     }
   });
 
-  it('accepts a version 1 backup without trainingSessions and defaults to an empty array', () => {
+  it('preserves practice sessions, blocks, events, metrics and status', () => {
+    const backup = buildBackupData(sourceState);
+    const validation = validateBackupData(backup);
+
+    expect(backup.data.practiceSessions[0]).toMatchObject({
+      id: practiceSession.id,
+      blocks: practiceSession.blocks,
+      status: practiceSession.status,
+    });
+    expect(validation.valid).toBe(true);
+    if (validation.valid) {
+      expect(validation.backup.data.practiceSessions[0].blocks[0].events[0]).toEqual(practiceSession.blocks[0].events[0]);
+      expect(validation.backup.data.practiceSessions[0].blocks[0].metrics[0]).toEqual(practiceSession.blocks[0].metrics[0]);
+    }
+  });
+
+  it('accepts a version 1 backup without trainingSessions/practiceSessions and defaults to empty arrays', () => {
     const currentBackup = buildBackupData(sourceState);
-    const { trainingSessions: _trainingSessions, ...legacyData } = currentBackup.data;
+    const { trainingSessions: _trainingSessions, practiceSessions: _practiceSessions, ...legacyData } = currentBackup.data;
     const validation = validateBackupData({ ...currentBackup, backupVersion: 1, data: legacyData });
 
     expect(validation.valid).toBe(true);
     if (validation.valid) {
       expect(validation.backup.data.trainingSessions).toEqual([]);
+      expect(validation.backup.data.practiceSessions).toEqual([]);
     }
   });
 
-  it('defaults malformed non-array trainingSessions safely', () => {
+  it('defaults malformed non-array trainingSessions/practiceSessions safely', () => {
     const backup = buildBackupData(sourceState);
-    const validation = validateBackupData({ ...backup, data: { ...backup.data, trainingSessions: 'invalid' } });
+    const validation = validateBackupData({
+      ...backup,
+      data: { ...backup.data, trainingSessions: 'invalid', practiceSessions: 'invalid' },
+    });
 
     expect(validation.valid).toBe(true);
     if (validation.valid) {
       expect(validation.backup.data.trainingSessions).toEqual([]);
+      expect(validation.backup.data.practiceSessions).toEqual([]);
     }
   });
 
@@ -183,6 +254,15 @@ describe('backup', () => {
     const backup = buildBackupData(sourceState);
 
     expect(validateBackupData({ ...backup, data: { ...backup.data, trainingSessions: [{ id: 'bad' }] } })).toEqual({
+      valid: false,
+      error: INVALID_BACKUP_ERROR,
+    });
+  });
+
+  it('rejects malformed sessions inside practiceSessions', () => {
+    const backup = buildBackupData(sourceState);
+
+    expect(validateBackupData({ ...backup, data: { ...backup.data, practiceSessions: [{ id: 'bad' }] } })).toEqual({
       valid: false,
       error: INVALID_BACKUP_ERROR,
     });

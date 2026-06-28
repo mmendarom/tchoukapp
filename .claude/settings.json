@@ -1,5 +1,16 @@
 {
   "enabledPlugins": {
     "expo@claude-plugins-official": true
+  },
+  "permissions": {
+    "allow": [
+      "PowerShell(npm ls *)",
+      "PowerShell(npm view *)",
+      "PowerShell(npm audit *)",
+      "PowerShell(npm install --dry-run*)",
+      "PowerShell(npx tsc --noEmit)",
+      "PowerShell(npx expo-doctor)",
+      "PowerShell(npx expo install --check)"
+    ]
   }
 }

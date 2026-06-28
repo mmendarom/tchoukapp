@@ -1,5 +1,153 @@
 # Implementation Log
 
+## 2026-06-27 - Modo Entrenamiento MVP inicial
+
+Se implemento el primer corte usable de `Modo Entrenamiento`, separado de `Practica 3v3`.
+
+Implementado:
+
+- Nuevo dominio `src/domain/practice.ts`:
+  - `TrainingPracticeSession`;
+  - `TrainingBlock`;
+  - eventos/metricas livianas;
+  - normalizacion;
+  - validacion de setup;
+  - filtros;
+  - resumen basico.
+- Nuevo store `src/store/usePracticeStore.ts`:
+  - persistencia offline en `tchoukstats:practice-state`;
+  - crear/editar sesion;
+  - iniciar/finalizar/cancelar;
+  - archivar/restaurar/eliminar;
+  - iniciar/completar/saltar bloques;
+  - notas, eventos y metricas simples;
+  - restore normalizado.
+- Nueva pantalla `src/screens/PracticeSessionsScreen.tsx`:
+  - entrada `Modo Entrenamiento`;
+  - lista con filtros;
+  - seleccion de plantel;
+  - asistencia;
+  - objetivo;
+  - notas;
+  - bloques;
+  - detalle/resumen;
+  - acciones de lifecycle.
+- Home agrega card `Entrenamiento` separada de `Practica 3v3`.
+- Navegacion agrega `PracticeSessions`.
+- Backup JSON agrega `practiceSessions` y los restaura desde Home.
+- Backups viejos sin `practiceSessions` importan con lista vacia.
+- Tests nuevos de dominio/store y coverage de backup.
+
+Decisiones:
+
+- El primer MVP exige plantel, al menos un asistente, objetivo y al menos un bloque.
+- Los bloques pueden ser `attack`, `defense`, `mixed`, `physical`, `tactical`, `scrimmage` o `free`.
+- `scrimmage` existe como tipo de bloque, pero no incrusta todavia el flujo completo de `Practica 3v3`.
+- Backup queda incluido desde el primer corte usable.
+
+Limitaciones:
+
+- No hay pantalla live dedicada.
+- No hay templates.
+- No hay PDF/export especifico de entrenamiento.
+- No hay vinculo real a una sesion 3v3 existente.
+- No hay progreso acumulado por jugador todavia.
+
+Validacion:
+
+- `npx tsc --noEmit`: pasa.
+- `npm test`: pasa, 29 archivos / 356 tests.
+
+## 2026-06-27 - Planificacion de Modo Entrenamiento
+
+Se planifico un nuevo `Modo Entrenamiento` como tarea docs-only, sin cambios de codigo productivo.
+
+Documentado:
+
+- Nueva spec `docs/specs/012-training-practice-mode.md`.
+- Nuevo plan `docs/plans/012-training-practice-mode-plan.md`.
+
+Decisiones propuestas:
+
+- `Modo Entrenamiento` queda separado de `Practica 3v3`.
+- `Practica 3v3` puede aparecer como tipo de bloque `scrimmage`, pero el flujo completo de mini partidos no se incrusta en el MVP.
+- El MVP prioriza planificacion, asistencia, bloques y notas.
+- Store/modelo nuevo recomendado para no sobrecargar `useTrainingStore`, que ya representa `Practica 3v3`.
+- Backup debe incluir entrenamientos antes de liberar el modo para uso real.
+- Progreso acumulado por jugador debe derivarse de sesiones/bloques/eventos, no de contadores duplicados.
+
+Validacion:
+
+- `git diff --check`: pasa. Solo aparecieron warnings de CRLF/permisos fuera del repo; no hay errores de whitespace.
+
+## 2026-06-27 - Edicion segura de sesiones y equipos 3v3
+
+Se implemento el primer corte de Stage B del roadmap 012: edicion segura de sesiones/equipos de `Practica 3v3` sin reescribir historial jugado.
+
+Implementado:
+
+- `training.ts` agrega permisos puros de edicion:
+  - setup completo solo antes de que existan mini partidos;
+  - detalles de equipo editables cuando no hay mini partido live;
+  - sesiones archivadas bloqueadas hasta restaurar;
+  - sesiones con mini partido live bloqueadas.
+- `useTrainingStore` agrega:
+  - `updateTrainingSessionSetup`;
+  - `updateTrainingTeamDetails`.
+- El store valida equipos con `validateTrainingTeams`, preserva offline-first y actualiza `updatedAt`.
+- `TrainingSessionsScreen` agrega panel `Editar practica` en el detalle de sesion:
+  - corregir nombres de equipos;
+  - cambiar `Puntos para ganar` y `Ganador queda` solo antes de iniciar mini partidos;
+  - mostrar bloqueo en sesiones archivadas, con mini partido en vivo o con historial jugado.
+- En sesiones con historial, la UI solo permite nombres de equipos; no toca jugadores ni eventos.
+
+Compatibilidad:
+
+- No cambia scoring formal ni training.
+- No cambia ubicaciones ni `landingLocation`.
+- No cambia PDF formal ni PDF training.
+- No agrega backend, auth, cloud sync ni dependencias.
+
+Limitaciones:
+
+- La UI todavia no mueve jugadores entre equipos de una sesion ya creada.
+- La accion de store para setup completo existe solo para sesiones sin mini partidos; si se necesita editar equipos historicos, hace falta versionado/snapshots antes.
+
+Validacion:
+
+- `npm test`: pasa, 27 archivos / 339 tests.
+- `npx tsc --noEmit`: pasa.
+
+## 2026-06-27 - Planificacion de pendientes de roadmap
+
+Se planificaron tareas futuras sin cambiar codigo productivo.
+
+Documentado:
+
+- Nueva spec `docs/specs/012-training-roadmap-and-player-history.md`.
+- Nuevo plan `docs/plans/012-training-roadmap-and-player-history-plan.md`.
+- Tareas cubiertas:
+  - formaciones configurables `3-1-3`, `4-3` y `3-4`;
+  - auto-balance de equipos 3v3;
+  - pulido de PDF training despues de QA en dispositivo real;
+  - edicion segura de sesiones/equipos 3v3 ya creados;
+  - historial acumulado entre practicas;
+  - estadisticas globales por jugador a lo largo del tiempo.
+
+Decisiones de plan:
+
+- El pulido PDF queda guiado por feedback real de dispositivo.
+- La edicion de equipos con historial jugado debe bloquear cambios que reescriban eventos o requerir versionado futuro.
+- El historial global v1 se deriva desde `trainingSessions` locales, sin cache persistido inicial.
+- Las estadisticas globales v1 se limitan a training para no mezclar reglas con partidos formales.
+- Auto-balance debe ser una sugerencia editable y deterministica.
+- Las formaciones configurables son visuales y deben preservar `LineupSnapshot.playerIds`, sustituciones, swaps, undo y `landingLocation`.
+
+Validacion:
+
+- `npm test`: pasa, 27 archivos / 331 tests. El primer intento en sandbox fallo por `Access is denied` al cargar Vitest/esbuild; se repitio con permisos elevados.
+- `npx tsc --noEmit`: pasa.
+
 ## 2026-06-23 - Practica 3v3 orientacion behind-goal y nombres de equipos
 
 Se ajustaron dos puntos de UX para que `Practica 3v3` sea mas natural en campo.

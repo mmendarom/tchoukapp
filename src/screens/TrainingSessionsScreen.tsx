@@ -1,5 +1,5 @@
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Alert, Pressable, Share, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { ActionButton } from '../components/ActionButton';
@@ -9,6 +9,7 @@ import {
   filterTrainingSessions,
   getSuggestedNextMiniMatch,
   getTrainingQueue,
+  getTrainingSessionEditPermissions,
   getTrainingSessionStats,
   TrainingPlayerStats,
   TrainingSessionFilter,
@@ -74,6 +75,21 @@ const getPlayerStatLabel = (playersById: Map<string, Player>, playerId: string) 
 const formatShootingLine = (stats: TrainingPlayerStats) =>
   `${stats.points}/${stats.attempts} tiros · ${stats.attempts > 0 ? formatPercent(stats.effectiveness) : 'Sin tiros'}`;
 
+const getEditBlockedMessage = (reason?: string) => {
+  switch (reason) {
+    case 'archived':
+      return 'Restaurala para editar la practica.';
+    case 'active_mini_match':
+      return 'Cerra el mini partido en vivo antes de editar.';
+    case 'closed_session':
+      return 'La sesion esta cerrada: solo se pueden corregir nombres de equipos.';
+    case 'history_locked':
+      return 'Ya hay historial jugado: solo se pueden corregir nombres de equipos.';
+    default:
+      return 'No se puede editar esta practica ahora.';
+  }
+};
+
 export function TrainingSessionsScreen({ navigation }: Props) {
   const players = useMatchStore((state) => state.players);
   const teamPools = useMatchStore((state) => state.teamPools);
@@ -85,6 +101,8 @@ export function TrainingSessionsScreen({ navigation }: Props) {
   const archiveTrainingSession = useTrainingStore((state) => state.archiveTrainingSession);
   const unarchiveTrainingSession = useTrainingStore((state) => state.unarchiveTrainingSession);
   const deleteTrainingSession = useTrainingStore((state) => state.deleteTrainingSession);
+  const updateTrainingSessionSetup = useTrainingStore((state) => state.updateTrainingSessionSetup);
+  const updateTrainingTeamDetails = useTrainingStore((state) => state.updateTrainingTeamDetails);
   const [selectedTeamPoolId, setSelectedTeamPoolId] = useState(teamPools[0]?.id ?? '');
   const [participantIds, setParticipantIds] = useState<string[]>([]);
   const [teamCount, setTeamCount] = useState(2);
@@ -101,6 +119,11 @@ export function TrainingSessionsScreen({ navigation }: Props) {
   const [shareStatus, setShareStatus] = useState('');
   const [exportingPdf, setExportingPdf] = useState(false);
   const [pdfStatus, setPdfStatus] = useState('');
+  const [editingSessionId, setEditingSessionId] = useState<string | undefined>();
+  const [editTeamNames, setEditTeamNames] = useState<Record<string, string>>({});
+  const [editTargetScoreInput, setEditTargetScoreInput] = useState('3');
+  const [editWinnerStays, setEditWinnerStays] = useState(true);
+  const [editStatus, setEditStatus] = useState('');
   const selectedTeamPool = useMemo(
     () => teamPools.find((pool) => pool.id === selectedTeamPoolId) ?? teamPools[0],
     [selectedTeamPoolId, teamPools],
@@ -128,6 +151,7 @@ export function TrainingSessionsScreen({ navigation }: Props) {
     targetScore,
   });
   const selectedSession = trainingSessions.find((session) => session.id === selectedSessionId);
+  const selectedSessionEditPermissions = selectedSession ? getTrainingSessionEditPermissions(selectedSession) : undefined;
   const visibleTrainingSessions = useMemo(
     () => filterTrainingSessions(trainingSessions, sessionFilter),
     [sessionFilter, trainingSessions],
@@ -170,6 +194,15 @@ export function TrainingSessionsScreen({ navigation }: Props) {
 
     return alerts.slice(0, 5);
   }, [playersById, selectedSessionStats]);
+
+  useEffect(() => {
+    setEditingSessionId(undefined);
+    setEditTeamNames({});
+    setEditTargetScoreInput('3');
+    setEditWinnerStays(true);
+    setEditStatus('');
+  }, [selectedSessionId]);
+
   const resetSetup = () => {
     setParticipantIds([]);
     setAssignments({});
@@ -382,6 +415,71 @@ export function TrainingSessionsScreen({ navigation }: Props) {
       setExportingPdf(false);
     }
   };
+  const handleBeginSessionEdit = () => {
+    if (!selectedSession || !selectedSessionEditPermissions) {
+      return;
+    }
+
+    if (!selectedSessionEditPermissions.canEditTeamDetails) {
+      setEditStatus(getEditBlockedMessage(selectedSessionEditPermissions.reason));
+      return;
+    }
+
+    setEditingSessionId(selectedSession.id);
+    setEditTeamNames(Object.fromEntries(selectedSession.teams.map((team) => [team.id, team.name])));
+    setEditTargetScoreInput(String(selectedSession.settings.targetScore));
+    setEditWinnerStays(selectedSession.settings.winnerStays);
+    setEditStatus(selectedSessionEditPermissions.canEditSetup ? '' : getEditBlockedMessage(selectedSessionEditPermissions.reason));
+  };
+  const handleCancelSessionEdit = () => {
+    setEditingSessionId(undefined);
+    setEditTeamNames({});
+    setEditTargetScoreInput('3');
+    setEditWinnerStays(true);
+    setEditStatus('');
+  };
+  const handleSaveSessionEdit = () => {
+    if (!selectedSession || !selectedSessionEditPermissions) {
+      return;
+    }
+
+    if (!selectedSessionEditPermissions.canEditTeamDetails) {
+      setEditStatus(getEditBlockedMessage(selectedSessionEditPermissions.reason));
+      return;
+    }
+
+    const teamUpdates = selectedSession.teams.map((team) => ({
+      teamId: team.id,
+      name: editTeamNames[team.id] ?? team.name,
+      color: team.color,
+    }));
+    const saved = selectedSessionEditPermissions.canEditSetup
+      ? updateTrainingSessionSetup(selectedSession.id, {
+          teamPoolId: selectedSession.teamPoolId,
+          teamPoolName: selectedSession.teamPoolName,
+          participantPlayerIds: selectedSession.participantPlayerIds,
+          teams: selectedSession.teams.map((team) => ({
+            id: team.id,
+            name: editTeamNames[team.id] ?? team.name,
+            playerIds: team.playerIds,
+            queueOrder: team.queueOrder,
+            color: team.color,
+          })),
+          settings: {
+            targetScore: parseTrainingTargetScore(editTargetScoreInput),
+            winnerStays: editWinnerStays,
+          },
+        })
+      : updateTrainingTeamDetails(selectedSession.id, teamUpdates);
+
+    if (!saved) {
+      setEditStatus('No se pudieron guardar los cambios.');
+      return;
+    }
+
+    setEditingSessionId(undefined);
+    setEditStatus('Cambios guardados.');
+  };
 
   return (
     <Screen>
@@ -463,6 +561,11 @@ export function TrainingSessionsScreen({ navigation }: Props) {
               onPress={handleExportPdf}
               variant="secondary"
             />
+            <ActionButton
+              label={editingSessionId === selectedSession.id ? 'Editando' : 'Editar'}
+              onPress={handleBeginSessionEdit}
+              variant="secondary"
+            />
             {selectedSession.archivedAt ? (
               <ActionButton label="Restaurar" onPress={handleUnarchiveSession} variant="secondary" />
             ) : (
@@ -481,6 +584,61 @@ export function TrainingSessionsScreen({ navigation }: Props) {
           ) : null}
           {pdfStatus ? (
             <Text style={[styles.statusText, pdfStatus.startsWith('No ') && styles.errorText]}>{pdfStatus}</Text>
+          ) : null}
+          {editStatus ? (
+            <Text style={[styles.statusText, editStatus.startsWith('No ') || editStatus.startsWith('Restaurala') || editStatus.startsWith('Cerra') ? styles.errorText : undefined]}>
+              {editStatus}
+            </Text>
+          ) : null}
+          {editingSessionId === selectedSession.id && selectedSessionEditPermissions ? (
+            <View style={styles.editPanel}>
+              <Text style={styles.sectionTitle}>Editar practica</Text>
+              {!selectedSessionEditPermissions.canEditSetup ? (
+                <Text style={styles.helperText}>{getEditBlockedMessage(selectedSessionEditPermissions.reason)}</Text>
+              ) : (
+                <View style={styles.editSettingsGrid}>
+                  <View style={styles.editSettingItem}>
+                    <Text style={styles.inputLabel}>Puntos para ganar</Text>
+                    <TextInput
+                      keyboardType="number-pad"
+                      onChangeText={setEditTargetScoreInput}
+                      placeholder="3"
+                      placeholderTextColor="#8a98a8"
+                      style={styles.input}
+                      value={editTargetScoreInput}
+                    />
+                  </View>
+                  <Pressable onPress={() => setEditWinnerStays((current) => !current)} style={({ pressed }) => [styles.toggleRow, pressed && styles.pressed]}>
+                    <View style={[styles.checkbox, editWinnerStays && styles.checkboxSelected]}>
+                      <Text style={styles.checkboxMark}>{editWinnerStays ? '✓' : ''}</Text>
+                    </View>
+                    <View style={styles.toggleTextWrap}>
+                      <Text style={styles.inputLabel}>Ganador queda</Text>
+                      <Text style={styles.helperText}>Solo se puede cambiar antes de iniciar mini partidos.</Text>
+                    </View>
+                  </Pressable>
+                </View>
+              )}
+              <View style={styles.editTeamList}>
+                {selectedSession.teams.map((team) => (
+                  <View key={team.id} style={styles.editTeamRow}>
+                    <Text style={styles.inputLabel}>Nombre del equipo</Text>
+                    <TextInput
+                      onChangeText={(value) => setEditTeamNames((current) => ({ ...current, [team.id]: value }))}
+                      placeholder={team.name}
+                      placeholderTextColor="#8a98a8"
+                      style={styles.input}
+                      value={editTeamNames[team.id] ?? team.name}
+                    />
+                    <Text style={styles.helperText}>{team.playerIds.length} jugadores</Text>
+                  </View>
+                ))}
+              </View>
+              <View style={styles.managementActions}>
+                <ActionButton label="Guardar cambios" onPress={handleSaveSessionEdit} />
+                <ActionButton label="Cancelar edicion" onPress={handleCancelSessionEdit} variant="secondary" />
+              </View>
+            </View>
           ) : null}
           <View style={styles.teamPreviewGrid}>
             {selectedSession.teams.map((team) => (
@@ -895,6 +1053,31 @@ const styles = StyleSheet.create({
   },
   setupSection: {
     gap: spacing.sm,
+  },
+  editPanel: {
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#c9d7e5',
+    backgroundColor: '#ffffff',
+    padding: spacing.sm,
+    gap: spacing.sm,
+  },
+  editSettingsGrid: {
+    gap: spacing.sm,
+  },
+  editSettingItem: {
+    gap: spacing.xs,
+  },
+  editTeamList: {
+    gap: spacing.sm,
+  },
+  editTeamRow: {
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#dbe4ef',
+    backgroundColor: '#f7fafc',
+    padding: spacing.sm,
+    gap: spacing.xs,
   },
   summaryGrid: {
     flexDirection: 'row',

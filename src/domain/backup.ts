@@ -1,4 +1,5 @@
 import { Fixture, Match, Player, TeamPool } from './types';
+import { TrainingPracticeSession } from './practice';
 import { TrainingSession } from './training';
 
 export const BACKUP_VERSION = 2;
@@ -12,6 +13,7 @@ export type BackupSourceState = {
   matches: Match[];
   fixtures: Fixture[];
   trainingSessions: TrainingSession[];
+  practiceSessions: TrainingPracticeSession[];
 };
 
 export type AppBackupData = {
@@ -69,6 +71,11 @@ const isFixtureLike = (value: unknown) =>
 const trainingSessionStatuses = new Set(['draft', 'live', 'finished', 'cancelled']);
 const trainingMiniMatchStatuses = new Set(['scheduled', 'live', 'finished', 'cancelled']);
 const trainingEventTypes = new Set(['point', 'defense', 'shot_defended', 'error', 'own_point_against']);
+const trainingPracticeStatuses = new Set(['draft', 'live', 'finished', 'cancelled']);
+const trainingPracticeBlockTypes = new Set(['attack', 'defense', 'mixed', 'physical', 'tactical', 'scrimmage', 'free']);
+const trainingPracticeBlockStatuses = new Set(['planned', 'live', 'completed', 'skipped']);
+const trainingPracticeEventTypes = new Set(['note', 'player_highlight', 'player_follow_up', 'metric']);
+const trainingPracticeMetricUnits = new Set(['reps', 'minutes', 'shots', 'successes', 'errors', 'custom']);
 
 const isTrainingTeamLike = (value: unknown) =>
   hasStringField(value, 'id') &&
@@ -116,6 +123,69 @@ const isTrainingSessionLike = (value: unknown) =>
   (value.teamQueue === undefined || (Array.isArray(value.teamQueue) && value.teamQueue.every((teamId) => typeof teamId === 'string'))) &&
   (value.settings === undefined || isRecord(value.settings));
 
+const isTrainingPracticeMetricLike = (value: unknown) =>
+  hasStringField(value, 'id') &&
+  hasStringField(value, 'label') &&
+  hasNumberField(value, 'value') &&
+  isRecord(value) &&
+  (value.playerId === undefined || typeof value.playerId === 'string') &&
+  (value.unit === undefined || (typeof value.unit === 'string' && trainingPracticeMetricUnits.has(value.unit)));
+
+const isTrainingPracticeEventLike = (value: unknown) =>
+  hasStringField(value, 'id') &&
+  hasStringField(value, 'blockId') &&
+  hasStringField(value, 'createdAt') &&
+  isRecord(value) &&
+  typeof value.type === 'string' &&
+  trainingPracticeEventTypes.has(value.type) &&
+  (value.playerId === undefined || typeof value.playerId === 'string') &&
+  (value.label === undefined || typeof value.label === 'string') &&
+  (value.value === undefined || (typeof value.value === 'number' && Number.isFinite(value.value))) &&
+  (value.note === undefined || typeof value.note === 'string');
+
+const isTrainingPracticeBlockLike = (value: unknown) =>
+  hasStringField(value, 'id') &&
+  hasStringField(value, 'sessionId') &&
+  hasStringField(value, 'title') &&
+  hasNumberField(value, 'order') &&
+  isRecord(value) &&
+  typeof value.type === 'string' &&
+  trainingPracticeBlockTypes.has(value.type) &&
+  typeof value.status === 'string' &&
+  trainingPracticeBlockStatuses.has(value.status) &&
+  (value.durationMinutes === undefined || (typeof value.durationMinutes === 'number' && Number.isFinite(value.durationMinutes))) &&
+  (value.objective === undefined || typeof value.objective === 'string') &&
+  (value.notes === undefined || typeof value.notes === 'string') &&
+  (value.startedAt === undefined || typeof value.startedAt === 'string') &&
+  (value.endedAt === undefined || typeof value.endedAt === 'string') &&
+  (value.linkedTrainingSessionId === undefined || typeof value.linkedTrainingSessionId === 'string') &&
+  (value.participantPlayerIds === undefined ||
+    (Array.isArray(value.participantPlayerIds) && value.participantPlayerIds.every((playerId) => typeof playerId === 'string'))) &&
+  Array.isArray(value.events) &&
+  value.events.every(isTrainingPracticeEventLike) &&
+  Array.isArray(value.metrics) &&
+  value.metrics.every(isTrainingPracticeMetricLike);
+
+const isTrainingPracticeSessionLike = (value: unknown) =>
+  hasStringField(value, 'id') &&
+  hasStringField(value, 'date') &&
+  hasStringField(value, 'createdAt') &&
+  hasStringField(value, 'updatedAt') &&
+  hasStringField(value, 'objective') &&
+  isRecord(value) &&
+  typeof value.status === 'string' &&
+  trainingPracticeStatuses.has(value.status) &&
+  (value.teamPoolId === undefined || typeof value.teamPoolId === 'string') &&
+  (value.teamPoolName === undefined || typeof value.teamPoolName === 'string') &&
+  (value.notes === undefined || typeof value.notes === 'string') &&
+  (value.startedAt === undefined || typeof value.startedAt === 'string') &&
+  (value.finishedAt === undefined || typeof value.finishedAt === 'string') &&
+  (value.archivedAt === undefined || typeof value.archivedAt === 'string') &&
+  Array.isArray(value.participantPlayerIds) &&
+  value.participantPlayerIds.every((playerId) => typeof playerId === 'string') &&
+  Array.isArray(value.blocks) &&
+  value.blocks.every(isTrainingPracticeBlockLike);
+
 export function buildBackupData(
   state: BackupSourceState,
   options: { exportedAt?: string; dataVersion?: number; appName?: string } = {},
@@ -131,6 +201,7 @@ export function buildBackupData(
       matches: cloneDomainData(state.matches ?? []),
       fixtures: cloneDomainData(state.fixtures ?? []),
       trainingSessions: cloneDomainData(state.trainingSessions ?? []),
+      practiceSessions: cloneDomainData(state.practiceSessions ?? []),
     },
   };
 }
@@ -168,6 +239,7 @@ export function validateBackupData(value: unknown): BackupValidationResult {
 
   const { players, teamPools, matches, fixtures } = value.data;
   const trainingSessions = Array.isArray(value.data.trainingSessions) ? value.data.trainingSessions : [];
+  const practiceSessions = Array.isArray(value.data.practiceSessions) ? value.data.practiceSessions : [];
 
   if (!Array.isArray(players) || !Array.isArray(teamPools) || !Array.isArray(matches) || !Array.isArray(fixtures)) {
     return { valid: false, error: INVALID_BACKUP_ERROR };
@@ -178,6 +250,10 @@ export function validateBackupData(value: unknown): BackupValidationResult {
   }
 
   if (!trainingSessions.every(isTrainingSessionLike)) {
+    return { valid: false, error: INVALID_BACKUP_ERROR };
+  }
+
+  if (!practiceSessions.every(isTrainingPracticeSessionLike)) {
     return { valid: false, error: INVALID_BACKUP_ERROR };
   }
 
@@ -198,6 +274,7 @@ export function validateBackupData(value: unknown): BackupValidationResult {
         matches: cloneDomainData(matches as Match[]),
         fixtures: cloneDomainData(fixtures as Fixture[]),
         trainingSessions: cloneDomainData(trainingSessions as TrainingSession[]),
+        practiceSessions: cloneDomainData(practiceSessions as TrainingPracticeSession[]),
       },
     },
   };

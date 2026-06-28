@@ -129,6 +129,12 @@ export type TrainingValidationResult = {
   errors: string[];
 };
 
+export type TrainingSessionEditPermissions = {
+  canEditSetup: boolean;
+  canEditTeamDetails: boolean;
+  reason?: 'archived' | 'active_mini_match' | 'closed_session' | 'history_locked';
+};
+
 export function filterTrainingSessions(sessions: TrainingSession[], filter: TrainingSessionFilter) {
   switch (filter) {
     case 'active':
@@ -140,6 +146,49 @@ export function filterTrainingSessions(sessions: TrainingSession[], filter: Trai
     case 'all':
       return sessions;
   }
+}
+
+export function hasLiveTrainingMiniMatch(session: Pick<TrainingSession, 'miniMatches' | 'activeMiniMatchId'>) {
+  return session.miniMatches.some((miniMatch) => miniMatch.status === 'live') || Boolean(session.activeMiniMatchId);
+}
+
+export function hasTrainingMiniMatchHistory(session: Pick<TrainingSession, 'miniMatches'>) {
+  return session.miniMatches.length > 0;
+}
+
+export function getTrainingSessionEditPermissions(
+  session: Pick<TrainingSession, 'archivedAt' | 'status' | 'miniMatches' | 'activeMiniMatchId'>,
+): TrainingSessionEditPermissions {
+  if (session.archivedAt) {
+    return {
+      canEditSetup: false,
+      canEditTeamDetails: false,
+      reason: 'archived',
+    };
+  }
+
+  if (hasLiveTrainingMiniMatch(session)) {
+    return {
+      canEditSetup: false,
+      canEditTeamDetails: false,
+      reason: 'active_mini_match',
+    };
+  }
+
+  const closedSession = session.status === 'finished' || session.status === 'cancelled';
+
+  if (!hasTrainingMiniMatchHistory(session) && !closedSession) {
+    return {
+      canEditSetup: true,
+      canEditTeamDetails: true,
+    };
+  }
+
+  return {
+    canEditSetup: false,
+    canEditTeamDetails: true,
+    reason: closedSession ? 'closed_session' : 'history_locked',
+  };
 }
 
 export const uniqueTrainingIds = (ids: string[]) => {

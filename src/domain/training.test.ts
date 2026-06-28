@@ -6,6 +6,7 @@ import {
   filterTrainingSessions,
   getSuggestedNextMiniMatch,
   getOppositeTrainingTeamId,
+  getTrainingSessionEditPermissions,
   getTrainingMiniMatchScore,
   getTrainingMiniMatchWinner,
   getTrainingQueue,
@@ -70,6 +71,56 @@ describe('training domain', () => {
     expect(filterTrainingSessions(sessions, 'finished').map((item) => item.id)).toEqual(['finished', 'cancelled']);
     expect(filterTrainingSessions(sessions, 'archived').map((item) => item.id)).toEqual(['archived-live', 'archived-finished']);
     expect(filterTrainingSessions(sessions, 'all')).toEqual(sessions);
+  });
+
+  it('allows full setup editing only before mini match history exists', () => {
+    expect(getTrainingSessionEditPermissions(session({ status: 'draft', miniMatches: [] }))).toEqual({
+      canEditSetup: true,
+      canEditTeamDetails: true,
+    });
+    expect(getTrainingSessionEditPermissions(session({ status: 'live', miniMatches: [] }))).toEqual({
+      canEditSetup: true,
+      canEditTeamDetails: true,
+    });
+  });
+
+  it('allows only safe team detail edits once history exists', () => {
+    expect(getTrainingSessionEditPermissions(session({
+      miniMatches: [miniMatch({ status: 'finished' })],
+    }))).toEqual({
+      canEditSetup: false,
+      canEditTeamDetails: true,
+      reason: 'history_locked',
+    });
+  });
+
+  it('blocks training editing while archived or with a live mini match', () => {
+    expect(getTrainingSessionEditPermissions(session({
+      archivedAt: '2026-06-22T12:00:00.000Z',
+    }))).toEqual({
+      canEditSetup: false,
+      canEditTeamDetails: false,
+      reason: 'archived',
+    });
+    expect(getTrainingSessionEditPermissions(session({
+      activeMiniMatchId: 'mini-1',
+      miniMatches: [miniMatch({ status: 'live' })],
+    }))).toEqual({
+      canEditSetup: false,
+      canEditTeamDetails: false,
+      reason: 'active_mini_match',
+    });
+  });
+
+  it('keeps team details editable in closed sessions without reopening setup', () => {
+    expect(getTrainingSessionEditPermissions(session({
+      status: 'finished',
+      miniMatches: [miniMatch({ status: 'finished' })],
+    }))).toEqual({
+      canEditSetup: false,
+      canEditTeamDetails: true,
+      reason: 'closed_session',
+    });
   });
 
   it('validates teams of 3 or 4 players', () => {
