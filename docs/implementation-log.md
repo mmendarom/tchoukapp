@@ -1,5 +1,46 @@
 # Implementation Log
 
+## 2026-06-29 - Planificacion de Estadística 7v7 (partido entre dos cuadros)
+
+Se planifico un nuevo modo `Estadística 7v7` como tarea docs-only, sin cambios de codigo productivo.
+
+Documentado:
+
+- Nueva spec `docs/specs/013-cross-team-7v7-stats.md`.
+- Nuevo plan `docs/plans/013-cross-team-7v7-stats-plan.md`.
+
+Decisiones de producto capturadas:
+
+- Modo nuevo de registro + estadisticas para un partido entre dos cuadros cualesquiera.
+- Tracking simetrico: ambos equipos con roster y stats individuales completas.
+- Planteles precargados y editables antes de arrancar (caso scouting de delegaciones por categoria).
+- Cancha compartida con dos marcos para ubicar puntos y defensas de ambos cuadros.
+- Formato configurable (jugadores por equipo y tiempos) con default 7 jugadores / 3×15 min.
+- El valor esta en el resumen por tiempo y final (donde tiro/quien tiro/donde defendio cada equipo y zonas flojas), no en stats en vivo.
+- Export PDF y persistencia local para reabrir y re-exportar en futuras sesiones.
+- Entrada en Home bajo la categoria `Partido` con el nombre visible `Estadística 7v7`.
+
+Decisiones tecnicas propuestas:
+
+- Modelo y store nuevos y simetricos (`StatsMatch`, `StatsTeam`, `StatsMatchSettings`, `StatsMatchEvent`, `useStatsMatchStore`), separados de `Match` y de `Training`, siguiendo el precedente de `Practica 3v3`.
+- Reusar `courtVisual`, `CourtField`/`CourtMapInput`, sectores tacticos de `court.ts` y el patron de efectividad de `playerPerformance`, sin tocar el flujo formal.
+- Export PDF como builder/HTML separados, sin tocar `reportHtml` formal ni `trainingReportHtml`.
+- Backup aditivo con `statsMatches`, tolerante a backups previos sin ese campo.
+
+Decisiones cerradas con el usuario:
+
+- Cuadros ajenos: `TeamPool` reutilizables; se reusa `Gestionar planteles`.
+- `category`: metadata libre (texto).
+- Marco de tiro: inferido por zona desde `landingLocation`, sin campo de marco por evento.
+- Tipos de error/perdida: `turnover`, `missed_frame`, `bad_rebound`, `forbidden_zone`, `line_step` y `own_point_against` (solo este ultimo suma al rival).
+- `shot_defended`: defensor obligatorio (`defenderPlayerId` + `defendingTeamId` siempre presentes).
+- Resumen por tiempo/final: solo estadistica, sin recomendaciones tacticas.
+- Backup: version nueva `v3` con `statsMatches`.
+
+Validacion:
+
+- Tarea docs-only. No se tocaron modelos, store, navegacion ni pantallas productivas.
+
 ## 2026-06-27 - Modo Entrenamiento MVP inicial
 
 Se implemento el primer corte usable de `Modo Entrenamiento`, separado de `Practica 3v3`.
