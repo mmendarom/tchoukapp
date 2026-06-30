@@ -1,8 +1,9 @@
 import { Fixture, Match, Player, TeamPool } from './types';
 import { TrainingPracticeSession } from './practice';
 import { TrainingSession } from './training';
+import { StatsMatch } from './statsMatch';
 
-export const BACKUP_VERSION = 2;
+export const BACKUP_VERSION = 3;
 export const BACKUP_APP_NAME = 'Tchoukball Uruguay';
 export const UNSUPPORTED_BACKUP_ERROR = 'Este backup no es compatible con esta versión de la app.';
 export const INVALID_BACKUP_ERROR = 'No se pudo importar el backup.';
@@ -14,6 +15,7 @@ export type BackupSourceState = {
   fixtures: Fixture[];
   trainingSessions: TrainingSession[];
   practiceSessions: TrainingPracticeSession[];
+  statsMatches: StatsMatch[];
 };
 
 export type AppBackupData = {
@@ -186,6 +188,29 @@ const isTrainingPracticeSessionLike = (value: unknown) =>
   Array.isArray(value.blocks) &&
   value.blocks.every(isTrainingPracticeBlockLike);
 
+const statsMatchStatuses = new Set(['draft', 'live', 'period_break', 'finished', 'cancelled']);
+
+const isStatsTeamLike = (value: unknown) =>
+  hasStringField(value, 'id') &&
+  hasStringField(value, 'name') &&
+  isRecord(value) &&
+  Array.isArray(value.playerIds) &&
+  value.playerIds.every((id) => typeof id === 'string');
+
+const isStatsMatchLike = (value: unknown) =>
+  hasStringField(value, 'id') &&
+  hasStringField(value, 'createdAt') &&
+  hasStringField(value, 'updatedAt') &&
+  hasStringField(value, 'status') &&
+  isRecord(value) &&
+  statsMatchStatuses.has(value.status as string) &&
+  isStatsTeamLike(value.homeTeam) &&
+  isStatsTeamLike(value.awayTeam) &&
+  isRecord(value.settings) &&
+  typeof value.currentPeriod === 'number' &&
+  Array.isArray(value.periods) &&
+  Array.isArray(value.events);
+
 export function buildBackupData(
   state: BackupSourceState,
   options: { exportedAt?: string; dataVersion?: number; appName?: string } = {},
@@ -202,6 +227,7 @@ export function buildBackupData(
       fixtures: cloneDomainData(state.fixtures ?? []),
       trainingSessions: cloneDomainData(state.trainingSessions ?? []),
       practiceSessions: cloneDomainData(state.practiceSessions ?? []),
+      statsMatches: cloneDomainData(state.statsMatches ?? []),
     },
   };
 }
@@ -217,7 +243,7 @@ export function createBackupFileName(exportedAt: string) {
 }
 
 export function isSupportedBackupVersion(version: unknown) {
-  return version === 1 || version === BACKUP_VERSION;
+  return version === 1 || version === 2 || version === BACKUP_VERSION;
 }
 
 export function validateBackupData(value: unknown): BackupValidationResult {
@@ -240,6 +266,7 @@ export function validateBackupData(value: unknown): BackupValidationResult {
   const { players, teamPools, matches, fixtures } = value.data;
   const trainingSessions = Array.isArray(value.data.trainingSessions) ? value.data.trainingSessions : [];
   const practiceSessions = Array.isArray(value.data.practiceSessions) ? value.data.practiceSessions : [];
+  const statsMatches = Array.isArray(value.data.statsMatches) ? value.data.statsMatches : [];
 
   if (!Array.isArray(players) || !Array.isArray(teamPools) || !Array.isArray(matches) || !Array.isArray(fixtures)) {
     return { valid: false, error: INVALID_BACKUP_ERROR };
@@ -254,6 +281,10 @@ export function validateBackupData(value: unknown): BackupValidationResult {
   }
 
   if (!practiceSessions.every(isTrainingPracticeSessionLike)) {
+    return { valid: false, error: INVALID_BACKUP_ERROR };
+  }
+
+  if (!statsMatches.every(isStatsMatchLike)) {
     return { valid: false, error: INVALID_BACKUP_ERROR };
   }
 
@@ -275,6 +306,7 @@ export function validateBackupData(value: unknown): BackupValidationResult {
         fixtures: cloneDomainData(fixtures as Fixture[]),
         trainingSessions: cloneDomainData(trainingSessions as TrainingSession[]),
         practiceSessions: cloneDomainData(practiceSessions as TrainingPracticeSession[]),
+        statsMatches: cloneDomainData(statsMatches as StatsMatch[]),
       },
     },
   };

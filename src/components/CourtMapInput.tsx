@@ -24,6 +24,9 @@ type CourtMapInputProps = {
   onConfirm: () => void;
   onCancel: () => void;
   mode: 'uruguay_point' | 'opponent_point' | 'opponent_defense';
+  title?: string;
+  kicker?: string;
+  tip?: string;
 };
 
 type CourtRect = {
@@ -36,7 +39,16 @@ type CourtRect = {
 const SHOW_COORD_DEBUG = false;
 const MARKER_SIZE = 24;
 
-export function CourtMapInput({ selectedLocation, onSelectLocation, onConfirm, onCancel, mode }: CourtMapInputProps) {
+export function CourtMapInput({
+  selectedLocation,
+  onSelectLocation,
+  onConfirm,
+  onCancel,
+  mode,
+  title: titleOverride,
+  kicker: kickerOverride,
+  tip: tipOverride,
+}: CourtMapInputProps) {
   const { width: windowWidth, height: windowHeight } = useWindowDimensions();
   const insets = useSafeAreaInsets();
   const courtRef = useRef<View>(null);
@@ -50,18 +62,20 @@ export function CourtMapInput({ selectedLocation, onSelectLocation, onConfirm, o
   const isLandscape = windowWidth > windowHeight;
   const isTablet = windowWidth >= 768;
   const title =
-    mode === 'uruguay_point'
+    titleOverride ??
+    (mode === 'uruguay_point'
       ? '¿Dónde cayó nuestro punto?'
       : mode === 'opponent_point'
         ? '¿Dónde nos hicieron el punto?'
-        : '¿Dónde nos defendieron?';
-  const kicker = mode === 'opponent_defense'
-    ? 'Marcá dónde fue defendido'
-    : 'Marcá dónde cayó la pelota';
+        : '¿Dónde nos defendieron?');
+  const kicker =
+    kickerOverride ??
+    (mode === 'opponent_defense' ? 'Marcá dónde fue defendido' : 'Marcá dónde cayó la pelota');
   const tip =
-    mode === 'opponent_defense'
+    tipOverride ??
+    (mode === 'opponent_defense'
       ? 'Marcá dónde fue defendido el tiro.'
-      : 'Tip: girá el celular para marcar con más precisión.';
+      : 'Tip: girá el celular para marcar con más precisión.');
   const mapHeight = useMemo(() => {
     return getCourtInputMapHeight({
       bottomInset: insets.bottom,

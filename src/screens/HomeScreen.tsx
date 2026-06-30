@@ -11,6 +11,7 @@ import { exportBackupJson } from '../export/exportBackup';
 import { pickAndParseBackupJson } from '../export/importBackup';
 import { STORE_DATA_VERSION, useMatchStore } from '../store/useMatchStore';
 import { usePracticeStore } from '../store/usePracticeStore';
+import { useStatsMatchStore } from '../store/useStatsMatchStore';
 import { useTrainingStore } from '../store/useTrainingStore';
 import { RootStackParamList } from '../utils/navigation';
 import { fontSize, spacing } from '../utils/responsive';
@@ -37,6 +38,8 @@ export function HomeScreen({ navigation }: Props) {
   const restorePracticeSessions = usePracticeStore((state) => state.restorePracticeSessions);
   const trainingSessions = useTrainingStore((state) => state.trainingSessions);
   const restoreTrainingSessions = useTrainingStore((state) => state.restoreTrainingSessions);
+  const statsMatches = useStatsMatchStore((state) => state.statsMatches);
+  const restoreStatsMatches = useStatsMatchStore((state) => state.restoreStatsMatches);
   const activeMatch = matches.find((match) => match.status === 'live' || match.status === 'period_break');
   const visibleMatchCount = matches.filter((match) => match.status !== 'cancelled').length;
   const backupStatusLabel =
@@ -66,6 +69,7 @@ export function HomeScreen({ navigation }: Props) {
           fixtures,
           practiceSessions,
           trainingSessions,
+          statsMatches,
         },
         { dataVersion: STORE_DATA_VERSION },
       );
@@ -131,6 +135,7 @@ export function HomeScreen({ navigation }: Props) {
 
     const practiceRestored = restorePracticeSessions(pendingBackup.data.practiceSessions);
     const trainingRestored = restoreTrainingSessions(pendingBackup.data.trainingSessions);
+    restoreStatsMatches(pendingBackup.data.statsMatches ?? []);
     const restored = practiceRestored && trainingRestored && restoreBackupData(pendingBackup);
 
     if (!restored) {
@@ -204,6 +209,12 @@ export function HomeScreen({ navigation }: Props) {
               tone="quiet"
             />
           </View>
+          <HomeActionCard
+            label="Estadística 7v7"
+            description="Analizar un partido entre dos cuadros"
+            onPress={() => navigation.navigate('StatsMatches')}
+            tone="management"
+          />
         </HomeActionSection>
 
         <HomeActionSection title="Entrenamiento">
@@ -286,6 +297,7 @@ export function HomeScreen({ navigation }: Props) {
                 <Text style={styles.restoreSummaryItem}>Fixtures: {pendingBackup?.data.fixtures.length ?? 0}</Text>
                 <Text style={styles.restoreSummaryItem}>Entrenamientos: {pendingBackup?.data.practiceSessions.length ?? 0}</Text>
                 <Text style={styles.restoreSummaryItem}>Prácticas 3v3: {pendingBackup?.data.trainingSessions.length ?? 0}</Text>
+                <Text style={styles.restoreSummaryItem}>Estadística 7v7: {pendingBackup?.data.statsMatches?.length ?? 0}</Text>
                 <Text style={styles.restoreSummaryItem}>Exportado: {pendingBackup?.exportedAt || 'Sin fecha'}</Text>
               </View>
               {pendingBackupWarnings.map((warning) => (

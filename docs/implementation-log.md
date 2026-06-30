@@ -1,5 +1,184 @@
 # Implementation Log
 
+## 2026-06-29 - Estadística 7v7 Stage 6 (backup/import v3)
+
+Se incorporo `Estadística 7v7` al backup JSON local (spec/plan 013) de forma aditiva, sin romper backups previos ni tocar partidos formales, `Practica 3v3` ni `Modo Entrenamiento`.
+
+Implementado:
+
+- `src/domain/backup.ts`:
+  - `BACKUP_VERSION` 2 -> 3; `statsMatches: StatsMatch[]` agregado a `BackupSourceState` y al `data` exportado;
+  - `isSupportedBackupVersion` acepta v1, v2 y v3;
+  - validadores `isStatsTeamLike` / `isStatsMatchLike` (status, equipos, settings, currentPeriod, periods, events);
+  - `validateBackupData` extrae `statsMatches` tolerante (no-array o ausente -> lista vacia) y normaliza por clon profundo.
+- `src/screens/HomeScreen.tsx`: consume `useStatsMatchStore`; el export incluye `statsMatches`; el restore llama `restoreStatsMatches`; el modal de confirmacion muestra el conteo `Estadística 7v7: N`.
+- `src/store/useMatchStore.test.ts`: el `buildBackupData` de prueba incluye `statsMatches: []`.
+- Tests nuevos en `src/domain/backup.test.ts`: tolerancia v2 sin `statsMatches`, roundtrip de `statsMatches`, rechazo de objetos malformados; tolerancia v1 ampliada.
+
+Validacion:
+
+- `npx tsc --noEmit`: OK.
+- `npm test`: 413 tests en verde (3 nuevos); modo formal, `Practica 3v3` y `Modo Entrenamiento` intactos.
+
+Compatibilidad:
+
+- Backups v1 y v2 (sin `statsMatches`) se importan sin romper -> lista vacia.
+- Backups v3 hacen roundtrip completo de `statsMatches`.
+
+Cierre del feature `Estadística 7v7` (013): Stages 1-6 completas.
+
+## 2026-06-29 - Estadística 7v7 Stage 5 (export PDF y re-export)
+
+Se agrego el export PDF del analisis de `Estadística 7v7` (spec/plan 013), reutilizable en sesiones futuras gracias a la persistencia del partido, sin tocar los reportes formal ni de training.
+
+Implementado:
+
+- `src/domain/statsMatchReportData.ts`: el reporte ahora incluye metadata de portada (`matchId`, `createdAt`, `dateLabel`, `statusLabel`, `formatLabel`) para PDFs autocontenidos.
+- Nuevo `src/export/statsMatchReportHtml.ts`:
+  - HTML print-safe propio con cancha de **dos marcos** derivada de `COURT_VISUAL_GEOMETRY` (coincide con la captura en pantalla);
+  - por equipo: portada con marcador, metricas, mapa de tiros y de defensas con markers, tablas de quien tiro, destacados de defensa, sectores (convierte / le anotan / le defienden) y errores;
+  - escapa el HTML para nombres de cuadros.
+- Nuevo `src/export/exportStatsMatchReport.ts`: genera el PDF via Expo Print, lo copia al document directory y comparte via Expo Sharing (mismo patron que el export de training).
+- `src/screens/StatsMatchSummaryScreen.tsx`: boton `Exportar PDF` que exporta el tramo seleccionado (tiempo o final).
+- Tests nuevos: `src/export/statsMatchReportHtml.test.ts` (3).
+
+Validacion:
+
+- `npx tsc --noEmit`: OK.
+- `npm test`: 410 tests en verde (3 nuevos); modo formal, `Practica 3v3` y `Modo Entrenamiento` intactos.
+
+Limitaciones / pendientes:
+
+- Sin dependencias nuevas (se reusan `expo-print`, `expo-sharing`, `expo-file-system`).
+- La re-exportacion ya funciona: el partido persiste y se puede reabrir el resumen y volver a exportar.
+- Falta Stage 6: backup `v3` con `statsMatches`.
+
+## 2026-06-29 - Estadística 7v7 Stage 4 (resúmenes por tiempo y final)
+
+Se agregaron los resumenes simetricos por tiempo y final de `Estadística 7v7` (spec/plan 013), solo con informacion estadistica (sin recomendaciones tacticas), reusando los mapas de cancha existentes.
+
+Implementado:
+
+- Nuevo builder puro `src/domain/statsMatchReportData.ts`:
+  - `buildStatsMatchReport(match, players, { periodNumber? })` arma `StatsMatchReport` simetrico (home/away) filtrable por tiempo o final;
+  - por equipo: stats (puntos a favor/en contra, intentos, efectividad, defensas, errores), ubicaciones de tiros y de tiros atajados, destacados de ataque/defensa, sectores donde convierte / donde le anotan / donde le defienden, y desglose de errores/perdidas (incluye punto en contra);
+  - reusa `deriveTacticalCourtSector`, `getStatsMatchStats` y los rankings del dominio.
+- Nueva pantalla `src/screens/StatsMatchSummaryScreen.tsx`:
+  - selector de tramo (cada tiempo iniciado/con eventos + `Final`);
+  - marcador y dos secciones por equipo con mapa de tiros y mapa de defensas (reuso de `CourtLocationMap` con markers por color), quien tiro, destacados de defensa, zonas y errores.
+- Navegacion: nueva ruta `StatsMatchSummary` (`{ matchId, periodNumber? }`) en `src/utils/navigation.ts` y `App.tsx`.
+- Accesos: `Ver resumen del tiempo` (period_break) y `Ver resumen final` (finished) en `LiveStatsMatchScreen`; `Ver resumen` en el detalle de `StatsMatchesScreen` para partidos con eventos.
+- Tests nuevos: `src/domain/statsMatchReportData.test.ts` (6).
+
+Validacion:
+
+- `npx tsc --noEmit`: OK.
+- `npm test`: 407 tests en verde (6 nuevos); modo formal, `Practica 3v3` y `Modo Entrenamiento` intactos.
+
+Limitaciones / pendientes:
+
+- Sin recomendaciones tacticas por decision de producto (no se reusa `liveRecommendations`).
+- El mapa de defensas usa la ubicacion de los tiros atajados; las defensas sueltas (sin ubicacion) suman al conteo pero no al mapa.
+- Export PDF del analisis llega en Stage 5; el backup `v3` con `statsMatches` en Stage 6.
+
+## 2026-06-29 - Estadística 7v7 Stage 3 (registro en vivo)
+
+Se implemento la pantalla de registro en vivo jugador-centrica con cancha de dos marcos para `Estadística 7v7` (spec/plan 013), reusando la geometria existente sin tocar el modo formal ni los modos de entrenamiento.
+
+Implementado:
+
+- Nuevo dominio en vivo `src/domain/statsMatchLive.ts` (funciones puras):
+  - labels de estado y de subtipos de error (set tchoukball completo);
+  - `getStatsTeamPlayers`, `getStatsPlayerLabel`, `getStatsTeamName`;
+  - `formatStatsMatchScore` y `formatStatsEventLabel` por tipo de evento;
+  - `getCurrentStatsPeriod`, `getNextStatsPeriodNumber`, `canRecordStatsEvent`.
+- Nueva pantalla `src/screens/LiveStatsMatchScreen.tsx`:
+  - marcador simetrico (score derivado de eventos) y estado del tiempo;
+  - paneles de jugadores de ambos cuadros; tocar jugador abre acciones `Punto`, `Lo atajaron`, `Defensa`, `Error`;
+  - `Punto` y `Lo atajaron` abren la cancha de dos marcos para ubicar; `Lo atajaron` exige defensor rival (obligatorio);
+  - `Error` ofrece el set completo (perdida, tiro errado, mal rebote, invasion/zona, pisa la linea) + `Punto en contra` (+1 rival);
+  - `Deshacer`, cerrar tiempo, iniciar siguiente tiempo y finalizar partido; ultimas acciones.
+- `src/components/CourtMapInput.tsx`: overrides opcionales de `title`/`kicker`/`tip` (retrocompatible) para titulos neutrales por cuadro, sin duplicar la logica de gestos/medicion.
+- Navegacion: nueva ruta `LiveStatsMatch` en `src/utils/navigation.ts` y registro en `App.tsx`.
+- `src/screens/StatsMatchesScreen.tsx`: botones `Iniciar partido` (draft) y `Abrir registro en vivo` (live/period_break) que navegan a la pantalla en vivo.
+- Tests nuevos: `src/domain/statsMatchLive.test.ts` (7).
+
+Validacion:
+
+- `npx tsc --noEmit`: OK.
+- `npm test`: 401 tests en verde (7 nuevos); modo formal, `Practica 3v3` y `Modo Entrenamiento` intactos.
+
+Limitaciones / pendientes:
+
+- Sin reloj/cronometro automatico: los tiempos se cierran/inician manualmente (suficiente para scouting; el timer queda fuera del alcance del MVP).
+- Las defensas sueltas se registran sin ubicacion; el mapa de defensas (Stage 4) usara la ubicacion de los tiros atajados.
+- Resumenes por tiempo/final con mapas y export PDF llegan en Stages 4-5.
+
+## 2026-06-29 - Estadística 7v7 Stage 2 (setup UI)
+
+Se agrego la entrada en Home y el flujo de creacion de partidos del modo `Estadística 7v7` (spec/plan 013), sin tocar el modo formal ni los modos de entrenamiento.
+
+Implementado:
+
+- Nuevo dominio puro de setup `src/domain/statsMatchSetup.ts`:
+  - `parseStatsSetupInteger` para inputs numericos;
+  - `getStatsPoolPlayers` (resuelve jugadores de un `TeamPool` respetando orden y descartando ids inexistentes);
+  - `buildStatsSetupTeam` (arma `StatsTeam` desde un pool, con categoria libre y convocados unicos);
+  - `buildStatsMatchSettingsFromInputs` (minutos→segundos, defaults 7 / 3×15);
+  - `buildStatsMatchSetupValidation` (mensaje unico en español; reusa `validateStatsMatchSetup`).
+- Nueva pantalla `src/screens/StatsMatchesScreen.tsx`:
+  - lista de partidos guardados con filtros (activos/finalizados/archivados/todos);
+  - detalle del partido seleccionado con formato, convocados y acciones (archivar/restaurar/cancelar/eliminar);
+  - setup: elegir cuadro local y visitante desde planteles precargados, categoria opcional, ajustar convocados y configurar formato;
+  - validaciones visibles y creacion de partido en estado `draft`.
+- Navegacion: nueva ruta `StatsMatches` en `src/utils/navigation.ts` y registro en `App.tsx`.
+- Home: nueva tarjeta `Estadística 7v7` bajo la seccion `Partido` (`src/screens/HomeScreen.tsx`).
+- Tests nuevos: `src/domain/statsMatchSetup.test.ts` (7).
+
+Validacion:
+
+- `npx tsc --noEmit`: OK.
+- `npm test`: 394 tests en verde (7 nuevos); modo formal, `Practica 3v3` y `Modo Entrenamiento` intactos.
+
+Limitaciones / pendientes:
+
+- El registro en vivo y los resumenes llegan en Stages 3-4 (la pantalla de detalle ya lo anticipa con un aviso).
+- Los cuadros se eligen como planteles enteros y se ajustan convocados; los titulares iniciales se modelaran junto al live (Stage 3).
+- Reuso de `Gestionar planteles` para crear/editar planteles ajenos (no se duplica CRUD en este modo).
+
+## 2026-06-29 - Estadística 7v7 Stage 1 (dominio + store)
+
+Se implemento la base sin UI del modo `Estadística 7v7` (spec/plan 013), aislada del modo formal, `Practica 3v3` y `Modo Entrenamiento`.
+
+Implementado:
+
+- Nuevo dominio `src/domain/statsMatch.ts`:
+  - tipos simetricos `StatsTeam`, `StatsMatchSettings`, `StatsMatchPeriod`, `StatsMatchEvent`, `StatsMatch`;
+  - `buildStatsMatchSettings` con defaults 7 jugadores / 3×15 min y normalizacion a enteros positivos;
+  - `createStatsMatchPeriods` para generar los tiempos configurados;
+  - `validateStatsMatchSetup` (cuadros distintos, minimo de jugadores, sin duplicados, sin jugador compartido);
+  - score derivado de eventos por `teamId` (`getStatsMatchScore`, `getStatsEventScoringTeamId`, `getOpposingStatsTeamId`);
+  - `getStatsMatchStats` (player/team stats; intentos = puntos + tiros atajados + puntos en contra; efectividad segura con 0 intentos; filtro opcional por periodo);
+  - rankings reutilizables por equipo (`rankStatsAttackers`, `rankStatsDefenders`, `rankStatsErrors`);
+  - helpers de zona/sector tactico inferidos por `location` (reuso de `deriveTacticalCourtSector`/`getCourtZone`) y `filterStatsMatches`.
+- Nuevo store `src/store/useStatsMatchStore.ts`:
+  - persistencia offline propia en `tchoukstats:stats-match-state` (nuevo `STORAGE_KEYS.statsMatchState`);
+  - crear/editar setup (solo en `draft`), iniciar partido y ciclo de tiempos (`startStatsMatch`, `finishStatsPeriod`, `startNextStatsPeriod`);
+  - registrar evento con `scoreAfter`, `shot_defended` con defensor rival obligatorio, deshacer, finalizar, cancelar, archivar/desarchivar, eliminar;
+  - `restoreStatsMatches`/`normalizeStatsMatch` para backup futuro y rehidratacion.
+- Tests nuevos: `src/domain/statsMatch.test.ts` (13) y `src/store/useStatsMatchStore.test.ts` (18).
+
+Validacion:
+
+- `npx tsc --noEmit`: OK.
+- `npm test`: 387 tests en verde (incluye los 31 nuevos); modo formal, `Practica 3v3` y `Modo Entrenamiento` intactos.
+
+Limitaciones / pendientes:
+
+- Sin UI todavia (Stages 2-5): Home, setup, live tracking, resumenes y export PDF.
+- Backup `v3` con `statsMatches` queda para Stage 6 (el store ya expone `restoreStatsMatches`).
+- El reloj/timer en vivo se maneja recien en Stage 3; Stage 1 solo modela estado de tiempos y `currentPeriod`.
+
 ## 2026-06-29 - Planificacion de Estadística 7v7 (partido entre dos cuadros)
 
 Se planifico un nuevo modo `Estadística 7v7` como tarea docs-only, sin cambios de codigo productivo.

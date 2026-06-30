@@ -11,6 +11,7 @@ import {
 } from './backup';
 import { initialMatches, teamPools, upcomingFixtures, uruguayPlayers } from './mockData';
 import { TrainingPracticeSession } from './practice';
+import { buildStatsMatchSettings, createStatsMatchPeriods, StatsMatch } from './statsMatch';
 import { TrainingSession } from './training';
 
 describe('backup', () => {
@@ -90,6 +91,19 @@ describe('backup', () => {
       }],
     }],
   };
+  const statsSettings = buildStatsMatchSettings();
+  const statsMatch: StatsMatch = {
+    id: 'stats-match-1',
+    createdAt: '2026-06-29T10:00:00.000Z',
+    updatedAt: '2026-06-29T10:00:00.000Z',
+    homeTeam: { id: 'home', name: 'Brasil', playerIds: ['p1'] },
+    awayTeam: { id: 'away', name: 'Argentina', playerIds: ['p2'] },
+    settings: statsSettings,
+    status: 'finished',
+    currentPeriod: 1,
+    periods: createStatsMatchPeriods(statsSettings),
+    events: [],
+  };
   const sourceState = {
     players: uruguayPlayers,
     teamPools,
@@ -97,6 +111,7 @@ describe('backup', () => {
     fixtures: upcomingFixtures,
     trainingSessions: [trainingSession],
     practiceSessions: [practiceSession],
+    statsMatches: [statsMatch],
     activeMatchId: 'transient-match',
     activeTrainingSessionId: 'transient-training-session',
     activePracticeSessionId: 'transient-practice-session',
@@ -109,7 +124,7 @@ describe('backup', () => {
     });
 
     expect(backup).toMatchObject({
-      backupVersion: 2,
+      backupVersion: 3,
       exportedAt: '2026-06-15T12:00:00.000Z',
       appName: 'Tchoukball Uruguay',
       dataVersion: 8,
@@ -120,8 +135,10 @@ describe('backup', () => {
     expect(backup.data.fixtures).toEqual(upcomingFixtures);
     expect(backup.data.trainingSessions).toEqual([trainingSession]);
     expect(backup.data.practiceSessions).toEqual([practiceSession]);
+    expect(backup.data.statsMatches).toEqual([statsMatch]);
     expect(backup.data.trainingSessions[0]).not.toBe(trainingSession);
     expect(backup.data.practiceSessions[0]).not.toBe(practiceSession);
+    expect(backup.data.statsMatches[0]).not.toBe(statsMatch);
   });
 
   it('excludes transient UI/runtime state', () => {
@@ -140,7 +157,7 @@ describe('backup', () => {
     const json = buildBackupJson(backup);
     const parsed = JSON.parse(json);
 
-    expect(parsed.backupVersion).toBe(2);
+    expect(parsed.backupVersion).toBe(3);
     expect(parsed.data.players.length).toBeGreaterThan(0);
     expect(json).toContain('\n');
   });
@@ -153,6 +170,7 @@ describe('backup', () => {
       fixtures: [],
       trainingSessions: [],
       practiceSessions: [],
+      statsMatches: [],
     });
 
     expect(backup.data).toEqual({
@@ -162,6 +180,7 @@ describe('backup', () => {
       fixtures: [],
       trainingSessions: [],
       practiceSessions: [],
+      statsMatches: [],
     });
   });
 
@@ -224,29 +243,42 @@ describe('backup', () => {
     }
   });
 
-  it('accepts a version 1 backup without trainingSessions/practiceSessions and defaults to empty arrays', () => {
+  it('accepts a version 1 backup without trainingSessions/practiceSessions/statsMatches and defaults to empty arrays', () => {
     const currentBackup = buildBackupData(sourceState);
-    const { trainingSessions: _trainingSessions, practiceSessions: _practiceSessions, ...legacyData } = currentBackup.data;
+    const { trainingSessions: _ts, practiceSessions: _ps, statsMatches: _sm, ...legacyData } = currentBackup.data;
     const validation = validateBackupData({ ...currentBackup, backupVersion: 1, data: legacyData });
 
     expect(validation.valid).toBe(true);
     if (validation.valid) {
       expect(validation.backup.data.trainingSessions).toEqual([]);
       expect(validation.backup.data.practiceSessions).toEqual([]);
+      expect(validation.backup.data.statsMatches).toEqual([]);
     }
   });
 
-  it('defaults malformed non-array trainingSessions/practiceSessions safely', () => {
+  it('accepts a version 2 backup without statsMatches and defaults to empty array', () => {
+    const currentBackup = buildBackupData(sourceState);
+    const { statsMatches: _sm, ...legacyData } = currentBackup.data;
+    const validation = validateBackupData({ ...currentBackup, backupVersion: 2, data: legacyData });
+
+    expect(validation.valid).toBe(true);
+    if (validation.valid) {
+      expect(validation.backup.data.statsMatches).toEqual([]);
+    }
+  });
+
+  it('defaults malformed non-array trainingSessions/practiceSessions/statsMatches safely', () => {
     const backup = buildBackupData(sourceState);
     const validation = validateBackupData({
       ...backup,
-      data: { ...backup.data, trainingSessions: 'invalid', practiceSessions: 'invalid' },
+      data: { ...backup.data, trainingSessions: 'invalid', practiceSessions: 'invalid', statsMatches: 'invalid' },
     });
 
     expect(validation.valid).toBe(true);
     if (validation.valid) {
       expect(validation.backup.data.trainingSessions).toEqual([]);
       expect(validation.backup.data.practiceSessions).toEqual([]);
+      expect(validation.backup.data.statsMatches).toEqual([]);
     }
   });
 
@@ -263,6 +295,27 @@ describe('backup', () => {
     const backup = buildBackupData(sourceState);
 
     expect(validateBackupData({ ...backup, data: { ...backup.data, practiceSessions: [{ id: 'bad' }] } })).toEqual({
+      valid: false,
+      error: INVALID_BACKUP_ERROR,
+    });
+  });
+
+  it('includes and roundtrips statsMatches', () => {
+    const backup = buildBackupData(sourceState);
+    const validation = validateBackupData(backup);
+
+    expect(backup.data.statsMatches).toEqual([statsMatch]);
+    expect(validation.valid).toBe(true);
+    if (validation.valid) {
+      expect(validation.backup.data.statsMatches).toEqual([statsMatch]);
+      expect(validation.backup.data.statsMatches[0]).not.toBe(statsMatch);
+    }
+  });
+
+  it('rejects malformed objects inside statsMatches', () => {
+    const backup = buildBackupData(sourceState);
+
+    expect(validateBackupData({ ...backup, data: { ...backup.data, statsMatches: [{ id: 'bad' }] } })).toEqual({
       valid: false,
       error: INVALID_BACKUP_ERROR,
     });

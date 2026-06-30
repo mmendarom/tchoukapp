@@ -2,7 +2,7 @@
 
 Spec relacionada: `docs/specs/013-cross-team-7v7-stats.md`
 
-Estado: Draft - Stage 0 (planning docs-only). Sin código productivo todavía.
+Estado: Stages 1-6 completas. Feature implementado, validado (`npx tsc --noEmit` + 413 tests) y persistido en backup `v3`.
 
 ## Objetivo del plan
 
