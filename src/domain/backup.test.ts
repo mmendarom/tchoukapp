@@ -126,7 +126,7 @@ describe('backup', () => {
     expect(backup).toMatchObject({
       backupVersion: 3,
       exportedAt: '2026-06-15T12:00:00.000Z',
-      appName: 'Tchoukball Uruguay',
+      appName: 'TchoukApp',
       dataVersion: 8,
     });
     expect(backup.data.players).toEqual(uruguayPlayers);
@@ -389,6 +389,16 @@ describe('backup', () => {
     expect(validation.valid).toBe(true);
     if (validation.valid) {
       expect(validation.warnings).toEqual(['El backup fue generado por otra app o variante.']);
+    }
+  });
+
+  it('accepts legacy app name without warnings', () => {
+    const backup = buildBackupData(sourceState, { appName: 'Tchoukball Uruguay' });
+    const validation = validateBackupData(backup);
+
+    expect(validation.valid).toBe(true);
+    if (validation.valid) {
+      expect(validation.warnings).toEqual([]);
     }
   });
 });

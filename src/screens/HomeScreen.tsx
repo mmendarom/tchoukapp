@@ -7,18 +7,21 @@ import { PlayerManagerModal } from '../components/PlayerManagerModal';
 import { Screen } from '../components/Screen';
 import { TeamPoolManagerModal } from '../components/TeamPoolManagerModal';
 import { AppBackupData, buildBackupData } from '../domain/backup';
+import { GRACE_WARNING_DAYS, getGraceDaysLeft } from '../domain/session';
 import { exportBackupJson } from '../export/exportBackup';
 import { pickAndParseBackupJson } from '../export/importBackup';
 import { STORE_DATA_VERSION, useMatchStore } from '../store/useMatchStore';
 import { usePracticeStore } from '../store/usePracticeStore';
 import { useStatsMatchStore } from '../store/useStatsMatchStore';
 import { useTrainingStore } from '../store/useTrainingStore';
+import { useSessionStore } from '../store/useSessionStore';
 import { RootStackParamList } from '../utils/navigation';
 import { fontSize, spacing } from '../utils/responsive';
+import { APP_NAME, APP_TAGLINE } from '../utils/theme';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Home'>;
 
-const associationLogo = require('../../assets/association-logo.png');
+const appLogo = require('../../assets/logo.png');
 
 export function HomeScreen({ navigation }: Props) {
   const [poolManagerVisible, setPoolManagerVisible] = useState(false);
@@ -32,7 +35,6 @@ export function HomeScreen({ navigation }: Props) {
   const matches = useMatchStore((state) => state.matches);
   const fixtures = useMatchStore((state) => state.fixtures);
   const teamPools = useMatchStore((state) => state.teamPools);
-  const resetDemoData = useMatchStore((state) => state.resetDemoData);
   const restoreBackupData = useMatchStore((state) => state.restoreBackupData);
   const practiceSessions = usePracticeStore((state) => state.practiceSessions);
   const restorePracticeSessions = usePracticeStore((state) => state.restorePracticeSessions);
@@ -40,6 +42,38 @@ export function HomeScreen({ navigation }: Props) {
   const restoreTrainingSessions = useTrainingStore((state) => state.restoreTrainingSessions);
   const statsMatches = useStatsMatchStore((state) => state.statsMatches);
   const restoreStatsMatches = useStatsMatchStore((state) => state.restoreStatsMatches);
+  const profile = useSessionStore((state) => state.profile);
+
+  const entitlement = profile?.accountId ? profile.entitlement : undefined;
+  const verifiedMs = entitlement ? Date.parse(entitlement.verifiedAt) : Number.NaN;
+  const verifiedDaysAgo = Number.isFinite(verifiedMs)
+    ? Math.max(0, Math.floor((Date.now() - verifiedMs) / 86400000))
+    : undefined;
+  const licenseLabel = entitlement
+    ? [
+        `Licencia: ${entitlement.plan === 'suscripcion' ? 'Suscripción' : 'Cortesía'} ${
+          entitlement.status === 'active' ? 'activa' : entitlement.status === 'revoked' ? 'revocada' : 'pendiente'
+        }`,
+        verifiedDaysAgo === undefined
+          ? undefined
+          : verifiedDaysAgo === 0
+            ? 'verificada hoy'
+            : verifiedDaysAgo === 1
+              ? 'verificada hace 1 día'
+              : `verificada hace ${verifiedDaysAgo} días`,
+      ]
+        .filter(Boolean)
+        .join(' · ')
+    : '';
+  const graceDaysLeft = getGraceDaysLeft(profile);
+  const graceWarningLabel =
+    graceDaysLeft === undefined || graceDaysLeft > GRACE_WARNING_DAYS
+      ? ''
+      : graceDaysLeft === 0
+        ? 'La verificación de tu licencia vence hoy. Conectate a internet para renovar el acceso.'
+        : graceDaysLeft === 1
+          ? 'Queda 1 día de uso sin conexión. Conectate a internet para renovar el acceso.'
+          : `Quedan ${graceDaysLeft} días de uso sin conexión. Conectate a internet para renovar el acceso.`;
   const activeMatch = matches.find((match) => match.status === 'live' || match.status === 'period_break');
   const visibleMatchCount = matches.filter((match) => match.status !== 'cancelled').length;
   const backupStatusLabel =
@@ -162,25 +196,30 @@ export function HomeScreen({ navigation }: Props) {
 
   return (
     <Screen>
-      <View style={styles.hero}>
-        <View style={styles.logoShell}>
-          <Image source={associationLogo} resizeMode="contain" style={styles.logo} />
+      {graceWarningLabel ? (
+        <View style={styles.graceBanner}>
+          <Text style={styles.graceBannerText}>{graceWarningLabel}</Text>
         </View>
+      ) : null}
+      <View style={styles.hero}>
+        <Image source={appLogo} resizeMode="contain" style={styles.logo} />
         <View style={styles.heroText}>
-          <Text style={styles.kicker}>Selección Uruguaya de Tchoukball</Text>
-          <Text style={styles.title}>Tchoukball Uruguay</Text>
-          <Text style={styles.copy}>Estadísticas, planteles y análisis en tiempo real</Text>
+          <Text style={styles.title}>{APP_NAME}</Text>
+          <Text style={styles.copy}>{APP_TAGLINE}</Text>
+          {profile ? <Text style={styles.greeting}>Hola, {profile.name}</Text> : null}
+          {licenseLabel ? <Text style={styles.licenseLabel}>{licenseLabel}</Text> : null}
         </View>
       </View>
 
       <View style={styles.statsRow}>
-        <HomeStat label="Partidos" value={visibleMatchCount} />
+        <HomeStat label="Vs rivales" value={visibleMatchCount} />
+        <HomeStat label="Cruces 7v7" value={statsMatches.length} />
         <HomeStat label="Planteles" value={teamPools.length} />
-        <HomeStat label="Próximos" value={fixtures.length} />
+        <HomeStat label="Fixture" value={fixtures.length} />
       </View>
 
       <View style={styles.actionsPanel}>
-        <HomeActionSection title="Partido">
+        <HomeActionSection title="Partido vs rival">
           {activeMatch && (
             <HomeActionCard
               label="Retomar en vivo"
@@ -190,28 +229,33 @@ export function HomeScreen({ navigation }: Props) {
             />
           )}
           <HomeActionCard
-            label="Crear partido"
-            description="Configurar rival, plantel y titulares"
+            label="Nuevo partido"
+            description="Registrar a tu cuadro contra un rival · 3 tiempos oficiales"
             onPress={() => navigation.navigate('Matches', { openCreate: true })}
             tone="primary"
           />
           <View style={styles.actionRow}>
             <HomeActionCard
-              label="Partidos"
-              description="Ver historial y continuar"
+              label="Historial"
+              description={`${visibleMatchCount} partidos vs rivales`}
               onPress={() => navigation.navigate('Matches')}
               tone="secondary"
             />
             <HomeActionCard
               label="Fixture"
-              description={`${fixtures.length} próximos`}
+              badge="En desarrollo"
+              description={`${fixtures.length} partidos agendados`}
               onPress={() => navigation.navigate('Fixtures')}
               tone="quiet"
             />
           </View>
+        </HomeActionSection>
+
+        <HomeActionSection title="Estadística 7v7">
           <HomeActionCard
-            label="Estadística 7v7"
-            description="Analizar un partido entre dos cuadros"
+            label="Cruce entre dos cuadros"
+            badge="En desarrollo"
+            description={`Armar un 7v7 con dos cuadros propios y stats de ambos · ${statsMatches.length} guardados`}
             onPress={() => navigation.navigate('StatsMatches')}
             tone="management"
           />
@@ -220,6 +264,7 @@ export function HomeScreen({ navigation }: Props) {
         <HomeActionSection title="Entrenamiento">
           <HomeActionCard
             label="Entrenamiento"
+            badge="En desarrollo"
             description="Planificar sesion, asistencia y bloques"
             onPress={() => navigation.navigate('PracticeSessions')}
             tone="training"
@@ -275,15 +320,12 @@ export function HomeScreen({ navigation }: Props) {
         </HomeActionSection>
       </View>
 
-      <View style={styles.utilityRow}>
-        <ActionButton
-          label="Reiniciar datos demo"
-          onPress={resetDemoData}
-          variant="secondary"
-        />
-        {backupStatusLabel ? <Text style={styles.backupStatus}>{backupStatusLabel}</Text> : null}
-        {importStatusLabel ? <Text style={styles.backupStatus}>{importStatusLabel}</Text> : null}
-      </View>
+      {backupStatusLabel || importStatusLabel ? (
+        <View style={styles.utilityRow}>
+          {backupStatusLabel ? <Text style={styles.backupStatus}>{backupStatusLabel}</Text> : null}
+          {importStatusLabel ? <Text style={styles.backupStatus}>{importStatusLabel}</Text> : null}
+        </View>
+      ) : null}
       <Modal visible={Boolean(pendingBackup)} transparent animationType="fade" onRequestClose={handleCancelRestore}>
         <View style={styles.modalBackdrop}>
           <View style={styles.restoreModal}>
@@ -327,11 +369,12 @@ type HomeActionCardProps = {
   label: string;
   description: string;
   disabled?: boolean;
+  badge?: string;
   onPress: () => void;
   tone: 'primary' | 'secondary' | 'management' | 'quiet' | 'live' | 'training' | 'data' | 'caution';
 };
 
-function HomeActionCard({ label, description, disabled = false, onPress, tone }: HomeActionCardProps) {
+function HomeActionCard({ label, description, disabled = false, badge, onPress, tone }: HomeActionCardProps) {
   const darkText = tone === 'quiet' || tone === 'management' || tone === 'training' || tone === 'data' || tone === 'caution';
 
   return (
@@ -346,7 +389,14 @@ function HomeActionCard({ label, description, disabled = false, onPress, tone }:
         pressed && styles.pressed,
       ]}
     >
-      <Text style={[styles.actionLabel, darkText && styles.actionLabelDark]}>{label}</Text>
+      <View style={styles.actionLabelRow}>
+        <Text style={[styles.actionLabel, darkText && styles.actionLabelDark]}>{label}</Text>
+        {badge ? (
+          <View style={styles.actionBadge}>
+            <Text style={styles.actionBadgeText}>{badge}</Text>
+          </View>
+        ) : null}
+      </View>
       <Text style={[styles.actionDescription, darkText && styles.actionDescriptionDark]}>{description}</Text>
     </Pressable>
   );
@@ -382,30 +432,13 @@ const styles = StyleSheet.create({
     gap: spacing.md,
     overflow: 'hidden',
   },
-  logoShell: {
+  logo: {
     width: 104,
     height: 104,
-    borderRadius: 8,
-    backgroundColor: '#ffffff',
-    borderWidth: 3,
-    borderColor: '#8bd3ff',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: spacing.xs,
-  },
-  logo: {
-    width: '100%',
-    height: '100%',
   },
   heroText: {
     flex: 1,
     gap: spacing.xs,
-  },
-  kicker: {
-    color: '#8bd3ff',
-    fontSize: fontSize.small,
-    fontWeight: '800',
-    textTransform: 'uppercase',
   },
   title: {
     color: '#ffffff',
@@ -417,6 +450,28 @@ const styles = StyleSheet.create({
     color: '#d7e5f2',
     fontSize: fontSize.body,
     lineHeight: 20,
+  },
+  greeting: {
+    color: '#8bd3ff',
+    fontSize: fontSize.body,
+    fontWeight: '800',
+  },
+  licenseLabel: {
+    color: '#d7e5f2',
+    fontSize: fontSize.small,
+    fontWeight: '700',
+  },
+  graceBanner: {
+    borderRadius: 8,
+    backgroundColor: '#fff7ed',
+    borderWidth: 1,
+    borderColor: '#f5b46b',
+    padding: spacing.sm,
+  },
+  graceBannerText: {
+    color: '#b45309',
+    fontSize: fontSize.small,
+    fontWeight: '800',
   },
   statsRow: {
     flexDirection: 'row',
@@ -512,10 +567,31 @@ const styles = StyleSheet.create({
   disabledAction: {
     opacity: 0.58,
   },
+  actionLabelRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    gap: spacing.xs,
+  },
   actionLabel: {
     color: '#ffffff',
     fontSize: fontSize.section,
     fontWeight: '900',
+  },
+  actionBadge: {
+    borderRadius: 999,
+    backgroundColor: '#fff7ed',
+    borderWidth: 1,
+    borderColor: '#f5b46b',
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 2,
+  },
+  actionBadgeText: {
+    color: '#b45309',
+    fontSize: fontSize.tiny,
+    fontWeight: '900',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
   actionLabelDark: {
     color: '#0b1f33',

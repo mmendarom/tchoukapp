@@ -7,4 +7,5 @@ export const STORAGE_KEYS = {
   practiceState: 'tchoukstats:practice-state',
   trainingState: 'tchoukstats:training-state',
   statsMatchState: 'tchoukstats:stats-match-state',
+  sessionState: 'tchoukstats:session-state',
 };

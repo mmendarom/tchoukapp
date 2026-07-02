@@ -1,5 +1,7 @@
 export type RootStackParamList = {
+  Welcome: undefined;
   Home: undefined;
+  Profile: undefined;
   Players: undefined;
   Matches: { openCreate?: boolean } | undefined;
   LiveMatch: { matchId?: string } | undefined;

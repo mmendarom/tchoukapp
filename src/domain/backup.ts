@@ -4,7 +4,9 @@ import { TrainingSession } from './training';
 import { StatsMatch } from './statsMatch';
 
 export const BACKUP_VERSION = 3;
-export const BACKUP_APP_NAME = 'Tchoukball Uruguay';
+export const BACKUP_APP_NAME = 'TchoukApp';
+// Nombre previo al rebrand (spec 014): los backups viejos deben importar sin advertencia.
+export const BACKUP_LEGACY_APP_NAMES = ['Tchoukball Uruguay'];
 export const UNSUPPORTED_BACKUP_ERROR = 'Este backup no es compatible con esta versión de la app.';
 export const INVALID_BACKUP_ERROR = 'No se pudo importar el backup.';
 
@@ -289,7 +291,9 @@ export function validateBackupData(value: unknown): BackupValidationResult {
   }
 
   const warnings =
-    value.appName && value.appName !== BACKUP_APP_NAME ? ['El backup fue generado por otra app o variante.'] : [];
+    value.appName && value.appName !== BACKUP_APP_NAME && !BACKUP_LEGACY_APP_NAMES.includes(value.appName as string)
+      ? ['El backup fue generado por otra app o variante.']
+      : [];
 
   return {
     valid: true,

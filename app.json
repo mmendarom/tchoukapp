@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "Tchoukball Uruguay",
+    "name": "TchoukApp",
     "slug": "tchoukball-uruguay",
     "version": "1.0.0",
     "orientation": "default",
@@ -10,7 +10,7 @@
     "splash": {
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
-      "backgroundColor": "#ffffff"
+      "backgroundColor": "#0b1f33"
     },
     "ios": {
       "supportsTablet": true,

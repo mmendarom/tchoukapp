@@ -2,7 +2,9 @@
 
 ## 1. Objetivo
 
-Esta app es una herramienta mobile-first y usable en tablet para que el cuerpo tecnico de tchoukball de Uruguay registre eventos en vivo, entienda patrones tacticos durante el partido, revise resumenes por tiempo y tome mejores decisiones de coaching.
+La app se llama `TCHOUKAPP` (spec 014). Es una herramienta mobile-first y usable en tablet para que el cuerpo tecnico de tchoukball de Uruguay registre eventos en vivo, entienda patrones tacticos durante el partido, revise resumenes por tiempo y tome mejores decisiones de coaching.
+
+Vision de producto: eventualmente lanzarla al publico con una suscripcion mensual activable por usuario, manteniendo acceso gratuito (`cortesia`) para un grupo de companeros. La monetizacion esta documentada pero NO implementada (ver `docs/decisions/006-tchoukapp-rebrand-local-login-monetization.md`).
 
 Objetivos actuales del producto:
 
@@ -29,14 +31,18 @@ Stack actual inspeccionado desde `package.json` y la estructura del proyecto:
   - `@react-navigation/native-stack` `^7.15.1`
 - `react-native-screens` `~4.16.0`
 - `react-native-safe-area-context` `~5.6.0`
-- Vitest `^4.1.6` como runner de tests
+- `@supabase/supabase-js` `^2.110.0` (backend de licencias, spec 015) + `react-native-url-polyfill`
+- Vitest `^3.2.4` como runner de tests
 
 Principios tecnicos:
 
-- Offline-first por defecto.
-- Sin backend por ahora.
-- Sin autenticacion por ahora.
+- Offline-first por defecto. El unico uso de red propio de la app es la verificacion de licencias (spec 015), con gracia offline de 14 dias; los datos deportivos siguen 100% locales.
+- Backend minimo de cuentas y licencias en Supabase (specs 015, decision 007): login por email + codigo OTP y tabla `entitlements` de solo lectura para el cliente. Sin sync de datos, sin pagos.
+- Modo local sin backend: si `EXPO_PUBLIC_SUPABASE_URL` / `EXPO_PUBLIC_SUPABASE_ANON_KEY` no estan configuradas, la app usa el login local de la spec 014 y no toca la red.
+- `evaluateAccess` / `hasActiveAccess` en `src/domain/session.ts` son el unico punto de corte del acceso; la suscripcion futura solo cambia como se llega a `plan: 'suscripcion'`.
+- `@supabase/supabase-js` vive aislado en `src/backend/*`; el dominio y los stores no dependen de la red.
 - Evitar servicios pagos y dependencias innecesarias.
+- Paleta de marca celeste + azul + blanco centralizada en `src/utils/theme.ts`; los colores semanticos de estado (en vivo, training, peligro) se mantienen por pantalla.
 - Preferir arquitectura simple, local-first y mantenible por un solo desarrollador con Codex.
 - Preferir funciones puras de dominio para calculos, estadisticas, zonas e insights.
 - Mantener TypeScript estricto.
@@ -102,6 +108,7 @@ Estructura actual relevante:
 - `src/domain`: modelos de dominio, datos mock, calculos puros, estadisticas, zonas de cancha, insights y tests de dominio.
 - `src/store`: estado global con Zustand y acciones de partido.
 - `src/storage`: adaptadores de persistencia local.
+- `src/backend`: cliente Supabase y servicio de cuentas/licencias (unico lugar que toca la red); SQL versionado en `supabase/migrations`.
 - `src/utils`: utilidades compartidas como labels, navegacion, fechas y responsive sizing.
 - `docs`: documentacion de gobernanza y trabajo.
 - `docs/specs`: specs de features antes de implementar.
@@ -125,10 +132,13 @@ Reglas de ubicacion futura:
 
 Evitar:
 
-- Agregar backend antes de que sea verdaderamente necesario.
-- Agregar autenticacion.
-- Agregar servicios pagos.
+- Ampliar el backend mas alla de cuentas y licencias (spec 015) sin una spec nueva: nada de sync de datos deportivos, notificaciones ni features online.
+- Escribir en `entitlements` desde el cliente o aflojar las policies de RLS.
+- Importar `@supabase/supabase-js` fuera de `src/backend/*`.
+- Agregar servicios pagos o integraciones de cobro antes de la decision explicita de lanzamiento (la suscripcion futura tiene su camino documentado en las decisions 006 y 007).
 - Agregar cloud sync.
+- Romper el modo local: la app debe seguir funcionando completa sin variables de backend configuradas.
+- Cambiar `slug` de Expo o los identificadores nativos (`bundleIdentifier`, `package`) sin pasar por la decision 006: rompe el proyecto EAS y las builds instaladas.
 - Agregar librerias pesadas de graficos salvo justificacion clara en una spec.
 - Hardcodear `Uruguay vs Argentina` como unico flujo posible.
 - Inferir la ubicacion de caida del punto desde la zona default del jugador.

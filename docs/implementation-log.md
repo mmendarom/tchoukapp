@@ -1,5 +1,145 @@
 # Implementation Log
 
+## 2026-07-02 - Badges "En desarrollo" y pantalla Perfil
+
+Transparencia sobre features en testing y un lugar propio para la configuracion de usuario.
+
+Badges:
+
+- `HomeActionCard` acepta `badge?: string` (chip naranja redondeado junto al label).
+- Marcados "En desarrollo": `Cruce entre dos cuadros` (Estadística 7v7), `Fixture` y `Entrenamiento` (sesiones de practica). `Práctica 3v3` queda sin badge.
+
+Pantalla `Perfil` (nueva `src/screens/ProfileScreen.tsx`, ruta `Profile`, boton `Perfil` en el header de Inicio):
+
+- Header con avatar (inicial del nombre), nombre, email y chip de plan (`Modo local` / `Cortesía` / `Suscripción`).
+- Seccion `Cuenta`: editar el nombre del perfil (nueva accion `updateProfileName` en `useSessionStore`, con validacion y actualizacion del recordatorio de login).
+- Seccion `Licencia` (solo con cuenta y backend configurado): plan, estado, ultima verificacion, dias de uso offline restantes y boton `Verificar licencia ahora`.
+- Seccion `Datos`: `Reiniciar datos demo` movido desde el Home, ahora con confirmacion nativa (es destructivo).
+- Seccion `Sesión`: `Cerrar sesión` movido desde el Home (variant danger), aclarando que los datos del dispositivo se conservan.
+- Footer con la version de la app (leida de `app.json`).
+- El Home queda sin botones utilitarios al pie (solo los estados de backup/import cuando corresponden).
+
+Validacion: `npx tsc --noEmit` OK; `npm test` 444 tests en verde (1 nuevo).
+
+## 2026-07-02 - Logo propio TCHOUKAPP, limpieza de marca y reorganizacion de la Home
+
+Identidad visual nueva y Home reordenada para que cada accion diga que hace.
+
+Logo y assets (a partir de la referencia provista por Mauro: triangulo redondeado celeste con pelota, sobre tarjeta blanca):
+
+- El logo se redibujo programaticamente en 1024px (GDI+ via PowerShell, script reproducible) porque la imagen pegada en el chat no existe como archivo; el resultado es visualmente equivalente a la referencia.
+- `assets/logo.png` (tarjeta redondeada, usado en portada y hero de Inicio), `assets/icon.png` (cuadrado blanco full-bleed), `assets/adaptive-icon.png` (foreground transparente al 62% para el safe zone Android; `backgroundColor` -> `#ffffff`), `assets/splash-icon.png` (tarjeta sobre splash navy) y `assets/favicon.png` (64px).
+- `assets/association-logo.png` eliminado (era el logo de la asociacion).
+
+Limpieza de "Tchoukball Uruguay" en la UI:
+
+- `WelcomeScreen` y `HomeScreen`: se elimino el kicker `Tchoukball Uruguay` y el shell del logo viejo; la marca visible es solo `TCHOUKAPP` + logo nuevo.
+- Se mantienen (internos, no visibles): `BACKUP_LEGACY_APP_NAMES` en `src/domain/backup.ts` (compatibilidad de backups viejos) y `slug`/`package`/`bundleIdentifier` (decision 006, atados a EAS y builds instaladas).
+
+Reorganizacion de la Home (los nombres viejos mezclaban flujos):
+
+- Seccion `Partido vs rival`: `Nuevo partido` ("Registrar a tu cuadro contra un rival · 3 tiempos oficiales"), `Historial` ("N partidos vs rivales"), `Fixture` ("N partidos agendados") y `Retomar en vivo` si hay partido activo.
+- Seccion `Estadística 7v7`: una sola tarjeta `Cruce entre dos cuadros` ("Armar un 7v7 con dos cuadros propios y stats de ambos · N guardados"); la pantalla ya integra crear + historial.
+- Fila de metricas superior: `Vs rivales`, `Cruces 7v7`, `Planteles`, `Fixture`.
+- `Entrenamiento`, `Gestión` y `Datos` sin cambios.
+
+Validacion: `npx tsc --noEmit` OK; `npm test` 443 tests en verde.
+
+Notas: el icono/splash nuevos se ven al rebuildar (EAS o dev build); Expo Go solo refleja `logo.png` en runtime. El script del logo quedo en el scratchpad de la sesion; si se necesita regenerar variantes, pedirlo de nuevo o guardar el PNG maestro.
+
+## 2026-07-02 - Mejoras de experiencia de login (015 follow-up)
+
+Ajustes de UX sobre el flujo de login online tras la primera prueba real con Supabase:
+
+- `WelcomeScreen`:
+  - autofill del codigo OTP (`textContentType="oneTimeCode"` + `autoComplete="one-time-code"`) y `autoFocus` en el input;
+  - cooldown de 30 segundos en `Reenviar código` (contador visible, evita dobles envios y rate limits);
+  - boton `Entrar` deshabilitado hasta que el codigo tenga al menos 6 digitos;
+  - nombre y email prellenados con el ultimo login (persisten tras cerrar sesion);
+  - acepta codigos de 6 a 10 digitos (la longitud del OTP es configurable en Supabase; el proyecto real usa 8) y enlace `Ya tengo un código` para entrar sin reenviar.
+- `useSessionStore`: nuevos `lastLoginName` / `lastLoginEmail` persistidos, seteados en `login` y `loginWithAccount`, no se borran en logout.
+- `src/domain/session.ts`: `getGraceDaysLeft` (dias enteros de gracia offline restantes) y `GRACE_WARNING_DAYS = 4`.
+- `HomeScreen`:
+  - linea de licencia en el hero para perfiles con cuenta: plan (`Cortesía`/`Suscripción`), estado y hace cuantos dias se verifico;
+  - banner naranja de aviso cuando quedan 4 dias o menos de gracia offline ("Conectate a internet...").
+- `accountService`: los errores ahora anexan el detalle tecnico de Supabase (clave para diagnosticar rate limits y config).
+- `supabase/README.md` actualizado con el setup real del dashboard nuevo: SMTP propio con Gmail (obligatorio para editar plantillas en el plan gratis), plantillas `Confirm signup` y `Magic Link` con `{{ .Token }}`, rate limits y credenciales (`Publishable key` / Data API).
+
+Validacion: `npx tsc --noEmit` OK; `npm test` 443 tests en verde (4 nuevos).
+
+Notas de la puesta en marcha real: el SMTP default de Supabase (2 emails/hora, plantillas bloqueadas) obligo a configurar Gmail como SMTP; el OTP del proyecto es de 8 digitos.
+
+## 2026-07-01 - Backend de cuentas y licencias con Supabase, sin pagos (015)
+
+Se implemento la spec/plan 015 (aprobada por pedido explicito): backend minimo de cuentas y licencias en Supabase, con login por email + codigo OTP, gracia offline de 14 dias y **modo local intacto** cuando el backend no esta configurado. Sin pagos, sin sync de datos deportivos. Decision 007 documenta proveedor y politicas.
+
+Implementado:
+
+- `supabase/migrations/0001_entitlements.sql`: tabla `public.entitlements` (plan `cortesia`/`suscripcion`, status `pending`/`active`/`revoked`), RLS de solo lectura propia (sin escrituras de cliente), trigger de alta `pending` al registrarse y trigger de `updated_at`.
+- `supabase/README.md`: setup del proyecto (SQL, OTP, variables) y snippets SQL para activar/revocar/listar licencias.
+- Nuevo `src/backend/`: `config.ts` (lee `EXPO_PUBLIC_SUPABASE_URL`/`EXPO_PUBLIC_SUPABASE_ANON_KEY`; sin ellas -> modo local), `supabaseClient.ts` (cliente lazy con AsyncStorage) y `accountService.ts` (`requestEmailOtp`, `verifyEmailOtp`, `fetchEntitlement`, `signOutAccount`; errores en espanol). Unico lugar que importa `@supabase/supabase-js`.
+- `src/domain/session.ts`: `AccountEntitlement`, `EntitlementStatus`, `ACCESS_GRACE_DAYS = 14`, `evaluateAccess` (`none`/`local`/`active`/`pending`/`revoked`/`expired`) y `hasActiveAccess` sobre esa evaluacion. `UserProfile` suma `accountId?` y `entitlement?`.
+- `src/store/useSessionStore.ts`: version 2 (migracion passthrough de perfiles locales v1), `loginWithAccount` y `updateEntitlement`.
+- `WelcomeScreen`: con backend configurado, flujo en dos pasos (nombre + email -> enviar codigo; codigo de 6 digitos -> entrar, con reenviar y cambiar email); sin backend, el formulario local de la spec 014.
+- Nueva `AccessBlockedScreen`: estados pendiente/revocado/vencido con `Reintentar verificacion` y `Cerrar sesion`.
+- `App.tsx`: refresh de licencia en background al abrir con cuenta; gate que bloquea acceso `pending`/`revoked`/`expired` **salvo que haya un partido en vivo activo** (nunca se corta un partido iniciado).
+- `HomeScreen`: `Cerrar sesion` tambien cierra la sesion remota (fire and forget).
+- `.env.example` con las dos variables publicas (`.env` ya estaba gitignoreado).
+- Dependencias nuevas: `@supabase/supabase-js` `^2.110.0`, `react-native-url-polyfill` `^3.0.0`.
+- `docs/constitution.md`: backend de licencias como excepcion aprobada, `src/backend` en la estructura, boundaries nuevos (no ampliar backend sin spec, no escribir `entitlements` desde el cliente, no romper el modo local).
+
+Validacion:
+
+- `npx tsc --noEmit`: OK.
+- `npm test`: 439 tests en verde (8 nuevos: evaluacion de acceso y store de sesion).
+
+Pendiente de configuracion (no de codigo):
+
+- Crear el proyecto en Supabase, correr la migracion y configurar el OTP por email (pasos en `supabase/README.md`).
+- Setear las variables en `.env` local y en EAS para builds.
+- QA manual del flujo OTP con un email real.
+
+Limitaciones conocidas:
+
+- La gracia offline usa el reloj del dispositivo (riesgo aceptado, decision 007).
+- `plan: 'suscripcion'` existe en el modelo pero no hay forma de obtenerlo hasta la etapa de pagos.
+- El servicio de OTP usa el email transaccional default de Supabase (limite bajo de envios); para el lanzamiento conviene un SMTP propio.
+
+## 2026-07-01 - Rebrand TCHOUKAPP, portada con login local y theme celeste+azul+blanco (014)
+
+Se implemento la spec/plan 014: la app pasa a llamarse `TCHOUKAPP`, arranca con una portada de bienvenida con login local offline-first y consolida la paleta celeste + azul + blanco. Se deja documentado (no implementado) el camino a la suscripcion mensual por usuario con cortesias (decision 006).
+
+Implementado:
+
+- Nuevo `src/utils/theme.ts`: `APP_NAME`, `APP_TAGLINE` y paleta central celeste + azul + blanco (navy `#0b1f33`, azul `#0b6bcb`, celeste `#8bd3ff`, blanco).
+- Nuevo `src/domain/session.ts`: `UserProfile`, `UserPlan` (`cortesia` | `suscripcion`), `validateProfileInput`, `buildUserProfile` y `hasActiveAccess` (unico punto de corte previsto para la suscripcion futura). Tests en `session.test.ts`.
+- Nuevo `src/store/useSessionStore.ts` (Zustand + persist, clave `tchoukstats:session-state`): `profile`, `login`, `logout`, hidratacion. Tests en `useSessionStore.test.ts`. El perfil NO entra al backup JSON.
+- Nueva `src/screens/WelcomeScreen.tsx`: portada TCHOUKAPP (fondo navy con acentos celestes, tarjeta blanca) con formulario de nombre obligatorio y email opcional, errores en espanol.
+- `App.tsx`: gate de sesion (sin perfil -> `Welcome`; con perfil -> stack completo), espera la hidratacion de match store y session store, pantalla de carga con marca, colores de navegacion desde el theme. `RootStackParamList` suma `Welcome`.
+- `src/screens/HomeScreen.tsx`: hero rebrandeado a `TCHOUKAPP` (kicker `Tchoukball Uruguay`), saludo `Hola, {nombre}` y boton `Cerrar sesion` (solo borra el perfil, no los datos deportivos).
+- `app.json`: `name` -> `TchoukApp`; splash y adaptive icon con fondo navy. Se mantienen `slug` e identificadores nativos (decision 006). `package.json` -> `tchoukapp`.
+- `src/domain/backup.ts`: `BACKUP_APP_NAME` -> `TchoukApp` con `BACKUP_LEGACY_APP_NAMES` (`Tchoukball Uruguay`) para importar backups viejos sin advertencia. Tests actualizados.
+- `docs/constitution.md`: nombre del producto, login local como excepcion aprobada, boundaries de monetizacion e identificadores nativos.
+
+Validacion:
+
+- `npx tsc --noEmit`: OK.
+- `npm test`: 431 tests en verde (18 nuevos).
+
+Limitaciones conocidas:
+
+- El login es identidad local, no seguridad: cualquiera con el dispositivo puede crear un perfil.
+- La mayoria de las pantallas internas mantienen colores hardcodeados (ya coherentes con la paleta); migracion a tokens del theme es incremental.
+- Suscripcion, pagos y backend siguen fuera de alcance hasta decision explicita de lanzamiento.
+
+QA manual sugerida:
+
+- Primera apertura muestra la portada; login con nombre entra a `Inicio`.
+- Cerrar y reabrir la app entra directo a `Inicio` con el saludo.
+- `Cerrar sesion` vuelve a la portada sin perder jugadores, partidos ni entrenamientos.
+- Importar un backup exportado antes del rename no muestra advertencia de otra app.
+- Nombre invalido o email malformado muestran error en espanol en la portada.
+
 ## 2026-06-29 - Estadística 7v7 Stage 6 (backup/import v3)
 
 Se incorporo `Estadística 7v7` al backup JSON local (spec/plan 013) de forma aditiva, sin romper backups previos ni tocar partidos formales, `Practica 3v3` ni `Modo Entrenamiento`.
