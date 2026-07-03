@@ -46,6 +46,10 @@ export function ProfileScreen() {
   const verifiedDaysAgo = Number.isFinite(verifiedMs)
     ? Math.max(0, Math.floor((Date.now() - verifiedMs) / 86400000))
     : undefined;
+  const expiryMs = entitlement?.expiresAt ? Date.parse(entitlement.expiresAt) : Number.NaN;
+  const expiryLabel = Number.isFinite(expiryMs)
+    ? new Intl.DateTimeFormat('es-UY', { day: '2-digit', month: 'long', year: 'numeric' }).format(new Date(expiryMs))
+    : '';
   const initial = profile?.name?.trim().charAt(0).toUpperCase() || '?';
   const nameDirty = nameInput.trim() !== (profile?.name ?? '') && nameInput.trim().length > 0;
 
@@ -155,6 +159,7 @@ export function ProfileScreen() {
               value={graceDaysLeft === 1 ? 'queda 1 día' : `quedan ${graceDaysLeft} días`}
             />
           ) : null}
+          {expiryLabel ? <ProfileRow label="Válida hasta" value={expiryLabel} /> : null}
           {licenseStatus ? <Text style={styles.muted}>{licenseStatus}</Text> : null}
           <ActionButton
             disabled={licenseBusy}

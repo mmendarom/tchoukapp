@@ -7,7 +7,7 @@ Si la app corre **sin** las variables de entorno, funciona en modo local (login 
 ## Setup (una sola vez)
 
 1. Crear un proyecto en [supabase.com](https://supabase.com) (capa gratis alcanza).
-2. En el **SQL editor**, correr `migrations/0001_entitlements.sql`.
+2. En el **SQL editor**, correr `migrations/0001_entitlements.sql` y despues `migrations/0002_entitlement_expiry.sql` (vencimiento de cortesias: 1/1/2027).
 3. En **Authentication -> Sign In / Up -> Email**: dejar habilitado el login por email.
 4. **Obligatorio: SMTP propio + plantillas con codigo.** La app usa codigo OTP, pero las plantillas default de Supabase mandan un enlace magico que apunta a localhost, y en el plan gratis **no se pueden editar sin SMTP propio**. Configurar primero el SMTP (gratis, con Gmail):
    - En Google ([myaccount.google.com](https://myaccount.google.com) -> Seguridad): activar verificacion en 2 pasos y crear una **contrasena de aplicacion** llamada `Supabase` (clave de 16 caracteres).
@@ -67,12 +67,30 @@ from auth.users u
 where u.id = e.user_id and u.email = 'companero@email.com';
 ```
 
+Renovar o cambiar el vencimiento de una cortesia (null = sin vencimiento):
+
+```sql
+update public.entitlements e
+set expires_at = '2028-01-01T00:00:00Z'
+from auth.users u
+where u.id = e.user_id and u.email = 'companero@email.com';
+```
+
+Extender todas las cortesias a la vez:
+
+```sql
+update public.entitlements
+set expires_at = '2028-01-01T00:00:00Z'
+where plan = 'cortesia';
+```
+
 ## Como funciona el acceso en la app
 
 - Login por email + codigo OTP (6 a 10 digitos segun la config del proyecto). El nombre se pide en el mismo formulario.
 - La app cachea la licencia con la fecha de la ultima verificacion online y la refresca en background al abrir.
 - **Gracia offline: 14 dias.** Con licencia activa verificada, la app funciona sin conexion hasta 14 dias; despues bloquea en el arranque hasta reverificar (salvo partido en vivo activo, que nunca se bloquea).
 - `pending` y `revoked` bloquean con mensaje y boton de reintento.
+- Las licencias tienen `expires_at` (cortesias: 1/1/2027). Al vencer, la app bloquea con "Licencia vencida"; renovar es un `update` de `expires_at`. El vencimiento se muestra en la pantalla Perfil.
 
 ## Pendiente (etapas futuras)
 

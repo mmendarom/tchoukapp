@@ -87,7 +87,7 @@ export const fetchEntitlement = async (): Promise<AccountResult<{ entitlement: A
 
     const { data, error } = await supabase
       .from('entitlements')
-      .select('plan, status')
+      .select('plan, status, expires_at')
       .eq('user_id', userData.user.id)
       .maybeSingle();
 
@@ -98,10 +98,11 @@ export const fetchEntitlement = async (): Promise<AccountResult<{ entitlement: A
     // Fila ausente (registro anterior al trigger): tratar como pendiente.
     const plan = isPlan(data?.plan) ? data.plan : 'cortesia';
     const status = isStatus(data?.status) ? data.status : 'pending';
+    const expiresAt = typeof data?.expires_at === 'string' ? data.expires_at : undefined;
 
     return {
       success: true,
-      entitlement: { plan, status, verifiedAt: new Date().toISOString() },
+      entitlement: { plan, status, verifiedAt: new Date().toISOString(), expiresAt },
     };
   } catch {
     return { success: false, error: NETWORK_ERROR };

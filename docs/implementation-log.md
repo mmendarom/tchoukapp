@@ -1,5 +1,19 @@
 # Implementation Log
 
+## 2026-07-03 - Variables en EAS y vencimiento de cortesias (1/1/2027)
+
+Preparacion para la primera build compartible y limite temporal de las cortesias.
+
+- `eas.json`: `EXPO_PUBLIC_SUPABASE_URL` y `EXPO_PUBLIC_SUPABASE_ANON_KEY` en los tres perfiles de build (development, preview, production). La publishable key es de cliente (segura de versionar; RLS protege los datos).
+- Nueva `supabase/migrations/0002_entitlement_expiry.sql`: columna `expires_at` en `entitlements`, cortesias existentes y nuevas con vencimiento `2027-01-01T00:00:00Z` (trigger actualizado). `null` = sin vencimiento.
+- `src/domain/session.ts`: `AccountEntitlement.expiresAt?`; `evaluateAccess` suma el estado `lapsed` (vencimiento cumplido; la revocacion pesa mas, y aplica tambien sobre `pending`).
+- `accountService.fetchEntitlement` trae `expires_at`; `AccessBlockedScreen` muestra "Licencia vencida" con indicacion de renovar; `Perfil` muestra "Válida hasta {fecha}".
+- `supabase/README.md`: paso de la migracion 0002 y snippets para renovar vencimientos (individual y masivo).
+
+Validacion: `npx tsc --noEmit` OK; `npm test` 447 tests en verde (3 nuevos).
+
+Pendiente manual: correr la migracion 0002 en el SQL editor del proyecto ANTES de usar esta version de la app: el `select` pide `expires_at` y falla si la columna no existe (la verificacion de licencia devolveria error hasta correrla).
+
 ## 2026-07-02 - Badges "En desarrollo" y pantalla Perfil
 
 Transparencia sobre features en testing y un lugar propio para la configuracion de usuario.

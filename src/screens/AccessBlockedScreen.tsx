@@ -24,6 +24,10 @@ const MESSAGES: Record<string, { title: string; copy: string }> = {
     title: 'Verificación vencida',
     copy: 'Pasaron más de 14 días sin verificar tu licencia. Conectate a internet y reintentá para seguir usando la app.',
   },
+  lapsed: {
+    title: 'Licencia vencida',
+    copy: 'Tu licencia llegó a su fecha de vencimiento. Contactá a Mauro para renovarla.',
+  },
 };
 
 export function AccessBlockedScreen({ access }: Props) {

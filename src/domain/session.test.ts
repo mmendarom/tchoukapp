@@ -137,6 +137,28 @@ describe('evaluateAccess y hasActiveAccess', () => {
     expect(evaluateAccess(profile, now)).toBe('expired');
   });
 
+  it('licencia con vencimiento cumplido queda vencida (lapsed) aunque este activa', () => {
+    const lapsed = accountProfile({ ...activeEntitlement(now), expiresAt: '2026-06-30T00:00:00.000Z' });
+    const pendingLapsed = accountProfile({ plan: 'cortesia', status: 'pending', verifiedAt: now, expiresAt: '2026-06-30T00:00:00.000Z' });
+
+    expect(evaluateAccess(lapsed, now)).toBe('lapsed');
+    expect(evaluateAccess(pendingLapsed, now)).toBe('lapsed');
+    expect(hasActiveAccess(lapsed, now)).toBe(false);
+  });
+
+  it('licencia con vencimiento futuro o sin vencimiento sigue activa', () => {
+    const future = accountProfile({ ...activeEntitlement(now), expiresAt: '2027-01-01T00:00:00.000Z' });
+
+    expect(evaluateAccess(future, now)).toBe('active');
+    expect(evaluateAccess(accountProfile(activeEntitlement(now)), now)).toBe('active');
+  });
+
+  it('la revocacion pesa mas que el vencimiento', () => {
+    const revoked = accountProfile({ plan: 'cortesia', status: 'revoked', verifiedAt: now, expiresAt: '2026-06-30T00:00:00.000Z' });
+
+    expect(evaluateAccess(revoked, now)).toBe('revoked');
+  });
+
   describe('getGraceDaysLeft', () => {
     it('no aplica para perfiles locales ni licencias no activas', () => {
       expect(getGraceDaysLeft(undefined, now)).toBeUndefined();

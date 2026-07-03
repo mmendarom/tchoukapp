@@ -12,6 +12,8 @@ export type AccountEntitlement = {
   plan: UserPlan;
   status: EntitlementStatus;
   verifiedAt: string;
+  // Vencimiento de la licencia (ISO). undefined = sin vencimiento.
+  expiresAt?: string;
 };
 
 export type UserProfile = {
@@ -93,6 +95,7 @@ export type AccessEvaluation =
   | 'active' // licencia activa verificada dentro de la gracia
   | 'pending' // licencia aún no activada por el administrador
   | 'revoked' // licencia revocada
+  | 'lapsed' // licencia con fecha de vencimiento cumplida (expiresAt)
   | 'expired'; // licencia activa pero sin verificar hace más de la gracia
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -136,12 +139,21 @@ export const evaluateAccess = (
 
   const entitlement = profile.entitlement;
 
-  if (!entitlement || entitlement.status === 'pending') {
-    return 'pending';
+  if (entitlement?.status === 'revoked') {
+    return 'revoked';
   }
 
-  if (entitlement.status === 'revoked') {
-    return 'revoked';
+  if (entitlement?.expiresAt) {
+    const expiresAt = Date.parse(entitlement.expiresAt);
+    const nowMs = Date.parse(nowIso);
+
+    if (Number.isFinite(expiresAt) && Number.isFinite(nowMs) && nowMs >= expiresAt) {
+      return 'lapsed';
+    }
+  }
+
+  if (!entitlement || entitlement.status === 'pending') {
+    return 'pending';
   }
 
   const verifiedAt = Date.parse(entitlement.verifiedAt);
