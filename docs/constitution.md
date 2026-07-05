@@ -37,7 +37,7 @@ Stack actual inspeccionado desde `package.json` y la estructura del proyecto:
 Principios tecnicos:
 
 - Offline-first por defecto. El unico uso de red propio de la app es la verificacion de licencias (spec 015), con gracia offline de 14 dias; los datos deportivos siguen 100% locales.
-- Backend minimo de cuentas y licencias en Supabase (specs 015, decision 007): login por email + codigo OTP y tabla `entitlements` de solo lectura para el cliente. Sin sync de datos, sin pagos.
+- Backend minimo de cuentas y licencias en Supabase (specs 015/016, decisiones 007/008): login por email + codigo OTP y tabla `entitlements` de solo lectura para el cliente (RLS sin policies de escritura). La unica excepcion es un panel de administracion minimo (spec 016): funciones Postgres `security definer` (`admin_list_entitlements`, `admin_set_entitlement_status`) que verifican adentro que el email es `mauromendaro@gmail.com` antes de listar o cambiar un estado; el resto de los usuarios no puede ejecutarlas. Sin sync de datos, sin pagos.
 - Modo local sin backend: si `EXPO_PUBLIC_SUPABASE_URL` / `EXPO_PUBLIC_SUPABASE_ANON_KEY` no estan configuradas, la app usa el login local de la spec 014 y no toca la red.
 - `evaluateAccess` / `hasActiveAccess` en `src/domain/session.ts` son el unico punto de corte del acceso; la suscripcion futura solo cambia como se llega a `plan: 'suscripcion'`.
 - `@supabase/supabase-js` vive aislado en `src/backend/*`; el dominio y los stores no dependen de la red.
@@ -132,8 +132,8 @@ Reglas de ubicacion futura:
 
 Evitar:
 
-- Ampliar el backend mas alla de cuentas y licencias (spec 015) sin una spec nueva: nada de sync de datos deportivos, notificaciones ni features online.
-- Escribir en `entitlements` desde el cliente o aflojar las policies de RLS.
+- Ampliar el backend mas alla de cuentas y licencias (specs 015/016) sin una spec nueva: nada de sync de datos deportivos, notificaciones ni features online.
+- Escribir en `entitlements` desde el cliente fuera de las funciones admin de spec 016, o aflojar las policies de RLS de la tabla.
 - Importar `@supabase/supabase-js` fuera de `src/backend/*`.
 - Agregar servicios pagos o integraciones de cobro antes de la decision explicita de lanzamiento (la suscripcion futura tiene su camino documentado en las decisions 006 y 007).
 - Agregar cloud sync.

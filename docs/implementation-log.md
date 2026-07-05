@@ -1,5 +1,28 @@
 # Implementation Log
 
+## 2026-07-05 - Panel de administracion de licencias en Perfil (016)
+
+Se implemento la spec/plan 016 (pedido explicito de Mauro): activar/revocar licencias de companeros desde la app, sin abrir el SQL editor de Supabase para el dia a dia. Decision 008 documenta el enfoque.
+
+- `supabase/migrations/0003_admin_entitlements.sql`: funciones `security definer` `public.is_admin()`, `public.admin_list_entitlements()` y `public.admin_set_entitlement_status(email, status)`. Verifican adentro que el email del caller sea `mauromendaro@gmail.com`; sin policies de escritura nuevas en `entitlements` (RLS intacta).
+- `src/domain/session.ts`: `ADMIN_EMAIL`, `isAdminProfile`, `AdminEntitlementRow`. Tests en `session.test.ts`.
+- `src/backend/accountService.ts`: `adminListEntitlements` y `adminSetEntitlementStatus`, mismo patron `AccountResult` que el resto del servicio.
+- `ProfileScreen`: nueva seccion `Administración` (solo visible si el perfil logueado es el admin y el backend esta configurado) con la lista de usuarios registrados (email, plan, estado) y botones `Activar` / `Revocar` por fila.
+- `supabase/README.md`: instrucciones de la migracion 0003 y nota de que el flujo diario pasa a ser la app; el SQL editor queda como respaldo.
+- `docs/constitution.md`: boundary de escritura en `entitlements` actualizado con la excepcion acotada de estas funciones.
+- No objetivo (confirmado con Mauro): pre-aprobar emails antes de que se registren queda fuera de esta spec.
+
+Validacion: `npx tsc --noEmit` OK; `npm test` en verde (tests nuevos de `isAdminProfile`).
+
+Revision posterior (mismo dia, code review multi-angulo antes de push): se corrigieron los hallazgos sobre la primera version:
+
+- **Bug fatal en la migracion**: `admin_list_entitlements` declaraba `email text` pero `auth.users.email` es `varchar(255)`; `RETURN QUERY` de plpgsql exige tipos exactos (error 42804), asi que la lista fallaba siempre. Fix: `u.email::text`. La migracion quedo re-ejecutable: si se corrio la version anterior hay que correrla entera de nuevo.
+- `admin_set_entitlement_status`: chequeo de `found` (antes un UPDATE de 0 filas reportaba exito silencioso), match de email case-insensitive y `granted_by` derivado de `auth.jwt() ->> 'email'` en vez de un literal duplicado. `is_admin()` compara en lowercase.
+- `ProfileScreen`: el gate del panel ahora exige `hasAccount` (un perfil local viejo con el email admin ya no ve un panel que solo puede fallar); busy unico `adminBusy` que cubre hasta el fin del refresh (antes habia ventana para dobles taps sobre estado viejo); la fila admin muestra el vencimiento ("Vence el / Vencida el"); `ENTITLEMENT_STATUS_LABEL` unifica las etiquetas de estado que estaban duplicadas; se elimino un `eslint-disable` de un linter que el repo no tiene.
+- `accountService.ts`: tildes en el mensaje de error de administracion.
+
+Pendiente manual: correr `0003_admin_entitlements.sql` (version corregida, completa) en el SQL editor del proyecto Supabase existente antes de usar la seccion de Administración; QA manual activando/revocando un usuario de prueba logueado como admin.
+
 ## 2026-07-03 - Variables en EAS y vencimiento de cortesias (1/1/2027)
 
 Preparacion para la primera build compartible y limite temporal de las cortesias.

@@ -4,6 +4,12 @@ export const SESSION_STORE_DATA_VERSION = 2;
 // licencia online. Al vencer bloquea en el arranque, salvo partido en vivo.
 export const ACCESS_GRACE_DAYS = 14;
 
+// Unica cuenta admin (spec 016): gestiona licencias desde el perfil sin SQL.
+export const ADMIN_EMAIL = 'mauromendaro@gmail.com';
+
+export const isAdminProfile = (profile?: UserProfile): boolean =>
+  (profile?.email ?? '').trim().toLowerCase() === ADMIN_EMAIL;
+
 export type UserPlan = 'cortesia' | 'suscripcion';
 
 export type EntitlementStatus = 'pending' | 'active' | 'revoked';
@@ -27,6 +33,16 @@ export type UserProfile = {
   // (spec 015). Sin accountId el perfil es de modo local (spec 014).
   accountId?: string;
   entitlement?: AccountEntitlement;
+};
+
+// Fila de licencia de otro usuario, vista por el admin (spec 016).
+export type AdminEntitlementRow = {
+  email: string;
+  plan: UserPlan;
+  status: EntitlementStatus;
+  grantedBy?: string;
+  expiresAt?: string;
+  updatedAt: string;
 };
 
 export type SessionProfileInput = {

@@ -7,6 +7,7 @@ import {
   evaluateAccess,
   getGraceDaysLeft,
   hasActiveAccess,
+  isAdminProfile,
   validateProfileInput,
 } from './session';
 
@@ -157,6 +158,19 @@ describe('evaluateAccess y hasActiveAccess', () => {
     const revoked = accountProfile({ plan: 'cortesia', status: 'revoked', verifiedAt: now, expiresAt: '2026-06-30T00:00:00.000Z' });
 
     expect(evaluateAccess(revoked, now)).toBe('revoked');
+  });
+
+  describe('isAdminProfile', () => {
+    it('reconoce el email admin sin importar mayusculas o espacios', () => {
+      expect(isAdminProfile(accountProfile(undefined))).toBe(false);
+      expect(isAdminProfile({ ...localProfile, email: '  Mauromendaro@Gmail.com  ' })).toBe(true);
+      expect(isAdminProfile({ ...localProfile, email: 'mauromendaro@gmail.com' })).toBe(true);
+    });
+
+    it('devuelve false sin perfil o sin email', () => {
+      expect(isAdminProfile(undefined)).toBe(false);
+      expect(isAdminProfile(localProfile)).toBe(false);
+    });
   });
 
   describe('getGraceDaysLeft', () => {

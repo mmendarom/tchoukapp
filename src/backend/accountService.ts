@@ -1,4 +1,4 @@
-import { AccountEntitlement, EntitlementStatus, UserPlan } from '../domain/session';
+import { AccountEntitlement, AdminEntitlementRow, EntitlementStatus, UserPlan } from '../domain/session';
 import { getSupabaseClient } from './supabaseClient';
 
 const BACKEND_UNAVAILABLE_ERROR = 'El servidor no está configurado en esta versión de la app.';
@@ -6,6 +6,7 @@ const NETWORK_ERROR = 'No se pudo conectar. Revisá tu conexión e intentá de n
 const SEND_CODE_ERROR = 'No se pudo enviar el código.';
 const INVALID_CODE_ERROR = 'El código no es válido o expiró. Pedí uno nuevo.';
 const NO_SESSION_ERROR = 'No hay una sesión activa en el servidor.';
+const ADMIN_ERROR = 'No se pudo completar la acción de administración.';
 
 // El detalle técnico de Supabase (en inglés) se anexa para poder diagnosticar
 // fallas de configuración (key inválida, signups deshabilitados, rate limit).
@@ -104,6 +105,63 @@ export const fetchEntitlement = async (): Promise<AccountResult<{ entitlement: A
       success: true,
       entitlement: { plan, status, verifiedAt: new Date().toISOString(), expiresAt },
     };
+  } catch {
+    return { success: false, error: NETWORK_ERROR };
+  }
+};
+
+// Administracion de licencias (spec 016): RPCs security definer que solo
+// aceptan al email admin; ver supabase/migrations/0003_admin_entitlements.sql.
+export const adminListEntitlements = async (): Promise<AccountResult<{ entitlements: AdminEntitlementRow[] }>> => {
+  const supabase = getSupabaseClient();
+
+  if (!supabase) {
+    return { success: false, error: BACKEND_UNAVAILABLE_ERROR };
+  }
+
+  try {
+    const { data, error } = await supabase.rpc('admin_list_entitlements');
+
+    if (error) {
+      return { success: false, error: withDetail(ADMIN_ERROR, error.message) };
+    }
+
+    const entitlements: AdminEntitlementRow[] = (data ?? []).map((row: Record<string, unknown>) => ({
+      email: String(row.email),
+      plan: isPlan(row.plan) ? row.plan : 'cortesia',
+      status: isStatus(row.status) ? row.status : 'pending',
+      grantedBy: typeof row.granted_by === 'string' ? row.granted_by : undefined,
+      expiresAt: typeof row.expires_at === 'string' ? row.expires_at : undefined,
+      updatedAt: typeof row.updated_at === 'string' ? row.updated_at : new Date().toISOString(),
+    }));
+
+    return { success: true, entitlements };
+  } catch {
+    return { success: false, error: NETWORK_ERROR };
+  }
+};
+
+export const adminSetEntitlementStatus = async (
+  email: string,
+  status: EntitlementStatus,
+): Promise<AccountResult<object>> => {
+  const supabase = getSupabaseClient();
+
+  if (!supabase) {
+    return { success: false, error: BACKEND_UNAVAILABLE_ERROR };
+  }
+
+  try {
+    const { error } = await supabase.rpc('admin_set_entitlement_status', {
+      target_email: email.trim(),
+      new_status: status,
+    });
+
+    if (error) {
+      return { success: false, error: withDetail(ADMIN_ERROR, error.message) };
+    }
+
+    return { success: true };
   } catch {
     return { success: false, error: NETWORK_ERROR };
   }

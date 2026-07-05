@@ -7,7 +7,7 @@ Si la app corre **sin** las variables de entorno, funciona en modo local (login 
 ## Setup (una sola vez)
 
 1. Crear un proyecto en [supabase.com](https://supabase.com) (capa gratis alcanza).
-2. En el **SQL editor**, correr `migrations/0001_entitlements.sql` y despues `migrations/0002_entitlement_expiry.sql` (vencimiento de cortesias: 1/1/2027).
+2. En el **SQL editor**, correr en orden `migrations/0001_entitlements.sql`, `migrations/0002_entitlement_expiry.sql` (vencimiento de cortesias: 1/1/2027) y `migrations/0003_admin_entitlements.sql` (RPCs de administracion, spec 016).
 3. En **Authentication -> Sign In / Up -> Email**: dejar habilitado el login por email.
 4. **Obligatorio: SMTP propio + plantillas con codigo.** La app usa codigo OTP, pero las plantillas default de Supabase mandan un enlace magico que apunta a localhost, y en el plan gratis **no se pueden editar sin SMTP propio**. Configurar primero el SMTP (gratis, con Gmail):
    - En Google ([myaccount.google.com](https://myaccount.google.com) -> Seguridad): activar verificacion en 2 pasos y crear una **contrasena de aplicacion** llamada `Supabase` (clave de 16 caracteres).
@@ -36,9 +36,15 @@ EXPO_PUBLIC_SUPABASE_ANON_KEY=eyJ...
 
 Nota: el SMTP default de Supabase permite ~2 emails por hora y no deja editar plantillas; por eso el paso 4 es obligatorio. Si algun dia hay dominio propio, migrar de Gmail a Resend/Brevo con dominio verificado es el upgrade natural.
 
-## Administrar licencias (SQL editor)
+## Administrar licencias (desde la app)
 
-Los registros nuevos quedan `pending` (sin acceso) hasta que los actives.
+Con la migracion `0003_admin_entitlements.sql` corrida, la cuenta `mauromendaro@gmail.com` ve una seccion **Administración** en la pantalla Perfil de la app: lista todos los usuarios registrados con su plan/estado/vencimiento y permite Activar o Revocar con un boton. Reemplaza el flujo manual de abajo para el dia a dia; el SQL editor queda como respaldo y para cambiar `expires_at`.
+
+La migracion 0003 es re-ejecutable (todo `create or replace`): si corriste una version anterior del archivo, correlo entero de nuevo para quedar en la version vigente.
+
+Los registros nuevos quedan `pending` (sin acceso) hasta que los actives (desde la app o por SQL).
+
+## Administrar licencias (SQL editor, respaldo)
 
 Ver todas las licencias con email:
 

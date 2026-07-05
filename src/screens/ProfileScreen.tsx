@@ -1,11 +1,11 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Alert, StyleSheet, Text, TextInput, View } from 'react-native';
 
-import { fetchEntitlement, signOutAccount } from '../backend/accountService';
+import { adminListEntitlements, adminSetEntitlementStatus, fetchEntitlement, signOutAccount } from '../backend/accountService';
 import { isBackendConfigured } from '../backend/config';
 import { ActionButton } from '../components/ActionButton';
 import { Screen } from '../components/Screen';
-import { getGraceDaysLeft } from '../domain/session';
+import { AdminEntitlementRow, EntitlementStatus, getGraceDaysLeft, isAdminProfile } from '../domain/session';
 import { useMatchStore } from '../store/useMatchStore';
 import { useSessionStore } from '../store/useSessionStore';
 import { fontSize, spacing } from '../utils/responsive';
@@ -25,23 +25,66 @@ export function ProfileScreen() {
   const [licenseBusy, setLicenseBusy] = useState(false);
   const [licenseStatus, setLicenseStatus] = useState('');
   const [resetStatus, setResetStatus] = useState('');
+  const [adminRows, setAdminRows] = useState<AdminEntitlementRow[]>([]);
+  const [adminLoading, setAdminLoading] = useState(false);
+  const [adminError, setAdminError] = useState('');
+  const [adminBusy, setAdminBusy] = useState(false);
 
   const entitlement = profile?.accountId ? profile.entitlement : undefined;
   const hasAccount = Boolean(profile?.accountId);
   const graceDaysLeft = getGraceDaysLeft(profile);
+  // hasAccount evita mostrar el panel a un perfil local viejo que tenga el
+  // email admin sin sesion de Supabase; la autorizacion real vive en el server.
+  const isAdmin = hasAccount && isAdminProfile(profile) && isBackendConfigured();
+
+  const loadAdminList = async () => {
+    setAdminLoading(true);
+    setAdminError('');
+
+    const result = await adminListEntitlements();
+
+    setAdminLoading(false);
+
+    if (!result.success) {
+      setAdminError(result.error);
+      return;
+    }
+
+    setAdminRows(result.entitlements);
+  };
+
+  useEffect(() => {
+    if (isAdmin) {
+      void loadAdminList();
+    }
+  }, [isAdmin]);
+
+  const handleSetStatus = async (email: string, status: EntitlementStatus) => {
+    if (adminBusy || adminLoading) {
+      return;
+    }
+
+    setAdminBusy(true);
+    setAdminError('');
+
+    const result = await adminSetEntitlementStatus(email, status);
+
+    if (!result.success) {
+      setAdminBusy(false);
+      setAdminError(result.error);
+      return;
+    }
+
+    await loadAdminList();
+    setAdminBusy(false);
+  };
 
   const planLabel = !hasAccount
     ? 'Modo local'
     : entitlement?.plan === 'suscripcion'
       ? 'Suscripción'
       : 'Cortesía';
-  const statusLabel = !entitlement
-    ? 'sin verificar'
-    : entitlement.status === 'active'
-      ? 'activa'
-      : entitlement.status === 'revoked'
-        ? 'revocada'
-        : 'pendiente';
+  const statusLabel = entitlement ? ENTITLEMENT_STATUS_LABEL[entitlement.status] : 'sin verificar';
   const verifiedMs = entitlement ? Date.parse(entitlement.verifiedAt) : Number.NaN;
   const verifiedDaysAgo = Number.isFinite(verifiedMs)
     ? Math.max(0, Math.floor((Date.now() - verifiedMs) / 86400000))
@@ -170,6 +213,33 @@ export function ProfileScreen() {
         </ProfileSection>
       ) : null}
 
+      {isAdmin ? (
+        <ProfileSection title="Administración">
+          <Text style={styles.muted}>
+            Activá o revocá las licencias de cortesía de los demás usuarios. Reemplaza el SQL editor de Supabase.
+          </Text>
+          {adminError ? <Text style={styles.error}>{adminError}</Text> : null}
+          {adminLoading && adminRows.length === 0 ? <Text style={styles.muted}>Cargando usuarios...</Text> : null}
+          {!adminLoading && adminRows.length === 0 && !adminError ? (
+            <Text style={styles.muted}>Todavía no hay usuarios registrados.</Text>
+          ) : null}
+          {adminRows.map((row) => (
+            <AdminUserRow
+              busy={adminBusy || adminLoading}
+              key={row.email}
+              onSetStatus={(status) => handleSetStatus(row.email, status)}
+              row={row}
+            />
+          ))}
+          <ActionButton
+            disabled={adminLoading || adminBusy}
+            label={adminLoading ? 'Actualizando...' : 'Actualizar lista'}
+            onPress={loadAdminList}
+            variant="secondary"
+          />
+        </ProfileSection>
+      ) : null}
+
       <ProfileSection title="Datos">
         <Text style={styles.muted}>
           Restaura los jugadores, planteles y partidos de ejemplo. Útil para probar la app; borra tus datos actuales.
@@ -208,7 +278,88 @@ function ProfileRow({ label, value }: { label: string; value: string }) {
   );
 }
 
+const ENTITLEMENT_STATUS_LABEL: Record<EntitlementStatus, string> = {
+  pending: 'pendiente',
+  active: 'activa',
+  revoked: 'revocada',
+};
+
+function AdminUserRow({
+  row,
+  busy,
+  onSetStatus,
+}: {
+  row: AdminEntitlementRow;
+  busy: boolean;
+  onSetStatus: (status: EntitlementStatus) => void;
+}) {
+  const expiryMs = row.expiresAt ? Date.parse(row.expiresAt) : Number.NaN;
+  const expiryLabel = Number.isFinite(expiryMs)
+    ? `${expiryMs <= Date.now() ? 'Vencida el' : 'Vence el'} ${new Date(expiryMs).toLocaleDateString('es-UY')}`
+    : '';
+
+  return (
+    <View style={styles.adminRow}>
+      <View style={styles.adminRowHeader}>
+        <Text numberOfLines={1} style={styles.adminEmail}>
+          {row.email}
+        </Text>
+        <Text style={styles.adminStatus}>{ENTITLEMENT_STATUS_LABEL[row.status]}</Text>
+      </View>
+      {expiryLabel ? <Text style={styles.adminExpiry}>{expiryLabel}</Text> : null}
+      <View style={styles.adminActions}>
+        <ActionButton
+          disabled={busy || row.status === 'active'}
+          label="Activar"
+          onPress={() => onSetStatus('active')}
+        />
+        <ActionButton
+          disabled={busy || row.status === 'revoked'}
+          label="Revocar"
+          onPress={() => onSetStatus('revoked')}
+          variant="danger"
+        />
+      </View>
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
+  adminRow: {
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+    padding: spacing.sm,
+    gap: spacing.sm,
+  },
+  adminRowHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing.sm,
+  },
+  adminEmail: {
+    flex: 1,
+    color: colors.textPrimary,
+    fontSize: fontSize.small,
+    fontWeight: '800',
+  },
+  adminStatus: {
+    color: colors.textSecondary,
+    fontSize: fontSize.tiny,
+    fontWeight: '900',
+    textTransform: 'uppercase',
+  },
+  adminExpiry: {
+    color: colors.textSecondary,
+    fontSize: fontSize.tiny,
+    fontWeight: '700',
+  },
+  adminActions: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+  },
   headerCard: {
     borderRadius: 8,
     backgroundColor: colors.navy,
