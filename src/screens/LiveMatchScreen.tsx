@@ -8,6 +8,7 @@ import { CourtMapInput } from '../components/CourtMapInput';
 import { LineupCourt } from '../components/LineupCourt';
 import { LiveMapPanel } from '../components/LiveMapPanel';
 import { LiveRecommendationsPanel } from '../components/LiveRecommendationsPanel';
+import { PhaseTransitionOverlay } from '../components/PhaseTransitionOverlay';
 import { PlayerPerformanceBars } from '../components/PlayerPerformanceBars';
 import { Screen } from '../components/Screen';
 import { buildLiveRecommendations } from '../domain/liveRecommendations';
@@ -16,8 +17,9 @@ import { resolveMatchAvailablePlayers } from '../domain/matchSetup';
 import { normalizeOpponentName } from '../domain/opponent';
 import { buildLivePlayerPerformance } from '../domain/playerPerformance';
 import { calculateTotalScore, formatPeriodName, formatTimer, getEventsByPeriod } from '../domain/periodStats';
+import { buildPeriodEndTransition, buildPeriodStartTransition, PhaseTransitionContent } from '../domain/phaseTransition';
 import { getCurrentLineup } from '../domain/stats';
-import { CourtLocation, MatchEvent, Player } from '../domain/types';
+import { CourtLocation, MatchEvent, MatchPeriod, Player } from '../domain/types';
 import { getOwnTeamDisplayName } from '../domain/teamLabels';
 import { useMatchStore } from '../store/useMatchStore';
 import { eventKindLabel, safeErrorLabel, statusLabel, zoneLabel } from '../utils/labels';
@@ -81,6 +83,9 @@ export function LiveMatchScreen({ navigation, route }: Props) {
   const [liveMapsExpanded, setLiveMapsExpanded] = useState(false);
   const [selectedLandingLocation, setSelectedLandingLocation] = useState<CourtLocation | undefined>();
   const [selectedOpponentDefenseShooterId, setSelectedOpponentDefenseShooterId] = useState<string | undefined>();
+  const [phaseTransition, setPhaseTransition] = useState<PhaseTransitionContent | undefined>();
+  // Acción diferida hasta que termina la animación de fase (spec 018).
+  const [pendingSummaryPeriod, setPendingSummaryPeriod] = useState<MatchPeriod | undefined>();
   const feedbackOpacity = useRef(new Animated.Value(0)).current;
   const feedbackTranslateY = useRef(new Animated.Value(-8)).current;
   const players = useMatchStore((state) => state.players);
@@ -287,7 +292,27 @@ export function LiveMatchScreen({ navigation, route }: Props) {
 
   const finishPeriod = () => {
     endCurrentPeriod();
-    navigation.navigate('PeriodSummary', { matchId: match.id, periodNumber: match.currentPeriod });
+    setPendingSummaryPeriod(match.currentPeriod);
+    setPhaseTransition(buildPeriodEndTransition(match.currentPeriod, ownTeamName, score.uruguay, opponentName, score.opponent));
+  };
+
+  const startNextPeriodWithTransition = () => {
+    const nextPeriod = Math.min(match.currentPeriod + 1, 3) as MatchPeriod;
+
+    advancePeriod();
+    startCurrentPeriod();
+    setPhaseTransition(buildPeriodStartTransition(nextPeriod));
+  };
+
+  const handlePhaseTransitionFinished = () => {
+    const summaryPeriod = pendingSummaryPeriod;
+
+    setPhaseTransition(undefined);
+    setPendingSummaryPeriod(undefined);
+
+    if (summaryPeriod) {
+      navigation.navigate('PeriodSummary', { matchId: match.id, periodNumber: summaryPeriod });
+    }
   };
 
   const toggleTimer = () => {
@@ -629,10 +654,7 @@ export function LiveMatchScreen({ navigation, route }: Props) {
             {match.currentPeriod < 3 ? (
               <ActionButton
                 label="Iniciar siguiente tiempo"
-                onPress={() => {
-                  advancePeriod();
-                  startCurrentPeriod();
-                }}
+                onPress={startNextPeriodWithTransition}
                 variant="secondary"
               />
             ) : (
@@ -911,6 +933,8 @@ export function LiveMatchScreen({ navigation, route }: Props) {
           </View>
         </View>
       )}
+
+      <PhaseTransitionOverlay content={phaseTransition} onFinished={handlePhaseTransitionFinished} />
     </Screen>
   );
 }

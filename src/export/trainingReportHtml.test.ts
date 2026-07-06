@@ -143,6 +143,23 @@ describe('training report html', () => {
     expect(html).not.toMatch(/marco izquierdo|marco derecho|zona izquierda|zona derecha|120°|150°|180°/i);
   });
 
+  it('deja fluir las secciones y protege los bloques atómicos para no dejar hojas casi vacías', () => {
+    const html = richHtml();
+    const sectionRule = html.match(/\.section \{[^}]*\}/)?.[0] ?? '';
+
+    expect(sectionRule).not.toContain('page-break-inside: avoid');
+    expect(html).toContain('.summary-card, .team-card, .mini-card, .bar-row, .alert-grid article, tr {');
+  });
+
+  it('dibuja las barras de ataque según el porcentaje de goles', () => {
+    const html = richHtml();
+
+    // En richHtml solo p1 convierte, así que su barra ocupa el 100% de los goles.
+    expect(html).toContain('de los goles');
+    expect(html).toContain('width:100%');
+    expect(html).not.toContain('attempt-bar');
+  });
+
   it('shows empty map states safely', () => {
     const html = buildTrainingReportHtml(buildTrainingReportData(buildSession(), players));
 

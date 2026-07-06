@@ -90,6 +90,23 @@ describe('training live helpers', () => {
       playerId: 'p2',
       type: 'shot_defended',
     }, session, players)).toBe('#8 Tadeo tiro defendido');
+    expect(formatTrainingEventLabel({
+      id: 'event-5',
+      sessionId: 'session-1',
+      miniMatchId: 'mini-1',
+      createdAt: 'now',
+      teamId: 'team-b',
+      playerId: 'p2',
+      type: 'error',
+      errorSubtype: 'frame',
+    }, session, players)).toBe('#8 Tadeo tiró al marco');
+  });
+
+  it('ofrece el botón Marco en la pantalla en vivo de 3v3', () => {
+    const source = readFileSync(join(process.cwd(), 'src/screens/LiveTrainingMiniMatchScreen.tsx'), 'utf8');
+
+    expect(source).toContain("recordErrorSubtype('frame')");
+    expect(source).toContain('label="Marco"');
   });
 
   it('keeps live training UI player-centric and stops creating standalone defense events', () => {

@@ -16,7 +16,7 @@ export type TrainingEventType =
   | 'error'
   | 'own_point_against';
 
-export type TrainingErrorSubtype = 'invasion' | 'line_step' | 'turnover';
+export type TrainingErrorSubtype = 'invasion' | 'line_step' | 'turnover' | 'frame';
 
 export type TrainingSessionSettings = {
   targetScore: number;

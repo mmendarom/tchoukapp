@@ -108,19 +108,18 @@ const renderStandings = (report: TrainingReportData) => `
 `;
 
 const renderAttackRows = (report: TrainingReportData) => {
-  const maxAttempts = Math.max(...report.performance.attackRows.map((row) => row.attempts), 1);
   const rows = report.performance.attackRows.filter((row) => row.attempts > 0);
 
   if (rows.length === 0) {
     return renderEmpty('Sin tiros registrados.');
   }
 
-  return rows.map((row) => renderAttackRow(row, maxAttempts, report.performance.topAttackPlayerIds.has(row.playerId))).join('');
+  return rows.map((row) => renderAttackRow(row, report.performance.topAttackPlayerIds.has(row.playerId))).join('');
 };
 
-const renderAttackRow = (row: TrainingPerformanceAttackRow, maxAttempts: number, isTop: boolean) => {
-  const attemptWidth = Math.min(row.attempts / maxAttempts, 1) * 100;
-  const pointWidth = Math.min(row.points / maxAttempts, 1) * 100;
+const renderAttackRow = (row: TrainingPerformanceAttackRow, isTop: boolean) => {
+  // El ancho representa la participación del jugador en el total de goles.
+  const pointWidth = Math.min(row.pointShare, 1) * 100;
   const misses = [row.shotsDefended ? plural(row.shotsDefended, 'atajado', 'atajados') : '', row.ownPointsAgainst ? plural(row.ownPointsAgainst, 'errado', 'errados') : '']
     .filter(Boolean)
     .join(' · ');
@@ -134,9 +133,9 @@ const renderAttackRow = (row: TrainingPerformanceAttackRow, maxAttempts: number,
       ${row.teamName ? `<p>${escapeHtml(row.teamName)}</p>` : ''}
       ${misses ? `<p>${escapeHtml(misses)}</p>` : ''}
       <div class="bar-track attack-track">
-        <span class="attempt-bar" style="width:${attemptWidth}%"></span>
         <span class="point-bar" style="width:${pointWidth}%"></span>
       </div>
+      <p class="bar-share">${formatPercent(row.pointShare)} de los goles</p>
     </article>
   `;
 };
@@ -343,7 +342,8 @@ const renderPlayerMetricCards = (player: TrainingReportPlayerDetail) => `
 `;
 
 const renderPlayerPerformance = (player: TrainingReportPlayerDetail) => {
-  const attackWidth = player.attempts > 0 ? Math.min(player.points / player.attempts, 1) * 100 : 0;
+  // El ancho de la barra de ataque es la participación en el total de goles.
+  const attackWidth = Math.min(player.pointShare, 1) * 100;
   const defenseWidth = Math.min(player.defenseShare, 1) * 100;
   const breakdown = [
     player.shotsDefended ? plural(player.shotsDefended, 'atajado', 'atajados') : '',
@@ -360,9 +360,9 @@ const renderPlayerPerformance = (player: TrainingReportPlayerDetail) => {
         </div>
         ${breakdown ? `<p>${escapeHtml(breakdown)}</p>` : '<p>Sin atajados ni errados.</p>'}
         <div class="bar-track attack-track">
-          <span class="attempt-bar" style="width:${player.attempts > 0 ? 100 : 0}%"></span>
           <span class="point-bar" style="width:${attackWidth}%"></span>
         </div>
+        <p>${formatPercent(player.pointShare)} de los goles</p>
       </article>
       <article class="player-performance-card defense-card">
         <h4>Defensa</h4>
@@ -454,7 +454,15 @@ export function buildTrainingReportHtml(report: TrainingReportData) {
       text-transform: uppercase;
     }
     .summary-card strong { display: block; font-size: 17px; margin-top: 3px; }
-    .section { margin-bottom: 14px; page-break-inside: avoid; }
+    /* Las secciones fluyen entre páginas; solo los bloques atómicos de abajo
+       evitan partirse. Así no queda una hoja casi vacía cuando una sección
+       grande no entra en el espacio restante. */
+    .section { margin-bottom: 14px; }
+    .section h2 { break-after: avoid; page-break-after: avoid; }
+    .summary-card, .team-card, .mini-card, .bar-row, .alert-grid article, tr {
+      break-inside: avoid;
+      page-break-inside: avoid;
+    }
     ul, ol { margin: 0; padding-left: 18px; }
     li { margin: 3px 0; }
     table {
@@ -489,6 +497,7 @@ export function buildTrainingReportHtml(report: TrainingReportData) {
       padding: 8px;
     }
     .bar-row p { color: #5d6b7a; font-size: 10px; font-weight: 800; margin-top: 2px; }
+    .bar-share { color: #0b6bcb !important; font-weight: 900; margin-top: 4px !important; }
     .top { background: #fff; }
     .attack-top { border-color: #0b6bcb; }
     .defense-top { border-color: #0f766e; }
@@ -508,7 +517,7 @@ export function buildTrainingReportHtml(report: TrainingReportData) {
     }
     .attack-track { background: #d9ebff; }
     .defense-track { background: #ccfbf1; }
-    .attempt-bar, .point-bar, .defense-bar {
+    .point-bar, .defense-bar {
       border-radius: 999px;
       bottom: 0;
       display: block;
@@ -516,7 +525,6 @@ export function buildTrainingReportHtml(report: TrainingReportData) {
       position: absolute;
       top: 0;
     }
-    .attempt-bar { background: #8bd3ff; }
     .point-bar { background: #0b6bcb; min-width: 6px; }
     .defense-bar { background: #0f766e; min-width: 6px; }
     .mini-list { display: grid; gap: 8px; }

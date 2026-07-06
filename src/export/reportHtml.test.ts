@@ -235,6 +235,40 @@ const report: MatchReportData = {
       { x: 0.52, y: 0.32 },
     ],
   },
+  playerDetails: [
+    {
+      playerId: 'p1',
+      playerName: '#1 Mauro',
+      goals: 3,
+      shotAttempts: 5,
+      rivalDefendedShots: 1,
+      ownPointsAgainst: 1,
+      effectiveness: 0.6,
+      attackShare: 1,
+      defenses: 0,
+      defenseShare: 0,
+      errors: 1,
+      faltas: 0,
+      convertedLocations: [{ x: 0.75, y: 0.3 }],
+      defendedShotLocations: [{ x: 0.5, y: 0.3 }],
+    },
+    {
+      playerId: 'p2',
+      playerName: '#2 Marcelo',
+      goals: 0,
+      shotAttempts: 1,
+      rivalDefendedShots: 1,
+      ownPointsAgainst: 0,
+      effectiveness: 0,
+      attackShare: 0,
+      defenses: 2,
+      defenseShare: 1,
+      errors: 0,
+      faltas: 0,
+      convertedLocations: [],
+      defendedShotLocations: [],
+    },
+  ],
   lineups: {
     initial: ['#1 Mauro', '#2 Marcelo'],
     final: ['#1 Mauro', '#4 Vladi'],
@@ -256,16 +290,14 @@ describe('reportHtml', () => {
     expect(html).toContain('Goleadores');
     expect(html).toContain('Puntos en contra del rival');
     expect(html).toContain('Defensas del rival');
-    expect(html).toContain('Rendimiento ofensivo');
+    expect(html).toContain('Participación en los goles del equipo');
     expect(html).toContain('Rendimiento del tiempo');
     expect(html).toContain('Rendimiento total');
     expect(html).toContain('Efectividad ofensiva');
     expect(html).toContain('Efectividad ofensiva total');
     expect(html).toContain('Tiros atajados');
     expect(html).toContain('Errados');
-    expect(html).toContain('1 atajado · 1 errado');
-    expect(html).toContain('Tiros generados');
-    expect(html).toContain('Puntos convertidos');
+    expect(html).toContain('100% de los goles · 1 atajado · 1 errado');
     expect(html).toContain('60%');
     expect(html).toContain('Algunas defensas rivales antiguas no tienen jugador asociado');
     expect(html).toContain('Donde nos defendieron');
@@ -298,12 +330,12 @@ describe('reportHtml', () => {
     expect(html).toContain('background:#7c3aed');
     expect(html).toContain('data-map-point="0"');
     expect(html).toContain('class="performance-grid"');
-    expect(html).toContain('class="attempt-bar"');
     expect(html).toContain('class="converted-bar"');
     expect(html).toContain('class="defense-bar"');
-    expect(html).toContain('style="width:100%;height:12px;background-color:#9dcff0;"');
-    expect(html).toContain('style="width:60.0%;height:12px;background-color:#075ca8;"');
+    // La barra de ataque mide attackShare (participación en los goles), no efectividad.
+    expect(html).toContain('style="width:100.0%;height:12px;background-color:#075ca8;"');
     expect(html).toContain('style="width:100.0%;height:12px;background-color:#0b6b61;"');
+    expect(html).not.toContain('class="attempt-bar"');
     expect(html).toContain('print-color-adjust: exact');
     expect(html).toContain('#4 Vladi · 0/4 tiros · 4 atajados');
     expect(html).toContain('#2 Marcelo · 3 errores');
@@ -450,6 +482,37 @@ describe('reportHtml', () => {
     expect(html).toContain('+40 vs Etsy');
     expect(html).toContain('+40 2 - 1 Etsy');
     expect(html).toContain('Puntos +40');
+  });
+
+  it('deja fluir los contenedores grandes para no dejar hojas casi vacías', () => {
+    const html = buildMatchReportHtml(report);
+
+    expect(html).not.toContain('.report-map-section { break-inside: avoid');
+    expect(html).not.toMatch(/\.performance-grid \{[^}]*break-inside: avoid/);
+    expect(html).not.toMatch(/\.executive-section[^{]*\{[^}]*break-inside: avoid/);
+    // Los bloques chicos siguen siendo atómicos.
+    expect(html).toMatch(/\.map-card \{[^}]*break-inside: avoid/);
+    expect(html).toMatch(/\.summary-card \{ break-inside: avoid/);
+  });
+
+  it('incluye el detalle por jugador con métricas, shares y mapas individuales', () => {
+    const html = buildMatchReportHtml(report);
+
+    expect(html).toContain('Detalle por jugador');
+    expect(html).toContain('Detalle individual');
+    expect(html).toContain('100% de los goles');
+    expect(html).toContain('Dónde convirtió');
+    expect(html).toContain('Dónde le atajaron el tiro');
+    expect(html).toContain('class="player-metric-grid"');
+    expect(html).toContain('Faltas');
+    // Un bloque por jugador participante.
+    expect(html.match(/player-detail-page/g)?.length).toBeGreaterThanOrEqual(2);
+  });
+
+  it('omite la sección de detalle cuando no hay jugadores', () => {
+    const html = buildMatchReportHtml({ ...report, playerDetails: [] });
+
+    expect(html).not.toContain('Detalle por jugador');
   });
 
   it('limits dense performance cards and reports remaining players', () => {

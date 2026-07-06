@@ -72,6 +72,10 @@ export function formatTrainingEventLabel(event: TrainingEvent, session: Training
         return `${playerLabel} pisa la línea`;
       }
 
+      if (event.errorSubtype === 'frame') {
+        return `${playerLabel} tiró al marco`;
+      }
+
       if (event.errorSubtype === 'turnover' || event.errorType === 'turnover') {
         return `${playerLabel} perdió la pelota`;
       }

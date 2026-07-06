@@ -1,5 +1,50 @@
 # Implementation Log
 
+## 2026-07-05 - PDF del partido vs rival: paridad con 3v3 y detalle por jugador (019)
+
+Se comparó el export PDF del 3v3 (spec 017) con el del partido vs rival y se portaron las mejoras, más el desglose individual pedido por Mauro (spec/plan 019).
+
+- **Barras por % de goles**: la barra de ataque del PDF formal mostraba efectividad individual (goles/tiros propios); ahora usa `attackShare` (participación en los goles del equipo, dato que ya existía) con el texto "NN% de los goles". Leyenda actualizada y `attempt-bar` eliminado. Lo mismo en las barras in-app `PlayerPerformanceBars` (Rendimiento en vivo, del tiempo y total): barra por `pointShare` + texto, quitando la barra de tiros superpuesta.
+- **Paginación fluida**: se sacó `break-inside/page-break-inside: avoid` de los contenedores grandes del PDF formal (`.report-map-section` que forzaba los 3 mapas juntos ≈ una página entera, `.performance-grid`, `.executive-section`, `.tactical-sectors`); las tarjetas y filas chicas siguen siendo atómicas. Mismo criterio que el fix del 3v3 (spec 017).
+- **Nueva sección "Detalle por jugador"** al final del PDF: una página por jugador que participó (estuvo en cancha o registró eventos), con 8 métricas (puntos, tiros, efectividad, atajados, errados, defensas, errores, faltas), chip y barras de share ofensivo/defensivo, y dos mapas individuales de cancha completa (`Dónde convirtió` y `Dónde le atajaron el tiro`). Datos en `ReportPlayerDetail` / `MatchReportData.playerDetails` (`reportData.ts`), ordenados por aporte ofensivo.
+
+Validación: `npx tsc --noEmit` OK; `npm test` 464 tests en verde (nuevos: `playerDetails` con shares/errores/ubicaciones y participante sin stats; paginación de contenedores; sección de detalle con mapas; detalle omitido sin jugadores).
+
+Limitaciones: las defensas propias del partido formal no tienen ubicación en el modelo de eventos, así que el mapa individual defensivo no aplica (se muestran dónde convirtió y dónde le atajaron, que sí tienen ubicación).
+
+## 2026-07-05 - Transiciones animadas de fase en 3v3 y partido vs rival (018)
+
+Se implementó la spec/plan 018 (pedido explícito de Mauro): animaciones de transición entre fases de juego, con un overlay reutilizable. Sin cambios de reglas, scoring ni persistencia; sin dependencias nuevas (API `Animated` nativa de React Native, `useNativeDriver` en todo).
+
+- Nuevo `src/domain/phaseTransition.ts`: `PhaseTransitionContent` y builders puros (`buildMiniMatchEndTransition`, `buildPeriodEndTransition`, `buildPeriodStartTransition`). Testeados.
+- Nuevo `src/components/PhaseTransitionOverlay.tsx`: overlay a pantalla completa (Modal transparente, fondo navy + halo celeste) con secuencia entrada (spring + barrido de acento) → pausa → salida, ~2 s en total. Tocar la pantalla saltea la pausa; `onFinished` se dispara exactamente una vez (flag interno).
+- **Práctica 3v3**: "Finalizar mini partido" ahora muestra la animación (ganador + "Ahora: A vs B") y **auto-inicia el próximo mini partido sugerido** al terminar, navegando directo; ya no hace falta tocar "Iniciar próximo". Si no hay sugerido, la animación muestra solo al ganador y la tarjeta Rotación queda como fallback.
+- **Partido vs rival, fin de tiempo**: "Fin tiempo" muestra "Fin del Xer tiempo" + marcador y recién entonces navega al resumen del tiempo.
+- **Partido vs rival, nuevo tiempo**: tanto desde el resumen ("Iniciar siguiente tiempo") como desde el panel de entretiempo, se anuncia "2do/3er tiempo · ¡A jugar!" con la misma animación.
+
+Validación: `npx tsc --noEmit` OK; `npm test` 460 tests en verde (6 nuevos: builders con y sin próximo cruce, fin de tiempo con marcador, inicio de tiempo, y source-checks del cableado en las tres pantallas).
+
+QA manual sugerida:
+
+- 3v3 con 3 equipos: finalizar un mini partido y confirmar que anuncia ganador y próximo cruce, y que arranca solo.
+- 3v3: tocar el overlay durante la animación y confirmar que saltea y arranca igual (sin doble inicio).
+- Partido formal: finalizar el 1er tiempo y confirmar animación con marcador antes del resumen.
+- Desde el resumen, iniciar el 2do tiempo y confirmar el anuncio antes de volver al registro.
+- Desde el panel de entretiempo, iniciar el siguiente tiempo y confirmar el anuncio sin salir de la pantalla.
+
+## 2026-07-05 - Práctica 3v3: falta marco, PDF sin huecos y barras por % de goles (017)
+
+Tres mejoras del 3v3 pedidas por Mauro tras testeo en vivo (spec/plan 017). Sin cambios en scoring, modelo de eventos, rotación ni store.
+
+- **Falta "marco"**: `TrainingErrorSubtype` suma `'frame'`; `formatTrainingEventLabel` lo muestra como "tiró al marco"; botón "Marco" en el modal de error de `LiveTrainingMiniMatchScreen` (`errorType` queda `other`, igual que invasión/pisa la línea). Retrocompatible: eventos viejos no lo tienen y siguen leyéndose.
+- **Jerarquía del modal de error**: "Punto en contra" pasa a ocupar toda la fila y ser más alto (nuevo prop `wide` en `TrainingActionButton` + estilo `actionButtonWide`), en vez de que "Perdió la pelota" se agrandara por el acomodo del flex-wrap. Es el error más importante y ahora es el objetivo más grande del modal.
+- **PDF sin hojas casi vacías**: se sacó `page-break-inside: avoid` de `.section` en `trainingReportHtml`, así las secciones grandes fluyen entre páginas en vez de empujarse enteras. Se protegieron los bloques atómicos (`.summary-card, .team-card, .mini-card, .bar-row, .alert-grid article, tr`) con `break-inside: avoid` y los `h2` con `break-after: avoid` para no dejar títulos huérfanos. Se mantienen los avoid de performance-card, map-card, sector-card y player-detail-page.
+- **Barras por % de goles**: las barras de ataque estaban normalizadas por total de tiros y parecían todas iguales. Ahora usan `pointShare = puntos / totalPoints` (participación en el total de goles), replicando el patrón `pointShare` del partido formal (`src/domain/playerPerformance.ts`). Cambios en `trainingPerformance` (nuevo campo `pointShare`), `TrainingPerformanceBars` (barra única de goles + texto "NN% de los goles", se quitó la barra de tiros), `trainingReportData` (`pointShare` en el detalle por jugador) y `trainingReportHtml` (barra de ataque de la lista y del detalle por jugador; se eliminó el `attempt-bar` que en el detalle estaba fijo al 100%).
+
+Validación: `npx tsc --noEmit` OK; `npm test` 454 tests en verde (5 nuevos: `pointShare`, `pointShare` sin goles, etiqueta "tiró al marco", botón Marco, paginación/barras del PDF).
+
+Limitaciones: el PDF de mini partidos sigue mostrando solo marcador y cantidad de acciones (no lista cada evento), así que la falta "marco" se ve en la app y en los totales de errores, no como línea en el PDF.
+
 ## 2026-07-05 - Panel de administracion de licencias en Perfil (016)
 
 Se implemento la spec/plan 016 (pedido explicito de Mauro): activar/revocar licencias de companeros desde la app, sin abrir el SQL editor de Supabase para el dia a dia. Decision 008 documenta el enfoque.

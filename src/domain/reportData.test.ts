@@ -212,6 +212,34 @@ describe('buildMatchReportData', () => {
     expect(`${periodReading} ${finalReading}`).not.toMatch(/zona (?:derecha|izquierda|central)|asist/i);
   });
 
+  it('arma el detalle por jugador con shares, errores y ubicaciones individuales', () => {
+    const report = buildMatchReportData(
+      match([
+        point({ id: 'u-1', scoringTeam: 'uruguay', playerId: 'p1', landingLocation: { x: 0.75, y: 0.3 } }),
+        point({ id: 'u-2', scoringTeam: 'uruguay', playerId: 'p1', landingLocation: { x: 0.8, y: 0.35 } }),
+        point({ id: 'u-3', scoringTeam: 'uruguay', playerId: 'p2', landingLocation: { x: 0.7, y: 0.4 } }),
+        point({ id: 'rd-1', kind: 'opponent_defense', team: 'opponent', playerId: 'p1', defenseLocation: { x: 0.5, y: 0.3 } } as Partial<MatchEvent>),
+        point({ id: 'f-1', kind: 'error', team: 'uruguay', playerId: 'p2', errorType: 'falta' } as Partial<MatchEvent>),
+        point({ id: 'd-1', kind: 'defense', team: 'uruguay', playerId: 'p2' } as Partial<MatchEvent>),
+      ]),
+      players,
+    );
+    const p1 = report.playerDetails.find((detail) => detail.playerId === 'p1');
+    const p2 = report.playerDetails.find((detail) => detail.playerId === 'p2');
+    const p3 = report.playerDetails.find((detail) => detail.playerId === 'p3');
+
+    expect(p1).toMatchObject({ goals: 2, shotAttempts: 3, rivalDefendedShots: 1, errors: 0, faltas: 0 });
+    expect(p1?.attackShare).toBeCloseTo(2 / 3);
+    expect(p1?.convertedLocations).toHaveLength(2);
+    expect(p1?.defendedShotLocations).toHaveLength(1);
+    expect(p2).toMatchObject({ goals: 1, defenses: 1, defenseShare: 1, errors: 1, faltas: 1 });
+    expect(p2?.attackShare).toBeCloseTo(1 / 3);
+    // p3 participó (estuvo en el lineup final) aunque no registre estadísticas.
+    expect(p3).toMatchObject({ goals: 0, shotAttempts: 0, attackShare: 0, convertedLocations: [] });
+    // Ordenado por aporte ofensivo: p1 primero.
+    expect(report.playerDetails[0]?.playerId).toBe('p1');
+  });
+
   it('uses custom rival name in report labels', () => {
     const report = buildMatchReportData({ ...match(), opponent: 'Brasil' }, players);
 

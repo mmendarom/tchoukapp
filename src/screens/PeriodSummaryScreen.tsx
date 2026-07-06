@@ -1,8 +1,10 @@
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
+import { useState } from 'react';
 import { StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 
 import { ActionButton } from '../components/ActionButton';
 import { CourtMapSummary } from '../components/CourtMapSummary';
+import { PhaseTransitionOverlay } from '../components/PhaseTransitionOverlay';
 import { PlayerPerformanceBars } from '../components/PlayerPerformanceBars';
 import { Screen } from '../components/Screen';
 import {
@@ -27,8 +29,10 @@ import {
   getOpponentOwnPointsByPeriod,
   getOpponentDefensesByPeriod,
 } from '../domain/periodStats';
+import { buildPeriodStartTransition, PhaseTransitionContent } from '../domain/phaseTransition';
 import { buildPlayerPerformanceForPeriod } from '../domain/playerPerformance';
 import { getOwnTeamDisplayName } from '../domain/teamLabels';
+import { MatchPeriod } from '../domain/types';
 import { useMatchStore } from '../store/useMatchStore';
 import { RootStackParamList } from '../utils/navigation';
 import { fontSize, spacing } from '../utils/responsive';
@@ -43,6 +47,7 @@ export function PeriodSummaryScreen({ navigation, route }: Props) {
   const advancePeriod = useMatchStore((state) => state.advancePeriod);
   const startCurrentPeriod = useMatchStore((state) => state.startCurrentPeriod);
   const completeActiveMatch = useMatchStore((state) => state.completeActiveMatch);
+  const [phaseTransition, setPhaseTransition] = useState<PhaseTransitionContent | undefined>();
   const match = matches.find((item) => item.id === route.params.matchId);
 
   if (!match) {
@@ -226,7 +231,7 @@ export function PeriodSummaryScreen({ navigation, route }: Props) {
             onPress={() => {
               advancePeriod();
               startCurrentPeriod();
-              navigation.navigate('LiveMatch', { matchId: match.id });
+              setPhaseTransition(buildPeriodStartTransition(Math.min(periodNumber + 1, 3) as MatchPeriod));
             }}
           />
         ) : (
@@ -240,6 +245,14 @@ export function PeriodSummaryScreen({ navigation, route }: Props) {
           />
         )}
       </View>
+
+      <PhaseTransitionOverlay
+        content={phaseTransition}
+        onFinished={() => {
+          setPhaseTransition(undefined);
+          navigation.navigate('LiveMatch', { matchId: match.id });
+        }}
+      />
     </Screen>
   );
 }

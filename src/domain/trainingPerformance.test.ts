@@ -118,6 +118,29 @@ describe('training performance', () => {
     );
   });
 
+  it('reparte pointShare como porcentaje del total de goles', () => {
+    const data = buildTrainingPerformance(session([
+      event('p1-1', 'point', 'team-a', 'p1'),
+      event('p1-2', 'point', 'team-a', 'p1'),
+      event('p2-1', 'point', 'team-a', 'p2'),
+    ]), players);
+    const p1 = data.attackRows.find((row) => row.playerId === 'p1');
+    const p2 = data.attackRows.find((row) => row.playerId === 'p2');
+
+    expect(data.totalPoints).toBe(3);
+    expect(p1?.pointShare).toBeCloseTo(2 / 3);
+    expect(p2?.pointShare).toBeCloseTo(1 / 3);
+  });
+
+  it('deja pointShare en 0 cuando no hay goles', () => {
+    const data = buildTrainingPerformance(session([
+      event('p1-defended', 'shot_defended', 'team-a', 'p1', { defendingTeamId: 'team-b', defenderPlayerId: 'p4' }),
+    ]), players);
+
+    expect(data.totalPoints).toBe(0);
+    expect(data.attackRows.find((row) => row.playerId === 'p1')?.pointShare).toBe(0);
+  });
+
   it('sorts defense rows by defenses and share', () => {
     const data = buildTrainingPerformance(session([
       event('p4-defense-1', 'shot_defended', 'team-a', 'p1', { defendingTeamId: 'team-b', defenderPlayerId: 'p4' }),

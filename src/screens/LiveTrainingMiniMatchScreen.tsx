@@ -3,8 +3,10 @@ import { useMemo, useState } from 'react';
 import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { ActionButton } from '../components/ActionButton';
+import { PhaseTransitionOverlay } from '../components/PhaseTransitionOverlay';
 import { Screen } from '../components/Screen';
 import { TrainingGoalMapInput } from '../components/TrainingGoalMapInput';
+import { buildMiniMatchEndTransition, PhaseTransitionContent } from '../domain/phaseTransition';
 import { getSuggestedNextMiniMatch } from '../domain/training';
 import {
   formatTrainingEventLabel,
@@ -60,6 +62,8 @@ export function LiveTrainingMiniMatchScreen({ navigation, route }: Props) {
   const [pendingLocationAction, setPendingLocationAction] = useState<PendingLocationAction | undefined>();
   const [pendingLocation, setPendingLocation] = useState<CourtLocation | undefined>();
   const [feedback, setFeedback] = useState('');
+  const [phaseTransition, setPhaseTransition] = useState<PhaseTransitionContent | undefined>();
+  const [autoStartNext, setAutoStartNext] = useState(false);
   const teamA = session && miniMatch ? getTrainingTeam(session, miniMatch.teamAId) : undefined;
   const teamB = session && miniMatch ? getTrainingTeam(session, miniMatch.teamBId) : undefined;
   const teamAPlayers = useMemo(() => getTrainingTeamPlayers(teamA, players), [players, teamA]);
@@ -219,7 +223,42 @@ export function LiveTrainingMiniMatchScreen({ navigation, route }: Props) {
   const handleFinishMiniMatch = () => {
     const finished = finishMiniMatch(session.id, miniMatch.id);
 
-    setFeedback(finished ? 'Mini partido finalizado.' : 'El mini partido necesita ganador para finalizar.');
+    if (!finished) {
+      setFeedback('El mini partido necesita ganador para finalizar.');
+      return;
+    }
+
+    setFeedback('');
+
+    // finishMiniMatch ya avanzó la cola: el ganador y el sugerido salen del estado nuevo.
+    const updatedSession = useTrainingStore.getState().trainingSessions.find((item) => item.id === session.id);
+    const finishedMiniMatch = updatedSession?.miniMatches.find((item) => item.id === miniMatch.id);
+    const suggestion = updatedSession ? getSuggestedNextMiniMatch(updatedSession) : undefined;
+    const winnerName = updatedSession && finishedMiniMatch?.winnerTeamId
+      ? getTrainingTeamName(updatedSession, finishedMiniMatch.winnerTeamId)
+      : 'Equipo';
+    const nextMatchupLabel = updatedSession && suggestion
+      ? `${getTrainingTeamName(updatedSession, suggestion.teamAId)} vs ${getTrainingTeamName(updatedSession, suggestion.teamBId)}`
+      : undefined;
+
+    setAutoStartNext(Boolean(suggestion));
+    setPhaseTransition(buildMiniMatchEndTransition(winnerName, nextMatchupLabel));
+  };
+  const handlePhaseTransitionFinished = () => {
+    setPhaseTransition(undefined);
+
+    if (!autoStartNext) {
+      return;
+    }
+
+    setAutoStartNext(false);
+    const nextMiniMatchId = startSuggestedNextMiniMatch(session.id);
+
+    if (nextMiniMatchId) {
+      navigation.navigate('LiveTrainingMiniMatch', { sessionId: session.id, miniMatchId: nextMiniMatchId });
+    } else {
+      setFeedback('No se pudo iniciar el próximo mini partido. Elegilo desde la sesión.');
+    }
   };
   const handleStartSuggestedNext = () => {
     const nextMiniMatchId = startSuggestedNextMiniMatch(session.id);
@@ -338,9 +377,10 @@ export function LiveTrainingMiniMatchScreen({ navigation, route }: Props) {
             <View style={styles.modalCard}>
               <Text style={styles.modalTitle}>Error de {errorPlayerLabel}</Text>
               <View style={styles.modalActions}>
-                <TrainingActionButton label="Punto en contra" tone="red" onPress={recordOwnPointAgainst} />
+                <TrainingActionButton label="Punto en contra" tone="red" onPress={recordOwnPointAgainst} wide />
                 <TrainingActionButton label="Invasión" tone="orange" onPress={() => recordErrorSubtype('invasion')} />
                 <TrainingActionButton label="Pisa la línea" tone="orange" onPress={() => recordErrorSubtype('line_step')} />
+                <TrainingActionButton label="Marco" tone="orange" onPress={() => recordErrorSubtype('frame')} />
                 <TrainingActionButton label="Perdió la pelota" tone="orange" onPress={() => recordErrorSubtype('turnover')} />
               </View>
               <ActionButton label="Cancelar" onPress={closeAllModals} variant="secondary" />
@@ -358,6 +398,8 @@ export function LiveTrainingMiniMatchScreen({ navigation, route }: Props) {
           selectedLocation={pendingLocation}
         />
       )}
+
+      <PhaseTransitionOverlay content={phaseTransition} onFinished={handlePhaseTransitionFinished} />
     </Screen>
   );
 }
@@ -405,13 +447,19 @@ function TrainingActionButton({
   label,
   onPress,
   tone,
+  wide = false,
 }: {
   label: string;
   onPress: () => void;
   tone: 'blue' | 'red' | 'purple' | 'orange';
+  wide?: boolean;
 }) {
   return (
-    <Pressable accessibilityRole="button" onPress={onPress} style={({ pressed }) => [styles.actionButton, styles[`${tone}Action`], pressed && styles.pressed]}>
+    <Pressable
+      accessibilityRole="button"
+      onPress={onPress}
+      style={({ pressed }) => [styles.actionButton, wide && styles.actionButtonWide, styles[`${tone}Action`], pressed && styles.pressed]}
+    >
       <Text style={styles.actionText}>{label}</Text>
     </Pressable>
   );
@@ -528,6 +576,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     padding: spacing.sm,
+  },
+  // "Punto en contra" ocupa toda la fila y es más alto: es el error más
+  // importante y debe ser el objetivo más grande del modal.
+  actionButtonWide: {
+    flexBasis: '100%',
+    minHeight: 96,
   },
   actionText: {
     color: '#ffffff',

@@ -42,7 +42,6 @@ export const TrainingPerformanceBars = memo(function TrainingPerformanceBars({
               key={`attack-${row.playerId}`}
               isTop={data.topAttackPlayerIds.has(row.playerId)}
               row={row}
-              totalAttempts={data.totalAttempts}
             />
           ))}
         </View>
@@ -71,16 +70,12 @@ export const TrainingPerformanceBars = memo(function TrainingPerformanceBars({
 function AttackRow({
   isTop,
   row,
-  totalAttempts,
 }: {
   isTop: boolean;
   row: TrainingPerformanceAttackRow;
-  totalAttempts: number;
 }) {
-  const attemptShare = totalAttempts > 0 ? row.attempts / totalAttempts : 0;
-  const pointShare = totalAttempts > 0 ? row.points / totalAttempts : 0;
-  const attemptBarWidth = `${clampShare(attemptShare) * 100}%` as DimensionValue;
-  const pointBarWidth = `${clampShare(pointShare) * 100}%` as DimensionValue;
+  // La barra mide la participación del jugador en el total de goles.
+  const pointBarWidth = `${clampShare(row.pointShare) * 100}%` as DimensionValue;
   const defendedText = row.shotsDefended > 0 ? plural(row.shotsDefended, 'atajado', 'atajados') : '';
   const missedText = row.ownPointsAgainst > 0 ? plural(row.ownPointsAgainst, 'errado', 'errados') : '';
   const breakdown = [defendedText, missedText].filter(Boolean).join(' · ');
@@ -99,9 +94,9 @@ function AttackRow({
       {row.teamName ? <Text numberOfLines={1} style={styles.teamText}>{row.teamName}</Text> : null}
       {breakdown ? <Text adjustsFontSizeToFit numberOfLines={1} style={styles.breakdownText}>{breakdown}</Text> : null}
       <View style={[styles.track, styles.attackTrack]}>
-        <View style={[styles.attemptBar, { width: attemptBarWidth }]} />
         <View style={[styles.bar, styles.attackBar, isTop && styles.topBar, { width: pointBarWidth }]} />
       </View>
+      <Text style={styles.shareText}>{formatPercent(row.pointShare)} de los goles</Text>
     </View>
   );
 }
@@ -272,6 +267,11 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     textAlign: 'right',
   },
+  shareText: {
+    color: '#0b6bcb',
+    fontSize: fontSize.tiny,
+    fontWeight: '900',
+  },
   track: {
     height: 8,
     borderRadius: 8,
@@ -282,14 +282,6 @@ const styles = StyleSheet.create({
   },
   defenseTrack: {
     backgroundColor: '#ccfbf1',
-  },
-  attemptBar: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    top: 0,
-    backgroundColor: '#8bd3ff',
-    borderRadius: 8,
   },
   bar: {
     height: '100%',

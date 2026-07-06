@@ -3,6 +3,7 @@ import {
   PeriodReportData,
   ReportEffectivenessRow,
   ReportLocationMaps,
+  ReportPlayerDetail,
   ReportPlayerPerformance,
   ReportPlayerPerformanceRow,
   ReportStat,
@@ -105,17 +106,16 @@ const effectivenessHtml = (items: ReportEffectivenessRow[], legacyOpponentDefens
 `;
 
 const attackPerformanceRowHtml = (item: ReportPlayerPerformanceRow) => {
-  const convertedWidth = item.shotAttempts > 0 ? clampPercent((item.goals / item.shotAttempts) * 100) : 0;
+  // El ancho representa la participación del jugador en los goles del equipo (spec 019).
+  const convertedWidth = clampPercent(item.attackShare * 100);
   const effectiveness = typeof item.effectiveness === 'number' ? formatPercent(item.effectiveness) : 'Sin tiros';
 
   return `<div class="performance-row">
     <div class="performance-meta"><strong>${escapeHtml(item.playerName)}</strong><span>${item.goals}/${item.shotAttempts} tiros · ${escapeHtml(effectiveness)}</span></div>
     <div class="performance-track attack-track" style="height:12px;background-color:#d8ecf8;">
-      <div class="attempt-bar" style="width:100%;height:12px;background-color:#9dcff0;">
-        <div class="converted-bar" style="width:${convertedWidth.toFixed(1)}%;height:12px;background-color:#075ca8;">&nbsp;</div>
-      </div>
+      <div class="converted-bar" style="width:${convertedWidth.toFixed(1)}%;height:12px;background-color:#075ca8;">&nbsp;</div>
     </div>
-    <small>${formatCount(item.rivalDefendedShots, 'atajado', 'atajados')} · ${formatCount(item.ownPointsAgainst, 'errado', 'errados')}</small>
+    <small>${escapeHtml(formatPercent(item.attackShare))} de los goles · ${formatCount(item.rivalDefendedShots, 'atajado', 'atajados')} · ${formatCount(item.ownPointsAgainst, 'errado', 'errados')}</small>
   </div>`;
 };
 
@@ -147,7 +147,7 @@ const performanceHtml = (performance: ReportPlayerPerformance) => {
   return `<div class="performance-grid">
     <div class="performance-column attack-performance-card">
       <h4>Ataque</h4>
-      <p class="performance-legend">Rendimiento ofensivo · <span class="legend-attempt"></span> Tiros generados <span class="legend-converted"></span> Puntos convertidos</p>
+      <p class="performance-legend"><span class="legend-converted"></span> Participación en los goles del equipo</p>
       ${attackRows.length === 0 ? '<p class="muted">Sin tiros registrados.</p>' : visibleAttackRows.map(attackPerformanceRowHtml).join('')}
       ${attackRows.length > PERFORMANCE_ROW_LIMIT ? `<p class="more-rows">+${attackRows.length - PERFORMANCE_ROW_LIMIT} jugadores más</p>` : ''}
     </div>
@@ -318,6 +318,64 @@ const renderMapStack = (maps: ReportLocationMaps) => `
   </div>
 `;
 
+const playerDetailHtml = (player: ReportPlayerDetail) => {
+  const effectiveness = typeof player.effectiveness === 'number' ? formatPercent(player.effectiveness) : 'Sin tiros';
+  const attackWidth = clampPercent(player.attackShare * 100);
+  const defenseWidth = clampPercent(player.defenseShare * 100);
+
+  return `
+  <article class="player-detail-page">
+    <div class="player-detail-header">
+      <div>
+        <span class="kicker">Detalle individual</span>
+        <h3>${escapeHtml(player.playerName)}</h3>
+      </div>
+      <span class="share-chip">${escapeHtml(formatPercent(player.attackShare))} de los goles</span>
+    </div>
+    <div class="player-metric-grid">
+      <div><strong>Puntos</strong><span>${player.goals}</span></div>
+      <div><strong>Tiros</strong><span>${player.goals}/${player.shotAttempts}</span></div>
+      <div><strong>Efectividad</strong><span>${escapeHtml(effectiveness)}</span></div>
+      <div><strong>Atajados</strong><span>${player.rivalDefendedShots}</span></div>
+      <div><strong>Errados</strong><span>${player.ownPointsAgainst}</span></div>
+      <div><strong>Defensas</strong><span>${player.defenses}</span></div>
+      <div><strong>Errores</strong><span>${player.errors}</span></div>
+      <div><strong>Faltas</strong><span>${player.faltas}</span></div>
+    </div>
+    <div class="performance-grid">
+      <div class="performance-column attack-performance-card">
+        <h4>Ataque</h4>
+        <div class="performance-row">
+          <div class="performance-meta"><strong>${escapeHtml(formatPercent(player.attackShare))} de los goles del equipo</strong><span>${player.goals}/${player.shotAttempts} tiros · ${escapeHtml(effectiveness)}</span></div>
+          <div class="performance-track attack-track" style="height:12px;background-color:#d8ecf8;"><div class="converted-bar" style="width:${attackWidth.toFixed(1)}%;height:12px;background-color:#075ca8;">&nbsp;</div></div>
+        </div>
+      </div>
+      <div class="performance-column defense-performance-card">
+        <h4>Defensa</h4>
+        <div class="performance-row">
+          <div class="performance-meta"><strong>${escapeHtml(formatPercent(player.defenseShare))} de las defensas</strong><span>${formatCount(player.defenses, 'defensa', 'defensas')}</span></div>
+          <div class="performance-track defense-track" style="height:12px;background-color:#cce8e3;"><div class="defense-bar" style="width:${defenseWidth.toFixed(1)}%;height:12px;background-color:#0b6b61;">&nbsp;</div></div>
+        </div>
+      </div>
+    </div>
+    <div class="two-col player-maps">
+      ${renderReportCourtMap('Dónde convirtió', player.convertedLocations, 'uruguay')}
+      ${renderReportCourtMap('Dónde le atajaron el tiro', player.defendedShotLocations, 'opponentDefense')}
+    </div>
+  </article>
+`;
+};
+
+const playerDetailsHtml = (report: MatchReportData) =>
+  report.playerDetails.length === 0
+    ? ''
+    : `
+  <section class="player-details-section">
+    <h2>Detalle por jugador</h2>
+    ${report.playerDetails.map(playerDetailHtml).join('')}
+  </section>
+`;
+
 const summaryCardsHtml = (report: MatchReportData) => {
   const preferredLabels = [
     'Top ataque',
@@ -422,9 +480,11 @@ export function buildMatchReportHtml(report: MatchReportData) {
     .grid span, .summary-grid span { display: block; font-size: 17px; font-weight: 900; margin-top: 3px; }
     .summary-grid span { font-size: 13px; }
     .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
-    .executive-section, .summary-card { break-inside: avoid; page-break-inside: avoid; }
+    /* Los contenedores grandes fluyen entre páginas (spec 019, mismo criterio que el
+       PDF del 3v3); solo las tarjetas y filas chicas evitan partirse. */
+    .summary-card { break-inside: avoid; page-break-inside: avoid; }
     .summary-card { border-top: 4px solid #0b6bcb !important; min-height: 62px; }
-    .report-map-section { break-inside: avoid; page-break-inside: avoid; margin-top: 14px; }
+    .report-map-section { margin-top: 14px; }
     .report-map-section h3 { break-after: avoid; page-break-after: avoid; margin-top: 18px; }
     .map-stack { display: block; margin-top: 8px; }
     .map-card { border: 1px solid #dbe4ef; border-radius: 8px; padding: 14px; background: #f7fafc; break-inside: avoid; page-break-inside: avoid; margin: 0 0 16px; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
@@ -452,7 +512,7 @@ export function buildMatchReportHtml(report: MatchReportData) {
     .period-section { break-inside: auto; page-break-inside: auto; }
     .note { background: #f4f7fb; border-left: 4px solid #0b6bcb; padding: 8px; border-radius: 6px; }
     .effectiveness-table { margin-top: 4px; }
-    .performance-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 8px 0 12px; break-inside: avoid; page-break-inside: avoid; }
+    .performance-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 8px 0 12px; }
     .performance-column { background: #f7fafc; border: 1px solid #c7d6e5; border-radius: 8px; padding: 10px; break-inside: avoid; page-break-inside: avoid; }
     .attack-performance-card { border-top: 5px solid #075ca8; }
     .defense-performance-card { border-top: 5px solid #0b6b61; }
@@ -460,13 +520,11 @@ export function buildMatchReportHtml(report: MatchReportData) {
     .performance-meta { display: flex; justify-content: space-between; gap: 8px; font-size: 11px; }
     .performance-meta span, .performance-row small { color: #5d6b7a; }
     .performance-track { height: 12px; border: 1px solid #9fb4c8; border-radius: 6px; overflow: hidden; margin: 4px 0; background-color: #dbe4ef; }
-    .attempt-bar, .converted-bar, .defense-bar { display: block; min-height: 12px; border-radius: 5px; }
-    .attempt-bar { background-color: #9dcff0; }
+    .converted-bar, .defense-bar { display: block; min-height: 12px; border-radius: 5px; }
     .converted-bar { background-color: #075ca8; }
     .defense-bar { background-color: #0b6b61; }
     .performance-legend { color: #5d6b7a; font-size: 9px; }
-    .legend-attempt, .legend-converted, .legend-defense { display: inline-block; width: 12px; height: 7px; margin: 0 4px 0 2px; border: 1px solid #7890a5; }
-    .legend-attempt { background-color: #9dcff0; }
+    .legend-converted, .legend-defense { display: inline-block; width: 12px; height: 7px; margin: 0 4px 0 2px; border: 1px solid #7890a5; }
     .legend-converted { background-color: #075ca8; }
     .legend-defense { background-color: #0b6b61; }
     .more-rows { color: #5d6b7a; font-size: 10px; font-weight: 800; margin-top: 6px; }
@@ -476,7 +534,6 @@ export function buildMatchReportHtml(report: MatchReportData) {
     .insight-card strong { color: #19344d; font-size: 11px; }
     .insight-card span { color: #43576b; font-size: 10px; margin-top: 2px; }
     .insight-warning { border-left-color: #b42318; background: #fff6f4; }
-    .tactical-sectors { break-inside: avoid; page-break-inside: avoid; }
     .sector-card { border: 1px solid #dbe4ef; border-radius: 8px; padding: 9px; background: #f9fbfd; break-inside: avoid; page-break-inside: avoid; }
     .sector-row { margin: 7px 0; break-inside: avoid; page-break-inside: avoid; }
     .sector-meta { display: grid; grid-template-columns: 1fr auto; gap: 8px; font-size: 10px; }
@@ -485,9 +542,21 @@ export function buildMatchReportHtml(report: MatchReportData) {
     .sector-bar { display: block; border-radius: 4px; }
     .three-col { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
     @media print {
-      .performance-grid, .performance-column, .performance-row, .insight-card, .sector-card, .sector-row, .map-card { break-inside: avoid; page-break-inside: avoid; }
+      .performance-column, .performance-row, .insight-card, .sector-card, .sector-row, .map-card, .player-metric-grid div { break-inside: avoid; page-break-inside: avoid; }
       .report-map-section h3, h2, h3 { break-after: avoid; page-break-after: avoid; }
     }
+    .player-detail-page { break-inside: avoid; page-break-inside: avoid; margin-top: 12px; }
+    .player-detail-page + .player-detail-page { page-break-before: always; }
+    .player-details-section { page-break-before: always; }
+    .player-detail-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; margin-bottom: 8px; }
+    .player-detail-header .kicker { color: #0b6bcb; display: block; font-size: 10px; font-weight: 900; text-transform: uppercase; }
+    .player-detail-header h3 { font-size: 19px; margin: 2px 0 0; }
+    .player-detail-header .share-chip { background: #f0f7ff; border: 1px solid #d9ebff; border-radius: 999px; color: #0b6bcb; font-weight: 900; padding: 4px 10px; font-size: 11px; }
+    .player-metric-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin: 8px 0 10px; }
+    .player-metric-grid div { border: 1px solid #dbe4ef; border-radius: 8px; padding: 8px; background: #f7fafc; break-inside: avoid; page-break-inside: avoid; }
+    .player-metric-grid strong { display: block; font-size: 10px; color: #5d6b7a; text-transform: uppercase; }
+    .player-metric-grid span { display: block; font-size: 15px; font-weight: 900; margin-top: 2px; }
+    .player-maps { margin-top: 8px; }
   </style>
 </head>
 <body>
@@ -556,6 +625,8 @@ export function buildMatchReportHtml(report: MatchReportData) {
       <div class="sector-card"><h3>Zonas donde el rival nos defendió</h3>${sectorStatsHtml(report.zones.defended, 'Sin ubicaciones registradas.')}</div>
     </div>
   </section>
+
+  ${playerDetailsHtml(report)}
 
   <section>
     <h2>Formaciones</h2>

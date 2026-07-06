@@ -124,7 +124,6 @@ function PerformanceColumn({
             playerName={row.playerName}
             row={row}
             share={row[shareField]}
-            teamAttempts={totalTeamAttempts}
             trackColor={trackColor}
             total={row[statField]}
             mode={mode}
@@ -143,7 +142,6 @@ function PerformanceRow({
   playerName,
   row,
   share,
-  teamAttempts,
   trackColor,
   total,
   isTop,
@@ -155,14 +153,12 @@ function PerformanceRow({
   playerName: string;
   row: PlayerPerformanceRow;
   share: number;
-  teamAttempts: number;
   trackColor: string;
   total: number;
 }) {
-  const convertedShare = mode === 'attack' && teamAttempts > 0 ? row.points / teamAttempts : share;
-  const attemptShare = mode === 'attack' && teamAttempts > 0 ? row.shotAttempts / teamAttempts : 0;
-  const barWidth = `${clampShare(convertedShare) * 100}%` as DimensionValue;
-  const attemptBarWidth = `${clampShare(attemptShare) * 100}%` as DimensionValue;
+  // La barra mide la participación del jugador en el total del equipo
+  // (share de goles en ataque, share de defensas en defensa), como en 3v3.
+  const barWidth = `${clampShare(share) * 100}%` as DimensionValue;
   const detailText = mode === 'attack'
     ? row.shotAttempts > 0
       ? `${row.points}/${row.shotAttempts} tiros · ${formatEffectiveness(row.effectiveness)}`
@@ -183,9 +179,9 @@ function PerformanceRow({
       </View>
       {attackBreakdown && <Text numberOfLines={1} adjustsFontSizeToFit style={styles.attackBreakdown}>{attackBreakdown}</Text>}
       <View style={[styles.track, { backgroundColor: trackColor }]}>
-        {mode === 'attack' && <View style={[styles.attemptBar, { width: attemptBarWidth }]} />}
         <View style={[styles.bar, isTop && styles.topBar, { backgroundColor: accentColor, width: barWidth }]} />
       </View>
+      {mode === 'attack' && <Text style={[styles.shareText, { color: accentColor }]}>{formatPercent(share)} de los goles</Text>}
     </View>
   );
 }
@@ -293,19 +289,15 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     overflow: 'hidden',
   },
-  attemptBar: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    top: 0,
-    backgroundColor: '#8bd3ff',
-    borderRadius: 8,
-  },
   bar: {
     height: '100%',
     borderRadius: 8,
   },
   topBar: {
     minWidth: 8,
+  },
+  shareText: {
+    fontSize: fontSize.tiny,
+    fontWeight: '900',
   },
 });

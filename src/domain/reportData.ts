@@ -102,6 +102,25 @@ export type ReportPlayerPerformance = {
   topDefense: ReportPlayerPerformanceRow[];
 };
 
+// Desglose individual del PDF (spec 019): un jugador participante con sus
+// métricas del partido y las ubicaciones propias para los mapas.
+export type ReportPlayerDetail = {
+  playerId: string;
+  playerName: string;
+  goals: number;
+  shotAttempts: number;
+  rivalDefendedShots: number;
+  ownPointsAgainst: number;
+  effectiveness?: number;
+  attackShare: number;
+  defenses: number;
+  defenseShare: number;
+  errors: number;
+  faltas: number;
+  convertedLocations: CourtLocation[];
+  defendedShotLocations: CourtLocation[];
+};
+
 export type PeriodReportData = {
   periodNumber: MatchPeriod;
   periodLabel: string;
@@ -162,6 +181,7 @@ export type MatchReportData = {
     defended: LandingZoneStat[];
   };
   totalMaps: ReportLocationMaps;
+  playerDetails: ReportPlayerDetail[];
   lineups: {
     initial: string[];
     final: string[];
@@ -454,6 +474,49 @@ export function buildMatchReportData(match: Match, players: Player[]): MatchRepo
   const totalErrorCount = totalErrors.reduce((sum, stat) => sum + stat.total, 0);
   const totalRecommendations = buildRecommendationInsights(match.events, players, getLineupPlayerIdsForEvents(match), 12);
   const ownTeamName = getOwnTeamDisplayName(match);
+  const errorsByPlayer = new Map(getErrorsByPlayer(match.events).map((stat) => [stat.playerId, stat.total]));
+  const faltasByPlayer = new Map(totalErrorBreakdown.map((stat) => [stat.playerId, stat.faltas]));
+  const convertedLocationsByPlayer = new Map<string, CourtLocation[]>();
+  const defendedShotLocationsByPlayer = new Map<string, CourtLocation[]>();
+
+  getPointEventsWithLocation(match.events, 'uruguay').forEach((event) => {
+    if (event.playerId) {
+      convertedLocationsByPlayer.set(event.playerId, [
+        ...(convertedLocationsByPlayer.get(event.playerId) ?? []),
+        event.landingLocation,
+      ]);
+    }
+  });
+  getOpponentDefenseEventsWithLocation(match.events).forEach((event) => {
+    if (event.playerId) {
+      defendedShotLocationsByPlayer.set(event.playerId, [
+        ...(defendedShotLocationsByPlayer.get(event.playerId) ?? []),
+        event.defenseLocation,
+      ]);
+    }
+  });
+
+  // Participantes: estuvieron en cancha (lineups) o registraron eventos.
+  const playerDetails: ReportPlayerDetail[] = sortPlayerPerformanceRows(
+    buildPlayerPerformance(match.events, players, getLineupPlayerIdsForEvents(match)).rows,
+    'points',
+    'contribution',
+  ).map((row) => ({
+    playerId: row.playerId,
+    playerName: row.playerName,
+    goals: row.points,
+    shotAttempts: row.shotAttempts,
+    rivalDefendedShots: row.rivalDefensesAgainst,
+    ownPointsAgainst: row.ownPointsAgainst,
+    effectiveness: row.effectiveness,
+    attackShare: row.pointShare,
+    defenses: row.defenses,
+    defenseShare: row.defenseShare,
+    errors: errorsByPlayer.get(row.playerId) ?? 0,
+    faltas: faltasByPlayer.get(row.playerId) ?? 0,
+    convertedLocations: convertedLocationsByPlayer.get(row.playerId) ?? [],
+    defendedShotLocations: defendedShotLocationsByPlayer.get(row.playerId) ?? [],
+  }));
 
   return {
     title: 'Reporte del partido',
@@ -515,6 +578,7 @@ export function buildMatchReportData(match: Match, players: Player[]): MatchRepo
       defended: defendedZones,
     },
     totalMaps: buildReportLocationMaps(match.events),
+    playerDetails,
     lineups: {
       initial: mapLineup(initialLineup?.playerIds, getPlayerLabel),
       final: mapLineup(finalLineup?.playerIds, getPlayerLabel),
