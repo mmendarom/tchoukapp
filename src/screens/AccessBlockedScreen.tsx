@@ -22,7 +22,7 @@ const MESSAGES: Record<string, { title: string; copy: string }> = {
   },
   expired: {
     title: 'Verificación vencida',
-    copy: 'Pasaron más de 14 días sin verificar tu licencia. Conectate a internet y reintentá para seguir usando la app.',
+    copy: 'Pasó demasiado tiempo sin verificar tu licencia online. Conectate a internet y reintentá, o entrá sin conexión desde el login.',
   },
   lapsed: {
     title: 'Licencia vencida',

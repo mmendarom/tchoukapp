@@ -7,7 +7,7 @@ Si la app corre **sin** las variables de entorno, funciona en modo local (login 
 ## Setup (una sola vez)
 
 1. Crear un proyecto en [supabase.com](https://supabase.com) (capa gratis alcanza).
-2. En el **SQL editor**, correr en orden `migrations/0001_entitlements.sql`, `migrations/0002_entitlement_expiry.sql` (vencimiento de cortesias: 1/1/2027) y `migrations/0003_admin_entitlements.sql` (RPCs de administracion, spec 016).
+2. En el **SQL editor**, correr en orden `migrations/0001_entitlements.sql`, `migrations/0002_entitlement_expiry.sql` (vencimiento de cortesias: 1/1/2027), `migrations/0003_admin_entitlements.sql` (RPCs de administracion, spec 016) y `migrations/0004_autoactivate_and_extend_2027.sql` (spec 021: vigencia hasta fin de 2027 y altas nuevas auto-activas; re-ejecutable).
 3. En **Authentication -> Sign In / Up -> Email**: dejar habilitado el login por email.
 4. **Obligatorio: SMTP propio + plantillas con codigo.** La app usa codigo OTP, pero las plantillas default de Supabase mandan un enlace magico que apunta a localhost, y en el plan gratis **no se pueden editar sin SMTP propio**. Configurar primero el SMTP (gratis, con Gmail):
    - En Google ([myaccount.google.com](https://myaccount.google.com) -> Seguridad): activar verificacion en 2 pasos y crear una **contrasena de aplicacion** llamada `Supabase` (clave de 16 caracteres).

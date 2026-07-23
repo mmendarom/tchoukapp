@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  ACCESS_GRACE_DAYS,
   AccountEntitlement,
   UserProfile,
   buildUserProfile,
@@ -10,6 +11,11 @@ import {
   isAdminProfile,
   validateProfileInput,
 } from './session';
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+// ISO desfasado `days` días hacia atrás desde `fromIso`.
+const daysBefore = (fromIso: string, days: number) =>
+  new Date(Date.parse(fromIso) - days * DAY_MS).toISOString();
 
 describe('validateProfileInput', () => {
   it('acepta nombre valido sin email', () => {
@@ -117,16 +123,16 @@ describe('evaluateAccess y hasActiveAccess', () => {
   });
 
   it('licencia activa verificada dentro de la gracia habilita acceso', () => {
-    const thirteenDaysAgo = '2026-06-18T12:00:00.000Z';
-    const profile = accountProfile(activeEntitlement(thirteenDaysAgo));
+    const withinGrace = daysBefore(now, ACCESS_GRACE_DAYS - 1);
+    const profile = accountProfile(activeEntitlement(withinGrace));
 
     expect(evaluateAccess(profile, now)).toBe('active');
     expect(hasActiveAccess(profile, now)).toBe(true);
   });
 
-  it('licencia activa sin verificar hace mas de 14 dias vence', () => {
-    const fifteenDaysAgo = '2026-06-16T11:59:59.000Z';
-    const profile = accountProfile(activeEntitlement(fifteenDaysAgo));
+  it('licencia activa sin verificar por mas de la gracia vence', () => {
+    const pastGrace = daysBefore(now, ACCESS_GRACE_DAYS + 1);
+    const profile = accountProfile(activeEntitlement(pastGrace));
 
     expect(evaluateAccess(profile, now)).toBe('expired');
     expect(hasActiveAccess(profile, now)).toBe(false);
@@ -181,14 +187,14 @@ describe('evaluateAccess y hasActiveAccess', () => {
       expect(getGraceDaysLeft(accountProfile({ plan: 'cortesia', status: 'revoked', verifiedAt: now }), now)).toBeUndefined();
     });
 
-    it('devuelve 14 recien verificada y va bajando', () => {
-      expect(getGraceDaysLeft(accountProfile(activeEntitlement(now)), now)).toBe(14);
-      expect(getGraceDaysLeft(accountProfile(activeEntitlement('2026-06-21T12:00:00.000Z')), now)).toBe(4);
-      expect(getGraceDaysLeft(accountProfile(activeEntitlement('2026-06-18T11:00:00.000Z')), now)).toBe(0);
+    it('devuelve la gracia completa recien verificada y va bajando', () => {
+      expect(getGraceDaysLeft(accountProfile(activeEntitlement(now)), now)).toBe(ACCESS_GRACE_DAYS);
+      expect(getGraceDaysLeft(accountProfile(activeEntitlement(daysBefore(now, ACCESS_GRACE_DAYS - 4))), now)).toBe(4);
+      expect(getGraceDaysLeft(accountProfile(activeEntitlement(daysBefore(now, ACCESS_GRACE_DAYS))), now)).toBe(0);
     });
 
     it('devuelve 0 con la gracia vencida o fecha invalida', () => {
-      expect(getGraceDaysLeft(accountProfile(activeEntitlement('2026-06-01T12:00:00.000Z')), now)).toBe(0);
+      expect(getGraceDaysLeft(accountProfile(activeEntitlement(daysBefore(now, ACCESS_GRACE_DAYS + 30))), now)).toBe(0);
       expect(getGraceDaysLeft(accountProfile(activeEntitlement('no-es-fecha')), now)).toBe(0);
     });
   });

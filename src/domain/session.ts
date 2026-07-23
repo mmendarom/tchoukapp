@@ -1,8 +1,11 @@
 export const SESSION_STORE_DATA_VERSION = 2;
 
-// Gracia offline (spec 015): días que la app funciona sin reverificar la
-// licencia online. Al vencer bloquea en el arranque, salvo partido en vivo.
-export const ACCESS_GRACE_DAYS = 14;
+// Gracia offline (spec 015, ampliada en spec 021): días que la app funciona sin
+// reverificar la licencia online. Se extendió a ~2 años para uso 100% offline en
+// torneos (iPad sin internet): el límite efectivo pasa a ser la fecha de
+// vencimiento de la licencia (`entitlement.expiresAt`), no esta reverificación.
+// Al vencer bloquea en el arranque, salvo partido en vivo.
+export const ACCESS_GRACE_DAYS = 730;
 
 // Unica cuenta admin (spec 016): gestiona licencias desde el perfil sin SQL.
 export const ADMIN_EMAIL = 'mauromendaro@gmail.com';

@@ -1,5 +1,36 @@
 # Implementation Log
 
+## 2026-07-23 - Licencias vigentes hasta 2027 y uso offline en torneo (021)
+
+Para usar la app en un iPad **sin conexión a internet en ningún momento** durante
+el torneo, y que ninguna licencia bloquee. Decisiones confirmadas con Mauro
+(decisión 010): entrar sin conexión, vigencia hasta fin de 2027, altas nuevas
+auto-activas.
+
+- **Ingreso sin conexión** (`WelcomeScreen`): aun con backend configurado, un
+  toggle `offlineMode` muestra el formulario local (spec 014) → perfil sin
+  `accountId` → `evaluateAccess` = `local` → acceso completo offline, sin
+  servidor. Enlaces "Entrar sin conexión" (desde el form online) y "Entrar con
+  email" (para volver). Copy del local adaptado al modo offline.
+- **Gracia offline** (`session.ts`): `ACCESS_GRACE_DAYS` 14 → 730. Una cuenta ya
+  verificada dura offline hasta su `expiresAt` real, no 14 días; el vencimiento
+  de la licencia pasa a ser el límite efectivo.
+- **Pantalla de bloqueo** (`AccessBlockedScreen`): copy de "expired" sin el "14
+  días" hardcodeado; sugiere entrar sin conexión.
+- **Backend** (`supabase/migrations/0004_autoactivate_and_extend_2027.sql`,
+  re-ejecutable): extiende `expires_at` a 2027-12-31 en todas las filas, activa
+  las `pending` (no toca `revoked`) y cambia el trigger de alta para que las
+  nuevas nazcan `active`. README de Supabase actualizado (paso 2). Esta parte la
+  corre el admin en el SQL editor; no afecta al iPad offline (usa modo local),
+  pero deja al resto de las cuentas vigentes hasta fin de 2027.
+
+Validación: `npx tsc --noEmit` OK; `npm test` 470 tests en verde (tests de gracia
+en `session.test.ts` reescritos para derivar los límites de `ACCESS_GRACE_DAYS`).
+
+Limitaciones: auto-activar altas nuevas abre el acceso a cualquiera que se
+registre con un email; se revoca individualmente desde el Perfil (spec 016). La
+parte de cliente requiere rebuild EAS; la parte SQL requiere correr la migración.
+
 ## 2026-07-22 - Planteles rivales del torneo para scouting con Estadística 7v7 (020)
 
 Se precargaron las delegaciones rivales del torneo como planteles elegibles para

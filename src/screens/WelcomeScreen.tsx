@@ -32,6 +32,10 @@ export function WelcomeScreen() {
   const lastLoginName = useSessionStore((state) => state.lastLoginName);
   const lastLoginEmail = useSessionStore((state) => state.lastLoginEmail);
   const backendEnabled = isBackendConfigured();
+  // Ingreso sin conexión (spec 021): aun con backend configurado, permite crear un
+  // perfil local (spec 014) para usar la app 100% offline (iPad sin internet).
+  const [offlineMode, setOfflineMode] = useState(false);
+  const showLocalForm = !backendEnabled || offlineMode;
   const [step, setStep] = useState<OnlineStep>('form');
   const [name, setName] = useState(lastLoginName ?? '');
   const [email, setEmail] = useState(lastLoginEmail ?? '');
@@ -219,6 +223,16 @@ export function WelcomeScreen() {
         <Pressable accessibilityRole="button" disabled={busy} onPress={handleUseExistingCode}>
           <Text style={styles.linkLabel}>Ya tengo un código</Text>
         </Pressable>
+        <Pressable
+          accessibilityRole="button"
+          disabled={busy}
+          onPress={() => {
+            clearMessages();
+            setOfflineMode(true);
+          }}
+        >
+          <Text style={styles.linkLabel}>Entrar sin conexión</Text>
+        </Pressable>
       </View>
     </>
   );
@@ -278,8 +292,12 @@ export function WelcomeScreen() {
 
   const localForm = (
     <>
-      <Text style={styles.cardTitle}>Bienvenido</Text>
-      <Text style={styles.cardCopy}>Creá tu perfil para empezar. Tus datos quedan guardados en este dispositivo.</Text>
+      <Text style={styles.cardTitle}>{offlineMode ? 'Entrar sin conexión' : 'Bienvenido'}</Text>
+      <Text style={styles.cardCopy}>
+        {offlineMode
+          ? 'Creá un perfil local para usar la app sin internet. Tus datos quedan guardados en este dispositivo.'
+          : 'Creá tu perfil para empezar. Tus datos quedan guardados en este dispositivo.'}
+      </Text>
 
       <View style={styles.field}>
         <Text style={styles.fieldLabel}>Nombre</Text>
@@ -322,6 +340,20 @@ export function WelcomeScreen() {
       >
         <Text style={styles.submitLabel}>Comenzar</Text>
       </Pressable>
+
+      {backendEnabled && offlineMode ? (
+        <View style={styles.secondaryActions}>
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => {
+              clearMessages();
+              setOfflineMode(false);
+            }}
+          >
+            <Text style={styles.linkLabel}>Entrar con email</Text>
+          </Pressable>
+        </View>
+      ) : null}
     </>
   );
 
@@ -349,7 +381,7 @@ export function WelcomeScreen() {
         </View>
 
         <View style={styles.card}>
-          {backendEnabled ? (step === 'form' ? onlineFormStep : onlineCodeStep) : localForm}
+          {showLocalForm ? localForm : step === 'form' ? onlineFormStep : onlineCodeStep}
         </View>
 
         <Text style={styles.footnote}>Funciona sin conexión durante los torneos</Text>
