@@ -1,7 +1,7 @@
 import { CourtLocation } from './types';
 import { deriveTacticalCourtSector, getCourtZone, TacticalCourtSector } from './court';
 
-export const STATS_MATCH_STORE_DATA_VERSION = 1;
+export const STATS_MATCH_STORE_DATA_VERSION = 2;
 
 export const DEFAULT_STATS_MATCH_PLAYERS_PER_TEAM = 7;
 export const DEFAULT_STATS_MATCH_PERIOD_COUNT = 3;
@@ -33,8 +33,16 @@ export type StatsTeam = {
   id: string;
   name: string;
   category?: string;
+  // Convocados: plantel completo del cuadro (titulares + suplentes).
   playerIds: string[];
+  // Titulares: los que arrancan en cancha (subconjunto de playerIds). Si falta,
+  // se derivan los primeros `playersPerTeam` (ver resolveStatsStarters).
+  starterIds?: string[];
 };
+
+// En cancha actual por equipo (teamId -> playerIds), mutado por los cambios en
+// vivo. Se inicializa desde los titulares del cuadro (spec 022).
+export type StatsMatchLineups = Record<string, string[]>;
 
 export type StatsMatchSettings = {
   playersPerTeam: number;
@@ -78,6 +86,7 @@ export type StatsMatch = {
   currentPeriod: number;
   periods: StatsMatchPeriod[];
   events: StatsMatchEvent[];
+  lineups?: StatsMatchLineups;
   archivedAt?: string;
 };
 
@@ -163,13 +172,76 @@ export function createStatsMatchPeriods(settings: StatsMatchSettings): StatsMatc
 
 export function normalizeStatsTeam(team: StatsTeam, fallbackName: string): StatsTeam {
   const category = team.category?.trim();
+  const playerIds = uniqueStatsIds(team.playerIds ?? []);
+  const rosterSet = new Set(playerIds);
+  const starterIds = team.starterIds
+    ? uniqueStatsIds(team.starterIds).filter((id) => rosterSet.has(id))
+    : undefined;
 
   return {
     id: team.id?.trim() || fallbackName,
     name: team.name?.trim() || fallbackName,
     category: category || undefined,
-    playerIds: uniqueStatsIds(team.playerIds ?? []),
+    playerIds,
+    starterIds,
   };
+}
+
+// Titulares en cancha del cuadro, acotados a `playersPerTeam`. Si el cuadro no
+// definió titulares (o son pocos), completa con los primeros del plantel.
+export function resolveStatsStarters(team: StatsTeam, playersPerTeam: number): string[] {
+  const roster = uniqueStatsIds(team.playerIds ?? []);
+  const onCourtTarget = Math.min(Math.max(Math.floor(playersPerTeam) || 1, 1), roster.length);
+  const starters = uniqueStatsIds(team.starterIds ?? []).filter((id) => roster.includes(id));
+
+  if (starters.length >= onCourtTarget) {
+    return starters.slice(0, onCourtTarget);
+  }
+
+  const fill = roster.filter((id) => !starters.includes(id));
+
+  return [...starters, ...fill].slice(0, onCourtTarget);
+}
+
+// En cancha por equipo: usa el lineup guardado si es válido, si no los titulares.
+export function resolveStatsMatchLineups(input: {
+  homeTeam: StatsTeam;
+  awayTeam: StatsTeam;
+  settings: StatsMatchSettings;
+  lineups?: StatsMatchLineups;
+}): StatsMatchLineups {
+  const result: StatsMatchLineups = {};
+
+  [input.homeTeam, input.awayTeam].forEach((team) => {
+    const roster = new Set(team.playerIds ?? []);
+    const existing = input.lineups?.[team.id];
+    const valid = Array.isArray(existing) ? uniqueStatsIds(existing).filter((id) => roster.has(id)) : [];
+
+    result[team.id] = valid.length > 0 ? valid : resolveStatsStarters(team, input.settings.playersPerTeam);
+  });
+
+  return result;
+}
+
+export function getStatsTeamOnCourt(
+  match: Pick<StatsMatch, 'lineups'>,
+  teamId: string,
+): string[] {
+  return match.lineups?.[teamId] ?? [];
+}
+
+// Cambio: saca a `playerOutId` (en cancha) y mete a `playerInId` (en banca),
+// conservando el orden. undefined si el cambio no es válido.
+export function applyStatsSubstitution(
+  lineup: string[],
+  playerOutId: string,
+  playerInId: string,
+): string[] | undefined {
+  if (playerOutId === playerInId || !lineup.includes(playerOutId) || lineup.includes(playerInId)) {
+    return undefined;
+  }
+
+  return lineup.map((id) => (id === playerOutId ? playerInId : id));
 }
 
 export function validateStatsMatchSetup(
@@ -212,6 +284,31 @@ export function validateStatsMatchSetup(
   if (sharedPlayer) {
     errors.push('Un jugador no puede estar en los dos cuadros.');
   }
+
+  const validateStarters = (team: StatsTeam, roster: string[], side: string) => {
+    if (!team.starterIds) {
+      return;
+    }
+
+    const starters = uniqueStatsIds(team.starterIds);
+    const rosterSet = new Set(roster);
+    const target = Math.min(playersPerTeam, roster.length);
+
+    if (starters.length !== team.starterIds.length) {
+      errors.push(`El cuadro ${side} tiene titulares repetidos.`);
+    }
+
+    if (starters.some((id) => !rosterSet.has(id))) {
+      errors.push(`Los titulares del cuadro ${side} deben estar entre los convocados.`);
+    }
+
+    if (starters.length !== target) {
+      errors.push(`El cuadro ${side} necesita ${target} titulares en cancha.`);
+    }
+  };
+
+  validateStarters(homeTeam, homePlayers, 'local');
+  validateStarters(awayTeam, awayPlayers, 'visitante');
 
   return {
     valid: errors.length === 0,

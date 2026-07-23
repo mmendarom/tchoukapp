@@ -315,4 +315,40 @@ describe('useStatsMatchStore', () => {
     expect(useStatsMatchStore.getState().statsMatches).toBe(before);
     expect(useStatsMatchStore.getState().activeStatsMatchId).toBe(matchId);
   });
+
+  it('initializes on-court lineups from starters (or the first N)', () => {
+    const matchId = useStatsMatchStore.getState().createStatsMatch({
+      homeTeam: { ...homeTeam, playerIds: ['h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'h7', 'h8'], starterIds: ['h8', 'h7', 'h6', 'h5', 'h4', 'h3', 'h2'] },
+      awayTeam,
+    });
+    const match = getMatch(matchId);
+
+    expect(match.lineups?.home).toEqual(['h8', 'h7', 'h6', 'h5', 'h4', 'h3', 'h2']);
+    // Sin titulares definidos: primeros 7 del plantel.
+    expect(match.lineups?.away).toEqual(['a1', 'a2', 'a3', 'a4', 'a5', 'a6', 'a7']);
+  });
+
+  it('substitutes a bench player for an on-court one, keeping the slot', () => {
+    const matchId = useStatsMatchStore.getState().createStatsMatch({
+      homeTeam: { ...homeTeam, playerIds: ['h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'h7', 'h8'] },
+      awayTeam,
+    });
+    useStatsMatchStore.getState().startStatsMatch(matchId);
+
+    expect(useStatsMatchStore.getState().substituteStatsPlayer(matchId, 'home', 'h2', 'h8')).toBe(true);
+    expect(getMatch(matchId).lineups?.home).toEqual(['h1', 'h8', 'h3', 'h4', 'h5', 'h6', 'h7']);
+
+    // Entra alguien que no está en el plantel: rechazado.
+    expect(useStatsMatchStore.getState().substituteStatsPlayer(matchId, 'home', 'h1', 'zzz')).toBe(false);
+    // Sale alguien que no está en cancha: rechazado.
+    expect(useStatsMatchStore.getState().substituteStatsPlayer(matchId, 'home', 'h2', 'h8')).toBe(false);
+    expect(getMatch(matchId).lineups?.home).toEqual(['h1', 'h8', 'h3', 'h4', 'h5', 'h6', 'h7']);
+  });
+
+  it('does not substitute in a finished match', () => {
+    const matchId = createLiveMatch();
+
+    useStatsMatchStore.getState().finishStatsMatch(matchId);
+    expect(useStatsMatchStore.getState().substituteStatsPlayer(matchId, 'home', 'h1', 'h2')).toBe(false);
+  });
 });

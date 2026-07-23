@@ -8,6 +8,7 @@ import { Screen } from '../components/Screen';
 import {
   getOpposingStatsTeamId,
   getStatsMatchScore,
+  isStatsMatchClosed,
   StatsMatchErrorSubtype,
 } from '../domain/statsMatch';
 import {
@@ -15,9 +16,10 @@ import {
   formatStatsEventLabel,
   getCurrentStatsPeriod,
   getNextStatsPeriodNumber,
+  getStatsBenchPlayers,
+  getStatsOnCourtPlayers,
   getStatsPlayerLabel,
   getStatsTeamName,
-  getStatsTeamPlayers,
   statsMatchStatusLabel,
   STATS_ERROR_SUBTYPE_OPTIONS,
 } from '../domain/statsMatchLive';
@@ -54,6 +56,7 @@ export function LiveStatsMatchScreen({ navigation, route }: Props) {
   const match = useStatsMatchStore((state) => state.statsMatches.find((item) => item.id === matchId));
   const startStatsMatch = useStatsMatchStore((state) => state.startStatsMatch);
   const recordStatsEvent = useStatsMatchStore((state) => state.recordStatsEvent);
+  const substituteStatsPlayer = useStatsMatchStore((state) => state.substituteStatsPlayer);
   const undoLastStatsEvent = useStatsMatchStore((state) => state.undoLastStatsEvent);
   const finishStatsPeriod = useStatsMatchStore((state) => state.finishStatsPeriod);
   const startNextStatsPeriod = useStatsMatchStore((state) => state.startNextStatsPeriod);
@@ -64,15 +67,29 @@ export function LiveStatsMatchScreen({ navigation, route }: Props) {
   const [pendingErrorPlayer, setPendingErrorPlayer] = useState<SelectedPlayerAction | undefined>();
   const [pendingLocationAction, setPendingLocationAction] = useState<PendingLocationAction | undefined>();
   const [pendingLocation, setPendingLocation] = useState<CourtLocation | undefined>();
+  const [subTeamId, setSubTeamId] = useState<string | undefined>();
+  const [subOutId, setSubOutId] = useState<string | undefined>();
+  const [subInId, setSubInId] = useState<string | undefined>();
   const [feedback, setFeedback] = useState('');
 
-  const homePlayers = useMemo(() => getStatsTeamPlayers(match?.homeTeam, players), [match?.homeTeam, players]);
-  const awayPlayers = useMemo(() => getStatsTeamPlayers(match?.awayTeam, players), [match?.awayTeam, players]);
+  const homePlayers = useMemo(
+    () => (match ? getStatsOnCourtPlayers(match, match.homeTeam.id, players) : []),
+    [match, players],
+  );
+  const awayPlayers = useMemo(
+    () => (match ? getStatsOnCourtPlayers(match, match.awayTeam.id, players) : []),
+    [match, players],
+  );
+  const homeBench = useMemo(() => (match ? getStatsBenchPlayers(match, match.homeTeam, players) : []), [match, players]);
+  const awayBench = useMemo(() => (match ? getStatsBenchPlayers(match, match.awayTeam, players) : []), [match, players]);
   const defenderTeam = useMemo(
     () => (match && pendingShotDefended ? (pendingShotDefended.defendingTeamId === match.homeTeam.id ? match.homeTeam : match.awayTeam) : undefined),
     [match, pendingShotDefended],
   );
-  const defenderPlayers = useMemo(() => getStatsTeamPlayers(defenderTeam, players), [defenderTeam, players]);
+  const defenderPlayers = useMemo(
+    () => (match && defenderTeam ? getStatsOnCourtPlayers(match, defenderTeam.id, players) : []),
+    [match, defenderTeam, players],
+  );
 
   if (!match) {
     return (
@@ -87,6 +104,7 @@ export function LiveStatsMatchScreen({ navigation, route }: Props) {
   const currentPeriod = getCurrentStatsPeriod(match);
   const nextPeriodNumber = getNextStatsPeriodNumber(match);
   const canRecord = canRecordStatsEvent(match);
+  const canSubstitute = !isStatsMatchClosed(match);
   const canUndo = match.events.length > 0 && match.status !== 'finished' && match.status !== 'cancelled';
   const recentEvents = match.events.slice(-8).reverse();
 
@@ -96,6 +114,25 @@ export function LiveStatsMatchScreen({ navigation, route }: Props) {
     setPendingErrorPlayer(undefined);
     setPendingLocationAction(undefined);
     setPendingLocation(undefined);
+    setSubTeamId(undefined);
+    setSubOutId(undefined);
+    setSubInId(undefined);
+  };
+  const openSubstitution = (teamId: string) => {
+    setFeedback('');
+    setSubOutId(undefined);
+    setSubInId(undefined);
+    setSubTeamId(teamId);
+  };
+  const confirmSubstitution = () => {
+    if (!subTeamId || !subOutId || !subInId) {
+      return;
+    }
+
+    const done = substituteStatsPlayer(match.id, subTeamId, subOutId, subInId);
+
+    setFeedback(done ? 'Cambio realizado.' : 'No se pudo hacer el cambio.');
+    closeAllModals();
   };
   const openPlayerActions = (teamId: string, playerId: string) => {
     if (!canRecord) {
@@ -279,12 +316,16 @@ export function LiveStatsMatchScreen({ navigation, route }: Props) {
           teamName={match.homeTeam.name}
           tone="blue"
           onPlayerPress={(playerId) => openPlayerActions(match.homeTeam.id, playerId)}
+          benchCount={homeBench.length}
+          onSubstitute={canSubstitute ? () => openSubstitution(match.homeTeam.id) : undefined}
         />
         <TeamPlayerPanel
           players={awayPlayers}
           teamName={match.awayTeam.name}
           tone="red"
           onPlayerPress={(playerId) => openPlayerActions(match.awayTeam.id, playerId)}
+          benchCount={awayBench.length}
+          onSubstitute={canSubstitute ? () => openSubstitution(match.awayTeam.id) : undefined}
         />
       </View>
 
@@ -390,6 +431,63 @@ export function LiveStatsMatchScreen({ navigation, route }: Props) {
         </Modal>
       )}
 
+      {subTeamId && (
+        <Modal visible transparent animationType="fade" onRequestClose={closeAllModals}>
+          <View style={styles.modalBackdrop}>
+            <View style={styles.modalCard}>
+              <Text style={styles.modalTitle}>Cambios · {getStatsTeamName(match, subTeamId)}</Text>
+              <Text style={styles.meta}>Elegí quién sale (cancha) y quién entra (banca).</Text>
+
+              <Text style={styles.subColumnTitle}>Sale (en cancha)</Text>
+              <View style={styles.subChipRow}>
+                {(subTeamId === match.homeTeam.id ? homePlayers : awayPlayers).map((player) => {
+                  const selected = subOutId === player.id;
+
+                  return (
+                    <Pressable
+                      key={player.id}
+                      accessibilityRole="button"
+                      onPress={() => setSubOutId(selected ? undefined : player.id)}
+                      style={({ pressed }) => [styles.subChip, selected && styles.subChipOut, pressed && styles.pressed]}
+                    >
+                      <Text style={[styles.subChipText, selected && styles.subChipTextSelected]}>
+                        #{player.number} {player.lastName || player.firstName}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+
+              <Text style={styles.subColumnTitle}>Entra (banca)</Text>
+              <ScrollView contentContainerStyle={styles.subChipRow} style={styles.subBenchScroll}>
+                {(subTeamId === match.homeTeam.id ? homeBench : awayBench).map((player) => {
+                  const selected = subInId === player.id;
+
+                  return (
+                    <Pressable
+                      key={player.id}
+                      accessibilityRole="button"
+                      onPress={() => setSubInId(selected ? undefined : player.id)}
+                      style={({ pressed }) => [styles.subChip, selected && styles.subChipIn, pressed && styles.pressed]}
+                    >
+                      <Text style={[styles.subChipText, selected && styles.subChipTextSelected]}>
+                        #{player.number} {player.lastName || player.firstName}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+                {(subTeamId === match.homeTeam.id ? homeBench : awayBench).length === 0 ? (
+                  <Text style={styles.meta}>No hay suplentes en la banca.</Text>
+                ) : null}
+              </ScrollView>
+
+              <ActionButton label="Confirmar cambio" onPress={confirmSubstitution} disabled={!subOutId || !subInId} />
+              <ActionButton label="Cancelar" onPress={closeAllModals} variant="secondary" />
+            </View>
+          </View>
+        </Modal>
+      )}
+
       {pendingLocationAction && (
         <CourtMapInput
           mode="uruguay_point"
@@ -411,19 +509,26 @@ export function LiveStatsMatchScreen({ navigation, route }: Props) {
 }
 
 function TeamPlayerPanel({
+  benchCount,
   onPlayerPress,
+  onSubstitute,
   players,
   teamName,
   tone,
 }: {
+  benchCount: number;
   onPlayerPress: (playerId: string) => void;
+  onSubstitute?: () => void;
   players: Player[];
   teamName: string;
   tone: 'blue' | 'red';
 }) {
   return (
     <View style={[styles.teamPanel, tone === 'blue' ? styles.teamPanelBlue : styles.teamPanelRed]}>
-      <Text style={styles.teamName}>{teamName}</Text>
+      <View style={styles.teamHeader}>
+        <Text style={styles.teamName}>{teamName}</Text>
+        <Text style={styles.teamOnCourt}>{players.length} en cancha</Text>
+      </View>
       <View style={styles.playerGrid}>
         {players.map((player) => (
           <Pressable
@@ -437,6 +542,16 @@ function TeamPlayerPanel({
           </Pressable>
         ))}
       </View>
+      {onSubstitute ? (
+        <Pressable
+          accessibilityRole="button"
+          disabled={benchCount === 0}
+          onPress={onSubstitute}
+          style={({ pressed }) => [styles.subButton, benchCount === 0 && styles.subButtonDisabled, pressed && styles.pressed]}
+        >
+          <Text style={styles.subButtonText}>⇄ Cambios (banca {benchCount})</Text>
+        </Pressable>
+      ) : null}
     </View>
   );
 }
@@ -519,10 +634,78 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff1f2',
     borderColor: '#fecdd3',
   },
+  teamHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing.xs,
+  },
   teamName: {
     color: '#0b1f33',
     fontSize: fontSize.section,
     fontWeight: '900',
+  },
+  teamOnCourt: {
+    color: '#5d6b7a',
+    fontSize: fontSize.tiny,
+    fontWeight: '900',
+  },
+  subButton: {
+    minHeight: 44,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#0b6bcb',
+    backgroundColor: '#eef6ff',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: spacing.sm,
+  },
+  subButtonDisabled: {
+    opacity: 0.5,
+  },
+  subButtonText: {
+    color: '#0b6bcb',
+    fontSize: fontSize.small,
+    fontWeight: '900',
+  },
+  subColumnTitle: {
+    color: '#0b1f33',
+    fontSize: fontSize.small,
+    fontWeight: '900',
+    marginTop: spacing.xs,
+  },
+  subChipRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.xs,
+  },
+  subBenchScroll: {
+    maxHeight: 190,
+  },
+  subChip: {
+    minHeight: 44,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#c9d7e5',
+    backgroundColor: '#f7fafc',
+    justifyContent: 'center',
+    paddingHorizontal: spacing.sm,
+  },
+  subChipOut: {
+    backgroundColor: '#b42318',
+    borderColor: '#b42318',
+  },
+  subChipIn: {
+    backgroundColor: '#188038',
+    borderColor: '#188038',
+  },
+  subChipText: {
+    color: '#0b1f33',
+    fontSize: fontSize.small,
+    fontWeight: '900',
+  },
+  subChipTextSelected: {
+    color: '#ffffff',
   },
   playerGrid: {
     flexDirection: 'row',

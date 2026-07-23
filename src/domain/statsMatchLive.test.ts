@@ -7,6 +7,8 @@ import {
   formatStatsMatchScore,
   getCurrentStatsPeriod,
   getNextStatsPeriodNumber,
+  getStatsBenchPlayers,
+  getStatsOnCourtPlayers,
   getStatsPlayerLabel,
   getStatsTeamPlayers,
   STATS_ERROR_SUBTYPE_OPTIONS,
@@ -98,6 +100,25 @@ describe('statsMatchLive', () => {
     expect(canRecordStatsEvent(match({ status: 'live' }))).toBe(true);
     expect(canRecordStatsEvent(match({ status: 'period_break' }))).toBe(false);
     expect(canRecordStatsEvent(match({ status: 'live', archivedAt: '2026-06-29T10:00:00.000Z' }))).toBe(false);
+  });
+
+  it('splits on-court and bench players from the lineup', () => {
+    const roster = [
+      player('h1', 7, 'Silva'),
+      player('h2', 8, 'Lima'),
+      player('h3', 9, 'Ide'),
+      player('h4', 10, 'Gross'),
+    ];
+    const current = match({
+      homeTeam: { id: 'home', name: 'Brasil', playerIds: ['h1', 'h2', 'h3', 'h4'] },
+      lineups: { home: ['h1', 'h3'], away: [] },
+    });
+
+    expect(getStatsOnCourtPlayers(current, 'home', roster).map((p) => p.id)).toEqual(['h1', 'h3']);
+    expect(getStatsBenchPlayers(current, current.homeTeam, roster).map((p) => p.id)).toEqual(['h2', 'h4']);
+    // Sin lineup para el equipo: nadie en cancha, todos en banca.
+    expect(getStatsOnCourtPlayers(current, 'away', roster)).toEqual([]);
+    expect(getStatsBenchPlayers(current, undefined, roster)).toEqual([]);
   });
 
   it('exposes the full tchoukball error set', () => {

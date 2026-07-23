@@ -36,14 +36,18 @@ export function buildStatsSetupTeam(
   pool: TeamPool | undefined,
   selectedPlayerIds: string[],
   category?: string,
+  starterIds?: string[],
 ): StatsTeam {
   const trimmedCategory = category?.trim();
+  const playerIds = uniqueStatsIds(selectedPlayerIds);
+  const playerSet = new Set(playerIds);
 
   return {
     id: pool?.id ?? '',
     name: pool?.name ?? '',
     category: trimmedCategory || undefined,
-    playerIds: uniqueStatsIds(selectedPlayerIds),
+    playerIds,
+    starterIds: starterIds ? uniqueStatsIds(starterIds).filter((id) => playerSet.has(id)) : undefined,
   };
 }
 

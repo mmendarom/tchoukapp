@@ -1,5 +1,38 @@
 # Implementation Log
 
+## 2026-07-23 - Estadística 7v7: armado por pasos y titulares/suplentes con cambios (022)
+
+Pedido de Mauro tras usar el 7v7 con planteles de ~20 (spec 020): armar el partido
+por etapas (como el 3v3) y no perderse entre 20 jugadores en vivo.
+
+- **Armado por pasos** (`StatsMatchesScreen`): "Nuevo partido" pasa a asistente con
+  barra de progreso de 5 pasos (Cuadros → Formato → Titulares local → Titulares
+  visitante → Confirmar), con Atrás/Siguiente y validación por etapa. El paso de
+  titulares usa un ciclo por toque (afuera → titular ★ → suplente → afuera) con
+  contador `Titulares X/N` y atajos (Convocar todos / Titulares: primeros N /
+  Limpiar).
+- **Titulares y en cancha** (dominio `statsMatch.ts`): `StatsTeam.starterIds` y
+  `StatsMatch.lineups` (en cancha por equipo). Helpers `resolveStatsStarters`,
+  `resolveStatsMatchLineups`, `getStatsTeamOnCourt`, `applyStatsSubstitution`;
+  validación de titulares en `validateStatsMatchSetup`. `statsMatchLive.ts` suma
+  `getStatsOnCourtPlayers`/`getStatsBenchPlayers`.
+- **Cambios en vivo** (`LiveStatsMatchScreen`): la grilla de cada equipo muestra
+  solo los que están en cancha (`N en cancha`); botón **⇄ Cambios (banca N)** abre
+  un modal para elegir quién sale (cancha) y quién entra (banca). El defensor en
+  "lo atajaron" se elige entre los que están en cancha. Las stats no cambian: se
+  siguen derivando de las acciones; los cambios solo mutan el lineup.
+- **Store** (`useStatsMatchStore`): create/update inicializan `lineups`; nueva
+  acción `substituteStatsPlayer`; `normalizeStatsMatch` deriva `lineups`.
+  `STATS_MATCH_STORE_DATA_VERSION` 1 → 2 (migración: lineup = primeros N).
+
+Validación: `npx tsc --noEmit` OK; `npm test` 479 tests en verde (9 nuevos:
+titulares/lineup/sustitución/validación en dominio, en cancha/banca en live, e
+init de lineups + `substituteStatsPlayer` en el store).
+
+Limitaciones: solo se atribuye una acción a quien está en cancha (si hay que
+anotarle a un suplente, primero se hace el cambio); el resumen/PDF todavía no
+distingue titulares. Requiere rebuild EAS.
+
 ## 2026-07-23 - Licencias vigentes hasta 2027 y uso offline en torneo (021)
 
 Para usar la app en un iPad **sin conexión a internet en ningún momento** durante

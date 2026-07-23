@@ -16,6 +16,7 @@ import {
   buildStatsSetupTeam,
   getStatsPoolPlayers,
   parseStatsSetupInteger,
+  StatsMatchSetupSide,
 } from '../domain/statsMatchSetup';
 import { Player, TeamPool } from '../domain/types';
 import { useMatchStore } from '../store/useMatchStore';
@@ -68,12 +69,15 @@ export function StatsMatchesScreen({ navigation }: Props) {
   const unarchiveStatsMatch = useStatsMatchStore((state) => state.unarchiveStatsMatch);
   const deleteStatsMatch = useStatsMatchStore((state) => state.deleteStatsMatch);
 
+  const [wizardStep, setWizardStep] = useState(1);
   const [homePoolId, setHomePoolId] = useState<string | undefined>();
   const [awayPoolId, setAwayPoolId] = useState<string | undefined>();
   const [homeCategory, setHomeCategory] = useState('');
   const [awayCategory, setAwayCategory] = useState('');
   const [homeSelectedIds, setHomeSelectedIds] = useState<string[]>([]);
   const [awaySelectedIds, setAwaySelectedIds] = useState<string[]>([]);
+  const [homeStarterIds, setHomeStarterIds] = useState<string[]>([]);
+  const [awayStarterIds, setAwayStarterIds] = useState<string[]>([]);
   const [playersPerTeamInput, setPlayersPerTeamInput] = useState('7');
   const [periodCountInput, setPeriodCountInput] = useState('3');
   const [periodMinutesInput, setPeriodMinutesInput] = useState('15');
@@ -96,12 +100,12 @@ export function StatsMatchesScreen({ navigation }: Props) {
     [periodCountInput, periodMinutesInput, playersPerTeamInput],
   );
   const homeTeam = useMemo(
-    () => buildStatsSetupTeam(homePool, homeSelectedIds, homeCategory),
-    [homeCategory, homePool, homeSelectedIds],
+    () => buildStatsSetupTeam(homePool, homeSelectedIds, homeCategory, homeStarterIds),
+    [homeCategory, homePool, homeSelectedIds, homeStarterIds],
   );
   const awayTeam = useMemo(
-    () => buildStatsSetupTeam(awayPool, awaySelectedIds, awayCategory),
-    [awayCategory, awayPool, awaySelectedIds],
+    () => buildStatsSetupTeam(awayPool, awaySelectedIds, awayCategory, awayStarterIds),
+    [awayCategory, awayPool, awaySelectedIds, awayStarterIds],
   );
   const validationMessage = useMemo(
     () => buildStatsMatchSetupValidation({ homePoolId, awayPoolId, homeTeam, awayTeam, settings }),
@@ -110,40 +114,119 @@ export function StatsMatchesScreen({ navigation }: Props) {
   const visibleMatches = useMemo(() => filterStatsMatches(statsMatches, matchFilter), [matchFilter, statsMatches]);
   const selectedMatch = statsMatches.find((match) => match.id === selectedMatchId);
 
+  const startersCap = settings.playersPerTeam;
+  const homeStarterTarget = Math.min(startersCap, homeSelectedIds.length);
+  const awayStarterTarget = Math.min(startersCap, awaySelectedIds.length);
+  const step1Ok = Boolean(homePoolId && awayPoolId && homePoolId !== awayPoolId);
+  const homeRosterOk = homeSelectedIds.length >= startersCap && homeStarterIds.length === homeStarterTarget;
+  const awayRosterOk = awaySelectedIds.length >= startersCap && awayStarterIds.length === awayStarterTarget;
+  const canAdvance =
+    wizardStep === 1 ? step1Ok : wizardStep === 3 ? homeRosterOk : wizardStep === 4 ? awayRosterOk : true;
+
   const resetSetup = () => {
+    setWizardStep(1);
     setHomePoolId(undefined);
     setAwayPoolId(undefined);
     setHomeCategory('');
     setAwayCategory('');
     setHomeSelectedIds([]);
     setAwaySelectedIds([]);
+    setHomeStarterIds([]);
+    setAwayStarterIds([]);
     setPlayersPerTeamInput('7');
     setPeriodCountInput('3');
     setPeriodMinutesInput('15');
   };
 
+  const goNext = () => {
+    setCreateStatus('');
+
+    if (canAdvance) {
+      setWizardStep((step) => Math.min(5, step + 1));
+    }
+  };
+
+  const goBack = () => {
+    setCreateStatus('');
+    setWizardStep((step) => Math.max(1, step - 1));
+  };
+
   const handleSelectHomePool = (pool: TeamPool) => {
     setHomePoolId(pool.id);
     setHomeSelectedIds(pool.playerIds);
+    setHomeStarterIds(pool.playerIds.slice(0, startersCap));
     setCreateStatus('');
   };
 
   const handleSelectAwayPool = (pool: TeamPool) => {
     setAwayPoolId(pool.id);
     setAwaySelectedIds(pool.playerIds);
+    setAwayStarterIds(pool.playerIds.slice(0, startersCap));
     setCreateStatus('');
   };
 
-  const toggleHomePlayer = (playerId: string) => {
-    setHomeSelectedIds((current) =>
-      current.includes(playerId) ? current.filter((id) => id !== playerId) : [...current, playerId],
-    );
+  // Ciclo de rol al tocar un jugador: afuera -> titular (si hay lugar) -> suplente -> afuera.
+  const cyclePlayerRole = (
+    playerId: string,
+    selectedIds: string[],
+    setSelectedIds: (ids: string[]) => void,
+    starterIds: string[],
+    setStarterIds: (ids: string[]) => void,
+  ) => {
+    setCreateStatus('');
+
+    if (!selectedIds.includes(playerId)) {
+      setSelectedIds([...selectedIds, playerId]);
+
+      if (starterIds.length < startersCap) {
+        setStarterIds([...starterIds, playerId]);
+      }
+
+      return;
+    }
+
+    if (starterIds.includes(playerId)) {
+      setStarterIds(starterIds.filter((id) => id !== playerId));
+      return;
+    }
+
+    setSelectedIds(selectedIds.filter((id) => id !== playerId));
   };
 
-  const toggleAwayPlayer = (playerId: string) => {
-    setAwaySelectedIds((current) =>
-      current.includes(playerId) ? current.filter((id) => id !== playerId) : [...current, playerId],
-    );
+  const selectAllForSide = (side: StatsMatchSetupSide) => {
+    const poolPlayerIds = (side === 'home' ? homePoolPlayers : awayPoolPlayers).map((player) => player.id);
+
+    if (side === 'home') {
+      setHomeSelectedIds(poolPlayerIds);
+      setHomeStarterIds(poolPlayerIds.slice(0, startersCap));
+    } else {
+      setAwaySelectedIds(poolPlayerIds);
+      setAwayStarterIds(poolPlayerIds.slice(0, startersCap));
+    }
+
+    setCreateStatus('');
+  };
+
+  const clearForSide = (side: StatsMatchSetupSide) => {
+    if (side === 'home') {
+      setHomeSelectedIds([]);
+      setHomeStarterIds([]);
+    } else {
+      setAwaySelectedIds([]);
+      setAwayStarterIds([]);
+    }
+
+    setCreateStatus('');
+  };
+
+  const autoStartersForSide = (side: StatsMatchSetupSide) => {
+    if (side === 'home') {
+      setHomeStarterIds(homeSelectedIds.slice(0, startersCap));
+    } else {
+      setAwayStarterIds(awaySelectedIds.slice(0, startersCap));
+    }
+
+    setCreateStatus('');
   };
 
   const handleCreateMatch = () => {
@@ -155,8 +238,20 @@ export function StatsMatchesScreen({ navigation }: Props) {
     }
 
     const matchId = createStatsMatch({
-      homeTeam: { id: homeTeam.id, name: homeTeam.name, category: homeTeam.category, playerIds: homeTeam.playerIds },
-      awayTeam: { id: awayTeam.id, name: awayTeam.name, category: awayTeam.category, playerIds: awayTeam.playerIds },
+      homeTeam: {
+        id: homeTeam.id,
+        name: homeTeam.name,
+        category: homeTeam.category,
+        playerIds: homeTeam.playerIds,
+        starterIds: homeTeam.starterIds,
+      },
+      awayTeam: {
+        id: awayTeam.id,
+        name: awayTeam.name,
+        category: awayTeam.category,
+        playerIds: awayTeam.playerIds,
+        starterIds: awayTeam.starterIds,
+      },
       settings,
     });
 
@@ -240,30 +335,84 @@ export function StatsMatchesScreen({ navigation }: Props) {
     ]);
   };
 
-  const renderConvocadosGrid = (
-    poolPlayers: Player[],
-    selectedIds: string[],
-    onToggle: (playerId: string) => void,
-  ) => (
-    <View style={styles.playerGrid}>
-      {poolPlayers.map((player) => {
-        const selected = selectedIds.includes(player.id);
+  const startersLabel = (ids: string[]) =>
+    ids
+      .map((id) => playersById.get(id))
+      .filter((player): player is Player => Boolean(player))
+      .map(getPlayerLabel)
+      .join(' · ') || 'Sin titulares';
 
-        return (
-          <Pressable
-            key={player.id}
-            onPress={() => onToggle(player.id)}
-            style={({ pressed }) => [styles.playerTile, selected && styles.playerTileSelected, pressed && styles.pressed]}
-          >
-            <Text style={[styles.playerNumber, selected && styles.playerSelectedText]}>#{player.number}</Text>
-            <Text numberOfLines={1} style={[styles.playerName, selected && styles.playerSelectedText]}>
-              {player.lastName || player.firstName}
-            </Text>
+  const renderRosterStep = (side: StatsMatchSetupSide) => {
+    const pool = side === 'home' ? homePool : awayPool;
+    const poolPlayers = side === 'home' ? homePoolPlayers : awayPoolPlayers;
+    const selectedIds = side === 'home' ? homeSelectedIds : awaySelectedIds;
+    const starterIds = side === 'home' ? homeStarterIds : awayStarterIds;
+    const category = side === 'home' ? homeCategory : awayCategory;
+    const setCategory = side === 'home' ? setHomeCategory : setAwayCategory;
+    const target = Math.min(startersCap, selectedIds.length);
+    const onCycle = (playerId: string) =>
+      side === 'home'
+        ? cyclePlayerRole(playerId, homeSelectedIds, setHomeSelectedIds, homeStarterIds, setHomeStarterIds)
+        : cyclePlayerRole(playerId, awaySelectedIds, setAwaySelectedIds, awayStarterIds, setAwayStarterIds);
+
+    if (!pool) {
+      return <Text style={styles.helperText}>Volvé al paso 1 y elegí el cuadro.</Text>;
+    }
+
+    return (
+      <>
+        <Text style={styles.wizardStepTitle}>{side === 'home' ? 'Local' : 'Visitante'}: {pool.name}</Text>
+        <Text style={styles.helperText}>
+          Tocá un jugador para marcarlo titular (★ en cancha) o suplente. Tocá de nuevo para cambiar el rol o sacarlo.
+        </Text>
+        <View style={styles.rosterCounters}>
+          <Text style={[styles.countBadge, starterIds.length === target ? styles.countOk : styles.countWarn]}>
+            Titulares {starterIds.length}/{startersCap}
+          </Text>
+          <Text style={styles.countBadge}>Convocados {selectedIds.length}</Text>
+        </View>
+        <View style={styles.rosterActions}>
+          <Pressable onPress={() => selectAllForSide(side)} style={({ pressed }) => [styles.miniButton, pressed && styles.pressed]}>
+            <Text style={styles.miniButtonText}>Convocar todos</Text>
           </Pressable>
-        );
-      })}
-    </View>
-  );
+          <Pressable onPress={() => autoStartersForSide(side)} style={({ pressed }) => [styles.miniButton, pressed && styles.pressed]}>
+            <Text style={styles.miniButtonText}>Titulares: primeros {startersCap}</Text>
+          </Pressable>
+          <Pressable onPress={() => clearForSide(side)} style={({ pressed }) => [styles.miniButton, pressed && styles.pressed]}>
+            <Text style={styles.miniButtonText}>Limpiar</Text>
+          </Pressable>
+        </View>
+        <View style={styles.playerGrid}>
+          {poolPlayers.map((player) => {
+            const isSelected = selectedIds.includes(player.id);
+            const isStarter = starterIds.includes(player.id);
+            const tileStyle = isStarter ? styles.playerTileSelected : isSelected ? styles.playerTileBench : undefined;
+            const textStyle = isSelected ? styles.playerSelectedText : undefined;
+
+            return (
+              <Pressable
+                key={player.id}
+                onPress={() => onCycle(player.id)}
+                style={({ pressed }) => [styles.playerTile, tileStyle, pressed && styles.pressed]}
+              >
+                <Text style={[styles.playerNumber, textStyle]}>#{player.number}</Text>
+                <Text numberOfLines={1} style={[styles.playerName, textStyle]}>{player.lastName || player.firstName}</Text>
+                <Text style={[styles.playerRole, textStyle]}>{isStarter ? '★ Titular' : isSelected ? 'Suplente' : 'Afuera'}</Text>
+              </Pressable>
+            );
+          })}
+        </View>
+        <Text style={styles.inputLabel}>Categoría (opcional)</Text>
+        <TextInput
+          onChangeText={setCategory}
+          placeholder="Mayores, Sub-18..."
+          placeholderTextColor="#8a98a8"
+          style={styles.input}
+          value={category}
+        />
+      </>
+    );
+  };
 
   const renderTeamSummary = (match: StatsMatch, side: 'home' | 'away') => {
     const team = side === 'home' ? match.homeTeam : match.awayTeam;
@@ -408,131 +557,164 @@ export function StatsMatchesScreen({ navigation }: Props) {
           <Text style={styles.helperText}>
             Necesitás al menos dos planteles cargados. Creálos desde Gestionar planteles en Inicio.
           </Text>
-        ) : null}
-
-        <Text style={styles.subTitle}>Cuadro local</Text>
-        <View style={styles.optionRow}>
-          {teamPools.map((pool) => {
-            const selected = homePoolId === pool.id;
-
-            return (
-              <Pressable
-                key={`home-${pool.id}`}
-                onPress={() => handleSelectHomePool(pool)}
-                style={({ pressed }) => [styles.choiceButton, selected && styles.choiceButtonSelected, pressed && styles.pressed]}
-              >
-                <Text style={[styles.choiceText, selected && styles.choiceTextSelected]}>{pool.name}</Text>
-                <Text style={[styles.choiceHint, selected && styles.choiceTextSelected]}>{pool.playerIds.length} jugadores</Text>
-              </Pressable>
-            );
-          })}
-        </View>
-        {homePool ? (
+        ) : (
           <>
-            <Text style={styles.inputLabel}>Categoría (opcional)</Text>
-            <TextInput
-              onChangeText={setHomeCategory}
-              placeholder="Mayores, Sub-18..."
-              placeholderTextColor="#8a98a8"
-              style={styles.input}
-              value={homeCategory}
-            />
-            <View style={styles.sectionHeader}>
-              <Text style={styles.inputLabel}>Convocados</Text>
-              <Text style={styles.countBadge}>
-                {homeSelectedIds.length}/{settings.playersPerTeam} mín.
-              </Text>
+            <View style={styles.wizardProgress}>
+              {['Cuadros', 'Formato', 'Local', 'Visitante', 'Confirmar'].map((label, index) => {
+                const stepNumber = index + 1;
+                const active = wizardStep === stepNumber;
+                const done = wizardStep > stepNumber;
+
+                return (
+                  <View key={label} style={styles.wizardStepChip}>
+                    <View style={[styles.wizardDot, active && styles.wizardDotActive, done && styles.wizardDotDone]}>
+                      <Text style={[styles.wizardDotText, (active || done) && styles.wizardDotTextActive]}>{stepNumber}</Text>
+                    </View>
+                    <Text style={[styles.wizardStepLabel, active && styles.wizardStepLabelActive]}>{label}</Text>
+                  </View>
+                );
+              })}
             </View>
-            {renderConvocadosGrid(homePoolPlayers, homeSelectedIds, toggleHomePlayer)}
-          </>
-        ) : null}
 
-        <Text style={styles.subTitle}>Cuadro visitante</Text>
-        <View style={styles.optionRow}>
-          {teamPools.map((pool) => {
-            const selected = awayPoolId === pool.id;
+            {wizardStep === 1 ? (
+              <>
+                <Text style={styles.wizardStepTitle}>Elegí los dos cuadros</Text>
+                <Text style={styles.subTitle}>Cuadro local</Text>
+                <View style={styles.optionRow}>
+                  {teamPools.map((pool) => {
+                    const selected = homePoolId === pool.id;
 
-            return (
-              <Pressable
-                key={`away-${pool.id}`}
-                onPress={() => handleSelectAwayPool(pool)}
-                style={({ pressed }) => [styles.choiceButton, selected && styles.choiceButtonSelected, pressed && styles.pressed]}
-              >
-                <Text style={[styles.choiceText, selected && styles.choiceTextSelected]}>{pool.name}</Text>
-                <Text style={[styles.choiceHint, selected && styles.choiceTextSelected]}>{pool.playerIds.length} jugadores</Text>
-              </Pressable>
-            );
-          })}
-        </View>
-        {awayPool ? (
-          <>
-            <Text style={styles.inputLabel}>Categoría (opcional)</Text>
-            <TextInput
-              onChangeText={setAwayCategory}
-              placeholder="Mayores, Sub-18..."
-              placeholderTextColor="#8a98a8"
-              style={styles.input}
-              value={awayCategory}
-            />
-            <View style={styles.sectionHeader}>
-              <Text style={styles.inputLabel}>Convocados</Text>
-              <Text style={styles.countBadge}>
-                {awaySelectedIds.length}/{settings.playersPerTeam} mín.
-              </Text>
+                    return (
+                      <Pressable
+                        key={`home-${pool.id}`}
+                        onPress={() => handleSelectHomePool(pool)}
+                        style={({ pressed }) => [styles.choiceButton, selected && styles.choiceButtonSelected, pressed && styles.pressed]}
+                      >
+                        <Text style={[styles.choiceText, selected && styles.choiceTextSelected]}>{pool.name}</Text>
+                        <Text style={[styles.choiceHint, selected && styles.choiceTextSelected]}>{pool.playerIds.length} jugadores</Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+                <Text style={styles.subTitle}>Cuadro visitante</Text>
+                <View style={styles.optionRow}>
+                  {teamPools.map((pool) => {
+                    const selected = awayPoolId === pool.id;
+
+                    return (
+                      <Pressable
+                        key={`away-${pool.id}`}
+                        onPress={() => handleSelectAwayPool(pool)}
+                        style={({ pressed }) => [styles.choiceButton, selected && styles.choiceButtonSelected, pressed && styles.pressed]}
+                      >
+                        <Text style={[styles.choiceText, selected && styles.choiceTextSelected]}>{pool.name}</Text>
+                        <Text style={[styles.choiceHint, selected && styles.choiceTextSelected]}>{pool.playerIds.length} jugadores</Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+                {homePoolId && awayPoolId && homePoolId === awayPoolId ? (
+                  <Text style={[styles.statusText, styles.errorText]}>Elegí dos cuadros distintos.</Text>
+                ) : null}
+              </>
+            ) : null}
+
+            {wizardStep === 2 ? (
+              <>
+                <Text style={styles.wizardStepTitle}>Formato del partido</Text>
+                <Text style={styles.helperText}>Por defecto 7 jugadores y 3 tiempos de 15 minutos.</Text>
+                <View style={styles.formatGrid}>
+                  <View style={styles.formatItem}>
+                    <Text style={styles.inputLabel}>Jugadores por equipo</Text>
+                    <TextInput
+                      keyboardType="number-pad"
+                      onChangeText={setPlayersPerTeamInput}
+                      placeholder="7"
+                      placeholderTextColor="#8a98a8"
+                      style={styles.input}
+                      value={playersPerTeamInput}
+                    />
+                  </View>
+                  <View style={styles.formatItem}>
+                    <Text style={styles.inputLabel}>Cantidad de tiempos</Text>
+                    <TextInput
+                      keyboardType="number-pad"
+                      onChangeText={setPeriodCountInput}
+                      placeholder="3"
+                      placeholderTextColor="#8a98a8"
+                      style={styles.input}
+                      value={periodCountInput}
+                    />
+                  </View>
+                  <View style={styles.formatItem}>
+                    <Text style={styles.inputLabel}>Minutos por tiempo</Text>
+                    <TextInput
+                      keyboardType="number-pad"
+                      onChangeText={setPeriodMinutesInput}
+                      placeholder="15"
+                      placeholderTextColor="#8a98a8"
+                      style={styles.input}
+                      value={periodMinutesInput}
+                    />
+                  </View>
+                </View>
+              </>
+            ) : null}
+
+            {wizardStep === 3 ? renderRosterStep('home') : null}
+            {wizardStep === 4 ? renderRosterStep('away') : null}
+
+            {wizardStep === 5 ? (
+              <>
+                <Text style={styles.wizardStepTitle}>Confirmá y creá el partido</Text>
+                <View style={styles.teamPreviewGrid}>
+                  <View style={styles.teamPreviewCard}>
+                    <Text style={styles.teamTitle}>
+                      Local: {homePool?.name ?? '—'}{homeCategory ? ` · ${homeCategory}` : ''}
+                    </Text>
+                    <Text style={styles.teamPlayers}>
+                      {homeStarterIds.length} titulares · {Math.max(0, homeSelectedIds.length - homeStarterIds.length)} suplentes
+                    </Text>
+                    <Text style={styles.teamPlayers}>{startersLabel(homeStarterIds)}</Text>
+                  </View>
+                  <View style={styles.teamPreviewCard}>
+                    <Text style={styles.teamTitle}>
+                      Visitante: {awayPool?.name ?? '—'}{awayCategory ? ` · ${awayCategory}` : ''}
+                    </Text>
+                    <Text style={styles.teamPlayers}>
+                      {awayStarterIds.length} titulares · {Math.max(0, awaySelectedIds.length - awayStarterIds.length)} suplentes
+                    </Text>
+                    <Text style={styles.teamPlayers}>{startersLabel(awayStarterIds)}</Text>
+                  </View>
+                </View>
+                <Text style={styles.helperText}>
+                  Formato: {settings.playersPerTeam} jugadores · {settings.periodCount} tiempos ×{' '}
+                  {Math.round(settings.periodDurationSeconds / 60)} min
+                </Text>
+              </>
+            ) : null}
+
+            {createStatus ? (
+              <Text style={[styles.statusText, createStatus.startsWith('No ') && styles.errorText]}>{createStatus}</Text>
+            ) : null}
+            {wizardStep === 5 && validationMessage ? (
+              <Text style={[styles.statusText, styles.errorText]}>{validationMessage}</Text>
+            ) : null}
+
+            <View style={styles.wizardNav}>
+              {wizardStep > 1 ? (
+                <ActionButton label="Atrás" onPress={goBack} variant="secondary" />
+              ) : (
+                <ActionButton label="Inicio" onPress={() => navigation.navigate('Home')} variant="secondary" />
+              )}
+              {wizardStep < 5 ? (
+                <ActionButton label="Siguiente" onPress={goNext} disabled={!canAdvance} />
+              ) : (
+                <ActionButton label="Crear partido" onPress={handleCreateMatch} disabled={Boolean(validationMessage)} />
+              )}
             </View>
-            {renderConvocadosGrid(awayPoolPlayers, awaySelectedIds, toggleAwayPlayer)}
           </>
-        ) : null}
-      </View>
-
-      <View style={styles.card}>
-        <Text style={styles.sectionTitle}>Formato</Text>
-        <Text style={styles.helperText}>Por defecto 7 jugadores y 3 tiempos de 15 minutos.</Text>
-        <View style={styles.formatGrid}>
-          <View style={styles.formatItem}>
-            <Text style={styles.inputLabel}>Jugadores por equipo</Text>
-            <TextInput
-              keyboardType="number-pad"
-              onChangeText={setPlayersPerTeamInput}
-              placeholder="7"
-              placeholderTextColor="#8a98a8"
-              style={styles.input}
-              value={playersPerTeamInput}
-            />
-          </View>
-          <View style={styles.formatItem}>
-            <Text style={styles.inputLabel}>Cantidad de tiempos</Text>
-            <TextInput
-              keyboardType="number-pad"
-              onChangeText={setPeriodCountInput}
-              placeholder="3"
-              placeholderTextColor="#8a98a8"
-              style={styles.input}
-              value={periodCountInput}
-            />
-          </View>
-          <View style={styles.formatItem}>
-            <Text style={styles.inputLabel}>Minutos por tiempo</Text>
-            <TextInput
-              keyboardType="number-pad"
-              onChangeText={setPeriodMinutesInput}
-              placeholder="15"
-              placeholderTextColor="#8a98a8"
-              style={styles.input}
-              value={periodMinutesInput}
-            />
-          </View>
-        </View>
-      </View>
-
-      <View style={styles.actions}>
-        {validationMessage || createStatus ? (
-          <Text style={[styles.statusText, (validationMessage || createStatus.startsWith('No ')) && styles.errorText]}>
-            {validationMessage || createStatus}
-          </Text>
-        ) : null}
-        <ActionButton label="Crear partido" onPress={handleCreateMatch} disabled={Boolean(validationMessage)} />
-        <ActionButton label="Volver a Inicio" onPress={() => navigation.navigate('Home')} variant="secondary" />
+        )}
       </View>
     </Screen>
   );
@@ -641,6 +823,94 @@ const styles = StyleSheet.create({
     fontSize: fontSize.small,
     fontWeight: '900',
   },
+  countOk: {
+    color: '#188038',
+  },
+  countWarn: {
+    color: '#b42318',
+  },
+  wizardProgress: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+    gap: spacing.xs,
+    marginBottom: spacing.xs,
+  },
+  wizardStepChip: {
+    flexGrow: 1,
+    alignItems: 'center',
+    gap: 2,
+  },
+  wizardDot: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    borderWidth: 1,
+    borderColor: '#c9d7e5',
+    backgroundColor: '#f7fafc',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  wizardDotActive: {
+    backgroundColor: '#0b6bcb',
+    borderColor: '#0b6bcb',
+  },
+  wizardDotDone: {
+    backgroundColor: '#188038',
+    borderColor: '#188038',
+  },
+  wizardDotText: {
+    color: '#5d6b7a',
+    fontSize: fontSize.tiny,
+    fontWeight: '900',
+  },
+  wizardDotTextActive: {
+    color: '#ffffff',
+  },
+  wizardStepLabel: {
+    color: '#5d6b7a',
+    fontSize: fontSize.tiny,
+    fontWeight: '800',
+  },
+  wizardStepLabelActive: {
+    color: '#0b1f33',
+    fontWeight: '900',
+  },
+  wizardStepTitle: {
+    color: '#0b1f33',
+    fontSize: fontSize.section,
+    fontWeight: '900',
+  },
+  wizardNav: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
+    marginTop: spacing.xs,
+  },
+  rosterCounters: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
+  },
+  rosterActions: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.xs,
+  },
+  miniButton: {
+    minHeight: 38,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#c9d7e5',
+    backgroundColor: '#f7fafc',
+    justifyContent: 'center',
+    paddingHorizontal: spacing.sm,
+  },
+  miniButtonText: {
+    color: '#0b6bcb',
+    fontSize: fontSize.tiny,
+    fontWeight: '900',
+  },
   playerGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -660,6 +930,16 @@ const styles = StyleSheet.create({
   playerTileSelected: {
     backgroundColor: '#188038',
     borderColor: '#188038',
+  },
+  playerTileBench: {
+    backgroundColor: '#0b6bcb',
+    borderColor: '#0b6bcb',
+  },
+  playerRole: {
+    color: '#0b1f33',
+    fontSize: fontSize.tiny,
+    fontWeight: '900',
+    marginTop: 2,
   },
   playerNumber: {
     color: '#0b6bcb',

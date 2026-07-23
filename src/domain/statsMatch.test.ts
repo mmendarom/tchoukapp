@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  applyStatsSubstitution,
   buildStatsMatchSettings,
   createStatsMatchPeriods,
   DEFAULT_STATS_MATCH_PERIOD_DURATION_SECONDS,
@@ -9,9 +10,12 @@ import {
   getStatsEventScoringTeamId,
   getStatsMatchScore,
   getStatsMatchStats,
+  getStatsTeamOnCourt,
   rankStatsAttackers,
   rankStatsDefenders,
   rankStatsErrors,
+  resolveStatsMatchLineups,
+  resolveStatsStarters,
   StatsMatch,
   StatsMatchEvent,
   validateStatsMatchSetup,
@@ -266,5 +270,95 @@ describe('statsMatch domain', () => {
     expect(filterStatsMatches(matches, 'finished').map((item) => item.id)).toEqual(['finished', 'cancelled']);
     expect(filterStatsMatches(matches, 'archived').map((item) => item.id)).toEqual(['archived']);
     expect(filterStatsMatches(matches, 'all')).toHaveLength(6);
+  });
+});
+
+describe('titulares, lineup y cambios (spec 022)', () => {
+  const rosterHome = { id: 'home', name: 'Brasil', playerIds: ['h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'h7', 'h8', 'h9'] };
+  const rosterAway = { id: 'away', name: 'Argentina', playerIds: ['a1', 'a2', 'a3', 'a4', 'a5', 'a6', 'a7', 'a8'] };
+
+  it('derives starters from starterIds, filling from the roster when short', () => {
+    expect(resolveStatsStarters({ ...rosterHome, starterIds: ['h9', 'h8'] }, 7)).toEqual([
+      'h9',
+      'h8',
+      'h1',
+      'h2',
+      'h3',
+      'h4',
+      'h5',
+    ]);
+    // Sin titulares definidos: primeros N del plantel.
+    expect(resolveStatsStarters(rosterHome, 7)).toEqual(['h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'h7']);
+    // Plantel más chico que N: todos en cancha.
+    expect(resolveStatsStarters({ id: 'x', name: 'X', playerIds: ['x1', 'x2'] }, 7)).toEqual(['x1', 'x2']);
+    // Ignora ids que no están en el plantel.
+    expect(resolveStatsStarters({ ...rosterAway, starterIds: ['ghost', 'a3'] }, 3)).toEqual(['a3', 'a1', 'a2']);
+  });
+
+  it('initializes lineups from starters and keeps a valid saved lineup', () => {
+    const lineups = resolveStatsMatchLineups({
+      homeTeam: { ...rosterHome, starterIds: ['h2', 'h4', 'h6', 'h1', 'h3', 'h5', 'h7'] },
+      awayTeam: rosterAway,
+      settings,
+    });
+
+    expect(lineups.home).toEqual(['h2', 'h4', 'h6', 'h1', 'h3', 'h5', 'h7']);
+    expect(lineups.away).toEqual(['a1', 'a2', 'a3', 'a4', 'a5', 'a6', 'a7']);
+
+    const kept = resolveStatsMatchLineups({
+      homeTeam: rosterHome,
+      awayTeam: rosterAway,
+      settings,
+      lineups: { home: ['h8', 'h9', 'ghost', 'h1', 'h2', 'h3', 'h4'], away: [] },
+    });
+
+    // Filtra ids inválidos del lineup guardado; el vacío cae a titulares.
+    expect(kept.home).toEqual(['h8', 'h9', 'h1', 'h2', 'h3', 'h4']);
+    expect(kept.away).toEqual(['a1', 'a2', 'a3', 'a4', 'a5', 'a6', 'a7']);
+  });
+
+  it('reads the on-court lineup for a team', () => {
+    const current = match({ lineups: { home: ['h1', 'h2'], away: ['a1'] } });
+
+    expect(getStatsTeamOnCourt(current, 'home')).toEqual(['h1', 'h2']);
+    expect(getStatsTeamOnCourt(current, 'ghost')).toEqual([]);
+  });
+
+  it('applies a substitution keeping the slot, rejecting invalid swaps', () => {
+    expect(applyStatsSubstitution(['h1', 'h2', 'h3'], 'h2', 'h9')).toEqual(['h1', 'h9', 'h3']);
+    // El que entra ya está en cancha.
+    expect(applyStatsSubstitution(['h1', 'h2', 'h3'], 'h2', 'h1')).toBeUndefined();
+    // El que sale no está en cancha.
+    expect(applyStatsSubstitution(['h1', 'h2', 'h3'], 'h8', 'h9')).toBeUndefined();
+    // Mismo jugador.
+    expect(applyStatsSubstitution(['h1', 'h2', 'h3'], 'h2', 'h2')).toBeUndefined();
+  });
+
+  it('validates starters when provided (count, subset, duplicates)', () => {
+    const okStarters = ['a1', 'a2', 'a3', 'a4', 'a5', 'a6', 'a7'];
+
+    expect(
+      validateStatsMatchSetup(
+        { ...rosterHome, starterIds: ['h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'h7'] },
+        { ...rosterAway, starterIds: okStarters },
+        settings,
+      ).valid,
+    ).toBe(true);
+
+    const fewStarters = validateStatsMatchSetup(
+      { ...rosterHome, starterIds: ['h1', 'h2'] },
+      { ...rosterAway, starterIds: okStarters },
+      settings,
+    );
+    expect(fewStarters.valid).toBe(false);
+    expect(fewStarters.errors.join(' ')).toContain('7 titulares');
+
+    const outsideRoster = validateStatsMatchSetup(
+      { ...rosterHome, starterIds: ['h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'ghost'] },
+      { ...rosterAway, starterIds: okStarters },
+      settings,
+    );
+    expect(outsideRoster.valid).toBe(false);
+    expect(outsideRoster.errors.join(' ')).toContain('entre los convocados');
   });
 });

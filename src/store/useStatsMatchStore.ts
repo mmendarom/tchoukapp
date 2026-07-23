@@ -2,13 +2,16 @@ import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
 
 import {
+  applyStatsSubstitution,
   buildStatsMatchSettings,
   createStatsMatchPeriods,
   getOpposingStatsTeamId,
   getStatsMatchScore,
+  getStatsMatchTeam,
   isPlayerInStatsTeam,
   isStatsMatchClosed,
   normalizeStatsTeam,
+  resolveStatsMatchLineups,
   STATS_MATCH_STORE_DATA_VERSION,
   StatsMatch,
   StatsMatchEvent,
@@ -26,6 +29,7 @@ type CreateStatsTeamInput = {
   name: string;
   category?: string;
   playerIds: string[];
+  starterIds?: string[];
 };
 
 type CreateStatsMatchInput = {
@@ -61,6 +65,7 @@ type StatsMatchState = {
   startNextStatsPeriod: (id: string) => boolean;
   finishStatsPeriod: (id: string) => boolean;
   recordStatsEvent: (id: string, input: StatsMatchEventInput) => boolean;
+  substituteStatsPlayer: (id: string, teamId: string, playerOutId: string, playerInId: string) => boolean;
   undoLastStatsEvent: (id: string) => boolean;
   finishStatsMatch: (id: string) => boolean;
   cancelStatsMatch: (id: string) => boolean;
@@ -83,6 +88,7 @@ const createTeam = (input: CreateStatsTeamInput, fallbackName: string): StatsTea
       name: input.name,
       category: input.category,
       playerIds: input.playerIds,
+      starterIds: input.starterIds,
     },
     fallbackName,
   );
@@ -97,6 +103,7 @@ export const normalizeStatsMatch = (match: StatsMatch): StatsMatch => {
   const currentPeriod = Number.isFinite(match.currentPeriod) && match.currentPeriod >= 1
     ? Math.min(Math.floor(match.currentPeriod), settings.periodCount)
     : 1;
+  const lineups = resolveStatsMatchLineups({ homeTeam, awayTeam, settings, lineups: match.lineups });
 
   return {
     ...match,
@@ -105,6 +112,7 @@ export const normalizeStatsMatch = (match: StatsMatch): StatsMatch => {
     settings,
     periods,
     currentPeriod,
+    lineups,
     events: Array.isArray(match.events) ? match.events : [],
     archivedAt: typeof match.archivedAt === 'string' && match.archivedAt.trim() ? match.archivedAt : undefined,
   };
@@ -161,6 +169,7 @@ export const useStatsMatchStore = create<StatsMatchState>()(
           status: 'draft',
           currentPeriod: 1,
           periods: createStatsMatchPeriods(settings),
+          lineups: resolveStatsMatchLineups({ homeTeam, awayTeam, settings }),
           events: [],
         };
 
@@ -195,6 +204,7 @@ export const useStatsMatchStore = create<StatsMatchState>()(
             settings,
             periods: createStatsMatchPeriods(settings),
             currentPeriod: 1,
+            lineups: resolveStatsMatchLineups({ homeTeam, awayTeam, settings }),
             updatedAt: nowIso(),
           })),
         }));
@@ -330,6 +340,36 @@ export const useStatsMatchStore = create<StatsMatchState>()(
             ...item,
             updatedAt: nowIso(),
             events: [...item.events, event],
+          })),
+        }));
+
+        return true;
+      },
+      substituteStatsPlayer: (id, teamId, playerOutId, playerInId) => {
+        const match = findMatch(get().statsMatches, id);
+
+        if (!match || isStatsMatchClosed(match)) {
+          return false;
+        }
+
+        const team = getStatsMatchTeam(match, teamId);
+
+        if (!team || !team.playerIds.includes(playerInId)) {
+          return false;
+        }
+
+        const lineup = match.lineups?.[teamId] ?? [];
+        const nextLineup = applyStatsSubstitution(lineup, playerOutId, playerInId);
+
+        if (!nextLineup) {
+          return false;
+        }
+
+        set((state) => ({
+          statsMatches: replaceMatch(state.statsMatches, id, (item) => ({
+            ...item,
+            updatedAt: nowIso(),
+            lineups: { ...(item.lineups ?? {}), [teamId]: nextLineup },
           })),
         }));
 

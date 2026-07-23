@@ -1,6 +1,7 @@
 import {
   getStatsMatchScore,
   getStatsMatchTeam,
+  getStatsTeamOnCourt,
   StatsMatch,
   StatsMatchErrorSubtype,
   StatsMatchEvent,
@@ -44,6 +45,38 @@ export function getStatsTeamPlayers(team: StatsTeam | undefined, players: Player
   return team.playerIds
     .map((playerId) => playersById.get(playerId))
     .filter((player): player is Player => Boolean(player));
+}
+
+const mapPlayerIds = (playerIds: string[], players: Player[]): Player[] => {
+  const playersById = new Map(players.map((player) => [player.id, player]));
+
+  return playerIds
+    .map((playerId) => playersById.get(playerId))
+    .filter((player): player is Player => Boolean(player));
+};
+
+// Jugadores en cancha del equipo (según el lineup actual del partido).
+export function getStatsOnCourtPlayers(
+  match: Pick<StatsMatch, 'lineups'>,
+  teamId: string,
+  players: Player[],
+): Player[] {
+  return mapPlayerIds(getStatsTeamOnCourt(match, teamId), players);
+}
+
+// Suplentes del equipo: convocados que no están en cancha, en orden de plantel.
+export function getStatsBenchPlayers(
+  match: Pick<StatsMatch, 'lineups'>,
+  team: StatsTeam | undefined,
+  players: Player[],
+): Player[] {
+  if (!team) {
+    return [];
+  }
+
+  const onCourt = new Set(getStatsTeamOnCourt(match, team.id));
+
+  return mapPlayerIds(team.playerIds.filter((playerId) => !onCourt.has(playerId)), players);
 }
 
 export function getStatsPlayerLabel(players: Player[], playerId?: string): string {
