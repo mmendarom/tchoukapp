@@ -1,5 +1,34 @@
 # Implementation Log
 
+## 2026-07-22 - Planteles rivales del torneo para scouting con Estadística 7v7 (020)
+
+Se precargaron las delegaciones rivales del torneo como planteles elegibles para
+`Estadística 7v7` (spec 013), para poder hacerles estadísticas sin cargar nada a mano.
+
+- Nuevo `src/domain/scoutingTeams.ts`: 12 rosters rivales (Argentina Masculino/Femenino/
+  Master Masculino, Canadá Masculino, Colombia Femenino 1 y 2, Colombia Masculino 1 y 2/B,
+  Brasil Masculino Mayor, Femenino, Master Masculino y Femenino Master; ~136 jugadores).
+  `buildScoutingData` genera `Player[]` (dorsal por orden de lista, posición/zona/mano por
+  defecto) y `TeamPool[]`; IDs `${poolId}-${slug(nombre)}` desduplicados global. Exporta
+  `scoutingPlayers`, `scoutingTeamPools`, `scoutingTeamPoolIds`.
+- `mockData.ts`: nuevos `defaultPlayers = [...uruguayPlayers, ...scoutingPlayers]` y
+  `defaultTeamPools = [...teamPools, ...scoutingTeamPools]`. `uruguayPlayers` y `teamPools`
+  quedan intactos (los usan otros módulos y tests).
+- `useMatchStore.ts`: estado inicial, `mergeDefaultPlayers`, `migrate`, `restoreBackupData`
+  y todas las llamadas a `ensureDefaultTeamPool` usan los defaults combinados.
+  `STORE_DATA_VERSION` 9 → 10 para que instalaciones existentes migren y sumen los rivales
+  sin pisar planteles editados por el usuario.
+- Los rivales son `Player`/`TeamPool` normales: editables desde Gestionar planteles y
+  parte del backup/restore local. Aparecen también en los selectores de Partidos,
+  Entrenamientos y Práctica 3v3 (mismo `teamPools`); ruido visual aceptable, default sigue
+  siendo `Mayores`. Ver decisión 009.
+
+Validación: `npx tsc --noEmit` OK; `npm test` 470 tests en verde (6 nuevos de integridad de
+datos de scouting; `useMatchStore` reset demo ajustado a `defaultPlayers.length`).
+
+Limitaciones: dorsales por orden de lista (no oficiales) y separación de apellidos
+compuestos a criterio; todo editable. Sin filtro por país/tipo de plantel (spec futura).
+
 ## 2026-07-05 - PDF del partido vs rival: paridad con 3v3 y detalle por jugador (019)
 
 Se comparó el export PDF del 3v3 (spec 017) con el del partido vs rival y se portaron las mejoras, más el desglose individual pedido por Mauro (spec/plan 019).

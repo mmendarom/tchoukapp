@@ -11,7 +11,7 @@ import {
   getScoreByPeriod,
 } from '../domain/periodStats';
 import { buildBackupData } from '../domain/backup';
-import { femeninoPlayerIds, mayoresPlayerIds, plus40PlayerIds, teamPools, uruguayPlayers } from '../domain/mockData';
+import { defaultPlayers, femeninoPlayerIds, mayoresPlayerIds, plus40PlayerIds, teamPools, uruguayPlayers } from '../domain/mockData';
 import { getCurrentLineup } from '../domain/stats';
 import { getBenchPlayers } from '../domain/lineupSlots';
 import { useMatchStore } from './useMatchStore';
@@ -771,7 +771,7 @@ describe('useMatchStore period stability', () => {
     useMatchStore.getState().resetDemoData();
 
     expect(useMatchStore.getState().players.map((player) => player.id)).toContain('mauro');
-    expect(useMatchStore.getState().players).toHaveLength(uruguayPlayers.length);
+    expect(useMatchStore.getState().players).toHaveLength(defaultPlayers.length);
     expect(useMatchStore.getState().players.map((player) => player.id)).toEqual(expect.arrayContaining(plus40PlayerIds));
   });
 

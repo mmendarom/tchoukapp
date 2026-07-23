@@ -1,3 +1,4 @@
+import { scoutingPlayers, scoutingTeamPools } from './scoutingTeams';
 import { Fixture, Match, Player, TeamPool } from './types';
 
 const createInitialPeriods = () => [
@@ -129,6 +130,13 @@ export const teamPools: TeamPool[] = [
     playerIds: femeninoPlayerIds,
   },
 ];
+
+// Planteles rivales del torneo (scouting con "Estadistica 7v7", spec 020),
+// sumados a los planteles propios de Uruguay. Ambas listas son la semilla por
+// defecto del store: los planteles propios primero, los rivales despues.
+export const defaultPlayers: Player[] = [...uruguayPlayers, ...scoutingPlayers];
+
+export const defaultTeamPools: TeamPool[] = [...teamPools, ...scoutingTeamPools];
 
 export const initialMatches: Match[] = [
   {

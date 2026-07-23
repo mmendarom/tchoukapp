@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
 
-import { initialMatches, teamPools, upcomingFixtures, uruguayPlayers } from '../domain/mockData';
+import { defaultPlayers, defaultTeamPools, initialMatches, upcomingFixtures } from '../domain/mockData';
 import { AppBackupData } from '../domain/backup';
 import { getTeamPoolById, resolveMatchAvailablePlayers, uniquePlayerIds, validateMatchSetup } from '../domain/matchSetup';
 import { normalizeOpponentName } from '../domain/opponent';
@@ -29,7 +29,7 @@ import { appStorage, STORAGE_KEYS } from '../storage/asyncStorage';
 type LiveEventAction = 'goal' | 'miss' | 'block' | 'fault' | 'turnover';
 type TrackableErrorType = 'falta' | 'punto_en_contra';
 
-export const STORE_DATA_VERSION = 9;
+export const STORE_DATA_VERSION = 10;
 
 type MatchState = {
   hasHydrated: boolean;
@@ -90,7 +90,7 @@ const defaultFrame: FrameSide = 'right-frame';
 const mergeDefaultPlayers = (players: Player[] | undefined) => {
   const playersById = new Map((players ?? []).map((player) => [player.id, player]));
 
-  uruguayPlayers.forEach((player) => {
+  defaultPlayers.forEach((player) => {
     if (!playersById.has(player.id)) {
       playersById.set(player.id, player);
     }
@@ -258,8 +258,8 @@ export const useMatchStore = create<MatchState>()(
   persist(
     (set, get) => ({
       hasHydrated: false,
-      players: uruguayPlayers,
-      teamPools: ensureDefaultTeamPool(teamPools, uruguayPlayers, teamPools),
+      players: defaultPlayers,
+      teamPools: ensureDefaultTeamPool(defaultTeamPools, defaultPlayers, defaultTeamPools),
       matches: initialMatches.map(normalizeMatch),
       fixtures: upcomingFixtures,
       activeMatchId: undefined,
@@ -273,7 +273,7 @@ export const useMatchStore = create<MatchState>()(
 
         set((state) => ({
           players: [...state.players, player],
-          teamPools: ensureDefaultTeamPool(state.teamPools, [...state.players, player], teamPools),
+          teamPools: ensureDefaultTeamPool(state.teamPools, [...state.players, player], defaultTeamPools),
         }));
 
         return player.id;
@@ -296,7 +296,7 @@ export const useMatchStore = create<MatchState>()(
 
           return {
             players,
-            teamPools: ensureDefaultTeamPool(state.teamPools, players, teamPools),
+            teamPools: ensureDefaultTeamPool(state.teamPools, players, defaultTeamPools),
           };
         });
 
@@ -318,7 +318,7 @@ export const useMatchStore = create<MatchState>()(
 
           return {
             players,
-            teamPools: ensureDefaultTeamPool(backup.data.teamPools, players, teamPools),
+            teamPools: ensureDefaultTeamPool(backup.data.teamPools, players, defaultTeamPools),
             matches: backup.data.matches.map(normalizeMatch),
             fixtures: backup.data.fixtures ?? [],
             activeMatchId: undefined,
@@ -359,7 +359,7 @@ export const useMatchStore = create<MatchState>()(
         }
 
         set((state) => ({
-          teamPools: ensureDefaultTeamPool([...state.teamPools, pool], state.players, teamPools),
+          teamPools: ensureDefaultTeamPool([...state.teamPools, pool], state.players, defaultTeamPools),
         }));
 
         return pool.id;
@@ -386,7 +386,7 @@ export const useMatchStore = create<MatchState>()(
           teamPools: ensureDefaultTeamPool(
             state.teamPools.map((pool) => (pool.id === poolId ? nextPool : pool)),
             state.players,
-            teamPools,
+            defaultTeamPools,
           ),
         }));
 
@@ -421,7 +421,7 @@ export const useMatchStore = create<MatchState>()(
         return match.id;
       },
       createDemoMatch: () => {
-        const defaultPool = getTeamPoolById(ensureDefaultTeamPool(get().teamPools, get().players, teamPools), 'mayores');
+        const defaultPool = getTeamPoolById(ensureDefaultTeamPool(get().teamPools, get().players, defaultTeamPools), 'mayores');
         const match = createDraftMatch({
           opponent: 'Argentina',
           venue: 'Partido demo',
@@ -1071,7 +1071,7 @@ export const useMatchStore = create<MatchState>()(
 
           return {
             players,
-            teamPools: ensureDefaultTeamPool(state.teamPools, players, teamPools),
+            teamPools: ensureDefaultTeamPool(state.teamPools, players, defaultTeamPools),
             matches: initialMatches.map(normalizeMatch),
             fixtures: upcomingFixtures,
             activeMatchId: undefined,
@@ -1091,7 +1091,7 @@ export const useMatchStore = create<MatchState>()(
         return {
           ...state,
           players,
-          teamPools: ensureDefaultTeamPool(state.teamPools, players, teamPools),
+          teamPools: ensureDefaultTeamPool(state.teamPools, players, defaultTeamPools),
           fixtures: state.fixtures?.length ? state.fixtures : upcomingFixtures,
           matches: state.matches?.map(normalizeMatch) ?? initialMatches.map(normalizeMatch),
         };
