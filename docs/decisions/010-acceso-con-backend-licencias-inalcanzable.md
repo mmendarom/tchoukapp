@@ -65,6 +65,25 @@ Se agrega un cron de GitHub Actions que pinguea el proyecto dos veces por semana
 
 Se descarta pasar a Supabase Pro (quita el auto-pausado): es un servicio pago y la constitution lo prohíbe antes de una decisión explícita de lanzamiento.
 
+## Alternativas consideradas
+
+### La rama `feature/scouting-rosters-torneo` (descartada el 2026-10-20)
+
+Al implementar P1 apareció una rama remota sin mergear, del 2026-07-23, que había resuelto este mismo problema por otro camino, con su propia decisión (`010-licencias-offline-y-auto-activacion.md`, mismo número que esta) y su spec `021-licencias-offline-torneo`:
+
+1. Agregar modo local ("Entrar sin conexión") en la portada aun con backend configurado.
+2. Extender `ACCESS_GRACE_DAYS` de 14 a **730 días**, dejando `expiresAt` como único corte real.
+3. Migración `0004_autoactivate_and_extend_2027.sql`: pasar todas las `pending` a `active`, vencimiento 2027-12-31, y trigger de alta que crea las licencias nuevas ya `active` (**auto-activación**).
+
+**Descartada por Mauro el 2026-10-20.** El motivo central: la auto-activación contradice directamente el objetivo reafirmado en esta decisión de evitar que gente no deseada use la app sin permiso — la propia decisión de esa rama admitía que "afloja la postura de activación manual de la decisión 007, a propósito". Los puntos 1 y 2 también contradicen los puntos 4 y 1 de esta decisión.
+
+Consecuencias del descarte:
+
+- La rama **no se borra**: queda en `origin` como registro. Simplemente no se mergea.
+- Sus números (specs 020/021/022, decisión 010, migración 0004) quedan libres, así que la numeración de esta decisión y de las specs 021/022 no cambia.
+- `src/domain/session.ts` habría conflictuado de verdad: ambas ramas editan `ACCESS_GRACE_DAYS` y `evaluateAccess`.
+- **Queda un hueco real sin cubrir**: el caso del iPad que no se conecta a internet *ni una vez* durante un torneo. Sin un login online inicial no hay sesión, así que no hay acceso, y el fail-open de esta decisión no ayuda (necesita una licencia `active` previamente verificada). Esa rama lo resolvía con el login offline. Si el caso aparece en la práctica, necesita una decisión nueva: no se resuelve con lo implementado acá.
+
 ## Consequences
 
 - Una pausa del proyecto deja de ser un incidente que bloquea al cuerpo técnico: se detecta por email de GitHub Actions antes de que algún usuario la note, y si igual pasa, la app aguanta 21 días.
