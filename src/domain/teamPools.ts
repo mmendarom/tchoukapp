@@ -27,17 +27,15 @@ export function ensureDefaultTeamPool(
   players: Player[],
   defaultPools: TeamPool[] = [createDefaultTeamPool(players)],
 ) {
-  const defaultPoolsById = new Map(defaultPools.map((pool) => [pool.id, pool]));
+  // Los planteles fijos solo se siembran cuando faltan: una vez creados, las
+  // ediciones del usuario (nombre y jugadores) se respetan y únicamente se
+  // filtran jugadores que ya no existen.
   const normalizedPools = (pools ?? [])
-    .map((pool) => {
-      const defaultPool = defaultPoolsById.get(pool.id);
-
-      return {
-        ...pool,
-        name: normalizeTeamPoolName(defaultPool?.name ?? pool.name),
-        playerIds: filterExistingPlayerIds(defaultPool?.playerIds ?? pool.playerIds, players),
-      };
-    })
+    .map((pool) => ({
+      ...pool,
+      name: normalizeTeamPoolName(pool.name),
+      playerIds: filterExistingPlayerIds(pool.playerIds, players),
+    }))
     .filter((pool) => pool.id && pool.name && pool.playerIds.length > 0);
   const existingPoolIds = new Set(normalizedPools.map((pool) => pool.id));
   const missingDefaultPools = defaultPools

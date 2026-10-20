@@ -68,26 +68,36 @@ describe('team pool helpers', () => {
     expect(normalizedAgain.filter((pool) => pool.id === 'femenino')).toHaveLength(1);
   });
 
-  it('normalizes default pools and preserves custom pools', () => {
-    const pollutedMayores = {
+  it('preserves user edits to fixed pools and only filters missing players', () => {
+    const editedMayores = {
       id: 'mayores',
       name: 'Mayores editado',
-      playerIds: ['mauro', 'plus40-ana-canteras', 'plus40-milena'],
+      playerIds: ['mauro', 'plus40-ana-canteras', 'jugador-borrado'],
     };
     const editedPlus40 = { id: 'plus40', name: '+40 editado', playerIds: ['mauro'] };
     const customPool = { id: 'team-pool-custom', name: 'Custom', playerIds: ['mauro', 'plus40-milena'] };
-    const ensured = ensureDefaultTeamPool([pollutedMayores, editedPlus40, customPool], uruguayPlayers, teamPools);
+    const ensured = ensureDefaultTeamPool([editedMayores, editedPlus40, customPool], uruguayPlayers, teamPools);
 
+    // La edición se respeta; solo se filtra el jugador inexistente.
     expect(ensured.find((pool) => pool.id === 'mayores')).toEqual({
       id: 'mayores',
-      name: 'Mayores',
-      playerIds: mayoresPlayerIds,
+      name: 'Mayores editado',
+      playerIds: ['mauro', 'plus40-ana-canteras'],
     });
-    expect(ensured.find((pool) => pool.id === 'plus40')?.playerIds).toEqual(teamPools.find((pool) => pool.id === 'plus40')?.playerIds);
-    expect(ensured.find((pool) => pool.id === 'plus40')?.playerIds).toEqual(plus40PlayerIds);
+    expect(ensured.find((pool) => pool.id === 'plus40')).toEqual(editedPlus40);
     expect(ensured.find((pool) => pool.id === 'team-pool-custom')).toEqual(customPool);
     expect(ensured.filter((pool) => pool.id === 'mayores')).toHaveLength(1);
     expect(ensured.filter((pool) => pool.id === 'plus40')).toHaveLength(1);
+  });
+
+  it('reseeds a fixed pool from defaults only when it disappears', () => {
+    const withoutPlus40 = [
+      { id: 'mayores', name: 'Mayores', playerIds: ['mauro'] },
+    ];
+    const ensured = ensureDefaultTeamPool(withoutPlus40, uruguayPlayers, teamPools);
+
+    expect(ensured.find((pool) => pool.id === 'plus40')?.playerIds).toEqual(plus40PlayerIds);
+    expect(ensured.find((pool) => pool.id === 'mayores')?.playerIds).toEqual(['mauro']);
   });
 
   it('builds valid pools and rejects invalid ones', () => {

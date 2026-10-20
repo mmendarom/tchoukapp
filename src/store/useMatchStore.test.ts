@@ -189,23 +189,52 @@ describe('useMatchStore period stability', () => {
     expect(useMatchStore.getState().matches.find((item) => item.id === matchId)?.availablePlayerIds).toEqual(before);
   });
 
-  it('normalizes polluted Mayores without mutating existing match roster snapshots', () => {
-    const pollutedSnapshot = [...mayoresPlayerIds, 'plus40-ana-canteras'];
+  it('keeps user edits to Mayores without mutating existing match roster snapshots', () => {
+    const editedRoster = [...mayoresPlayerIds, 'plus40-ana-canteras'];
     const matchId = useMatchStore.getState().createMatch({
       opponent: 'Brasil',
       teamPoolId: 'mayores',
-      availablePlayerIds: pollutedSnapshot,
+      availablePlayerIds: editedRoster,
       initialPlayerIds: mayoresPlayerIds.slice(0, 7),
     });
 
-    useMatchStore.getState().updateTeamPool('mayores', { playerIds: pollutedSnapshot });
+    useMatchStore.getState().updateTeamPool('mayores', { playerIds: editedRoster });
 
     const mayores = useMatchStore.getState().teamPools.find((pool) => pool.id === 'mayores');
     const match = useMatchStore.getState().matches.find((item) => item.id === matchId);
 
-    expect(mayores?.playerIds).toEqual(mayoresPlayerIds);
-    expect(mayores?.playerIds.some((playerId) => playerId.startsWith('plus40-'))).toBe(false);
-    expect(match?.availablePlayerIds).toEqual(pollutedSnapshot);
+    // Los planteles fijos se pueden editar: la edición persiste tal cual.
+    expect(mayores?.playerIds).toEqual(editedRoster);
+    expect(match?.availablePlayerIds).toEqual(editedRoster);
+  });
+
+  it('keeps a newly created player added to a fixed pool after later store updates', () => {
+    const playerId = useMatchStore.getState().createPlayer({
+      firstName: 'Nuevo',
+      lastName: 'Refuerzo',
+      position: 'Wing',
+      usualPlayingZone: 'central',
+      dominantHand: 'Right',
+    });
+
+    expect(playerId).toBeTruthy();
+    expect(
+      useMatchStore.getState().updateTeamPool('mayores', {
+        playerIds: [...mayoresPlayerIds, playerId],
+      }),
+    ).toBe(true);
+    expect(useMatchStore.getState().teamPools.find((pool) => pool.id === 'mayores')?.playerIds).toContain(playerId);
+
+    // Otras acciones del store (crear otro jugador) no deben revertir la edición.
+    useMatchStore.getState().createPlayer({
+      firstName: 'Otro',
+      lastName: 'Jugador',
+      position: 'Wing',
+      usualPlayingZone: 'derecha',
+      dominantHand: 'Right',
+    });
+
+    expect(useMatchStore.getState().teamPools.find((pool) => pool.id === 'mayores')?.playerIds).toContain(playerId);
   });
 
   it('keeps demo match creation using Argentina', () => {
