@@ -9,14 +9,14 @@ import { buildMatchReportHtml, buildMatchReportText } from './reportHtml';
 
 const performance = {
   rows: [
-    { playerId: 'p1', playerName: '#1 Mauro', goals: 3, rivalDefendedShots: 1, ownPointsAgainst: 1, shotAttempts: 5, effectiveness: 0.6, defenses: 0, attackShare: 1, defenseShare: 0 },
-    { playerId: 'p2', playerName: '#2 Marcelo', goals: 0, rivalDefendedShots: 1, ownPointsAgainst: 0, shotAttempts: 1, effectiveness: 0, defenses: 2, attackShare: 0, defenseShare: 1 },
+    { playerId: 'p1', playerName: '#1 Mauro', goals: 3, rivalDefendedShots: 1, ownPointsAgainst: 1, shotAttempts: 5, effectiveness: 0.6, defenses: 0, attackShare: 1, potentialShare: 5 / 3, defenseShare: 0 },
+    { playerId: 'p2', playerName: '#2 Marcelo', goals: 0, rivalDefendedShots: 1, ownPointsAgainst: 0, shotAttempts: 1, effectiveness: 0, defenses: 2, attackShare: 0, potentialShare: 1 / 3, defenseShare: 1 },
   ],
   totalGoals: 3,
   totalShotAttempts: 6,
   totalDefenses: 2,
-  topAttack: [{ playerId: 'p1', playerName: '#1 Mauro', goals: 3, rivalDefendedShots: 1, ownPointsAgainst: 1, shotAttempts: 5, effectiveness: 0.6, defenses: 0, attackShare: 1, defenseShare: 0 }],
-  topDefense: [{ playerId: 'p2', playerName: '#2 Marcelo', goals: 0, rivalDefendedShots: 1, ownPointsAgainst: 0, shotAttempts: 1, effectiveness: 0, defenses: 2, attackShare: 0, defenseShare: 1 }],
+  topAttack: [{ playerId: 'p1', playerName: '#1 Mauro', goals: 3, rivalDefendedShots: 1, ownPointsAgainst: 1, shotAttempts: 5, effectiveness: 0.6, defenses: 0, attackShare: 1, potentialShare: 5 / 3, defenseShare: 0 }],
+  topDefense: [{ playerId: 'p2', playerName: '#2 Marcelo', goals: 0, rivalDefendedShots: 1, ownPointsAgainst: 0, shotAttempts: 1, effectiveness: 0, defenses: 2, attackShare: 0, potentialShare: 1 / 3, defenseShare: 1 }],
 };
 
 const emptyPerformance = {
@@ -245,6 +245,7 @@ const report: MatchReportData = {
       ownPointsAgainst: 1,
       effectiveness: 0.6,
       attackShare: 1,
+      potentialShare: 5 / 3,
       defenses: 0,
       defenseShare: 0,
       errors: 1,
@@ -261,6 +262,7 @@ const report: MatchReportData = {
       ownPointsAgainst: 0,
       effectiveness: 0,
       attackShare: 0,
+      potentialShare: 1 / 3,
       defenses: 2,
       defenseShare: 1,
       errors: 0,
@@ -332,10 +334,14 @@ describe('reportHtml', () => {
     expect(html).toContain('class="performance-grid"');
     expect(html).toContain('class="converted-bar"');
     expect(html).toContain('class="defense-bar"');
-    // La barra de ataque mide attackShare (participación en los goles), no efectividad.
+    // La barra fuerte mide attackShare (participación en los goles) y la barra
+    // celeste el aporte posible (tiros generados sobre goles del equipo).
     expect(html).toContain('style="width:100.0%;height:12px;background-color:#075ca8;"');
     expect(html).toContain('style="width:100.0%;height:12px;background-color:#0b6b61;"');
-    expect(html).not.toContain('class="attempt-bar"');
+    // p1: 5 tiros / 3 goles del equipo se recorta a 100%; p2: 1/3 = 33.3%.
+    expect(html).toContain('class="attempt-bar" style="width:100.0%;height:12px;background-color:#9dcff0;"');
+    expect(html).toContain('class="attempt-bar" style="width:33.3%;height:12px;background-color:#9dcff0;"');
+    expect(html).toContain('Aporte posible sin atajados/errados');
     expect(html).toContain('print-color-adjust: exact');
     expect(html).toContain('#4 Vladi · 0/4 tiros · 4 atajados');
     expect(html).toContain('#2 Marcelo · 3 errores');
@@ -526,6 +532,7 @@ describe('reportHtml', () => {
       effectiveness: (9 - index) / (10 - index),
       defenses: 9 - index,
       attackShare: (9 - index) / 45,
+      potentialShare: (10 - index) / 45,
       defenseShare: (9 - index) / 45,
     }));
     const densePerformance = {

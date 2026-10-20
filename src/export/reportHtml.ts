@@ -106,14 +106,19 @@ const effectivenessHtml = (items: ReportEffectivenessRow[], legacyOpponentDefens
 `;
 
 const attackPerformanceRowHtml = (item: ReportPlayerPerformanceRow) => {
-  // El ancho representa la participación del jugador en los goles del equipo (spec 019).
+  // Barra fuerte: participación en los goles del equipo (spec 019). Barra
+  // celeste: aporte posible si también convertía los atajados/errados.
   const convertedWidth = clampPercent(item.attackShare * 100);
+  const potentialWidth = clampPercent(item.potentialShare * 100);
+  const convertedInnerWidth = potentialWidth > 0 ? clampPercent((convertedWidth / potentialWidth) * 100) : 0;
   const effectiveness = typeof item.effectiveness === 'number' ? formatPercent(item.effectiveness) : 'Sin tiros';
 
   return `<div class="performance-row">
     <div class="performance-meta"><strong>${escapeHtml(item.playerName)}</strong><span>${item.goals}/${item.shotAttempts} tiros · ${escapeHtml(effectiveness)}</span></div>
     <div class="performance-track attack-track" style="height:12px;background-color:#d8ecf8;">
-      <div class="converted-bar" style="width:${convertedWidth.toFixed(1)}%;height:12px;background-color:#075ca8;">&nbsp;</div>
+      <div class="attempt-bar" style="width:${potentialWidth.toFixed(1)}%;height:12px;background-color:#9dcff0;">
+        <div class="converted-bar" style="width:${convertedInnerWidth.toFixed(1)}%;height:12px;background-color:#075ca8;">&nbsp;</div>
+      </div>
     </div>
     <small>${escapeHtml(formatPercent(item.attackShare))} de los goles · ${formatCount(item.rivalDefendedShots, 'atajado', 'atajados')} · ${formatCount(item.ownPointsAgainst, 'errado', 'errados')}</small>
   </div>`;
@@ -147,7 +152,7 @@ const performanceHtml = (performance: ReportPlayerPerformance) => {
   return `<div class="performance-grid">
     <div class="performance-column attack-performance-card">
       <h4>Ataque</h4>
-      <p class="performance-legend"><span class="legend-converted"></span> Participación en los goles del equipo</p>
+      <p class="performance-legend"><span class="legend-converted"></span> Participación en los goles del equipo <span class="legend-attempt"></span> Aporte posible sin atajados/errados</p>
       ${attackRows.length === 0 ? '<p class="muted">Sin tiros registrados.</p>' : visibleAttackRows.map(attackPerformanceRowHtml).join('')}
       ${attackRows.length > PERFORMANCE_ROW_LIMIT ? `<p class="more-rows">+${attackRows.length - PERFORMANCE_ROW_LIMIT} jugadores más</p>` : ''}
     </div>
@@ -321,6 +326,8 @@ const renderMapStack = (maps: ReportLocationMaps) => `
 const playerDetailHtml = (player: ReportPlayerDetail) => {
   const effectiveness = typeof player.effectiveness === 'number' ? formatPercent(player.effectiveness) : 'Sin tiros';
   const attackWidth = clampPercent(player.attackShare * 100);
+  const potentialWidth = clampPercent(player.potentialShare * 100);
+  const attackInnerWidth = potentialWidth > 0 ? clampPercent((attackWidth / potentialWidth) * 100) : 0;
   const defenseWidth = clampPercent(player.defenseShare * 100);
 
   return `
@@ -347,7 +354,7 @@ const playerDetailHtml = (player: ReportPlayerDetail) => {
         <h4>Ataque</h4>
         <div class="performance-row">
           <div class="performance-meta"><strong>${escapeHtml(formatPercent(player.attackShare))} de los goles del equipo</strong><span>${player.goals}/${player.shotAttempts} tiros · ${escapeHtml(effectiveness)}</span></div>
-          <div class="performance-track attack-track" style="height:12px;background-color:#d8ecf8;"><div class="converted-bar" style="width:${attackWidth.toFixed(1)}%;height:12px;background-color:#075ca8;">&nbsp;</div></div>
+          <div class="performance-track attack-track" style="height:12px;background-color:#d8ecf8;"><div class="attempt-bar" style="width:${potentialWidth.toFixed(1)}%;height:12px;background-color:#9dcff0;"><div class="converted-bar" style="width:${attackInnerWidth.toFixed(1)}%;height:12px;background-color:#075ca8;">&nbsp;</div></div></div>
         </div>
       </div>
       <div class="performance-column defense-performance-card">
@@ -520,11 +527,13 @@ export function buildMatchReportHtml(report: MatchReportData) {
     .performance-meta { display: flex; justify-content: space-between; gap: 8px; font-size: 11px; }
     .performance-meta span, .performance-row small { color: #5d6b7a; }
     .performance-track { height: 12px; border: 1px solid #9fb4c8; border-radius: 6px; overflow: hidden; margin: 4px 0; background-color: #dbe4ef; }
-    .converted-bar, .defense-bar { display: block; min-height: 12px; border-radius: 5px; }
+    .attempt-bar, .converted-bar, .defense-bar { display: block; min-height: 12px; border-radius: 5px; }
+    .attempt-bar { background-color: #9dcff0; }
     .converted-bar { background-color: #075ca8; }
     .defense-bar { background-color: #0b6b61; }
     .performance-legend { color: #5d6b7a; font-size: 9px; }
-    .legend-converted, .legend-defense { display: inline-block; width: 12px; height: 7px; margin: 0 4px 0 2px; border: 1px solid #7890a5; }
+    .legend-attempt, .legend-converted, .legend-defense { display: inline-block; width: 12px; height: 7px; margin: 0 4px 0 2px; border: 1px solid #7890a5; }
+    .legend-attempt { background-color: #9dcff0; }
     .legend-converted { background-color: #075ca8; }
     .legend-defense { background-color: #0b6b61; }
     .more-rows { color: #5d6b7a; font-size: 10px; font-weight: 800; margin-top: 6px; }

@@ -132,6 +132,20 @@ describe('training performance', () => {
     expect(p2?.pointShare).toBeCloseTo(1 / 3);
   });
 
+  it('reparte potentialShare como tiros generados sobre el total de goles', () => {
+    const data = buildTrainingPerformance(session([
+      event('p1-1', 'point', 'team-a', 'p1'),
+      event('p1-2', 'point', 'team-a', 'p1'),
+      event('p2-1', 'point', 'team-a', 'p2'),
+      event('p2-defended', 'shot_defended', 'team-a', 'p2', { defendingTeamId: 'team-b', defenderPlayerId: 'p4' }),
+    ]), players);
+
+    expect(data.totalPoints).toBe(3);
+    // p1: 2 tiros / 3 goles; p2: 1 gol + 1 atajado = 2 tiros / 3 goles.
+    expect(data.attackRows.find((row) => row.playerId === 'p1')?.potentialShare).toBeCloseTo(2 / 3);
+    expect(data.attackRows.find((row) => row.playerId === 'p2')?.potentialShare).toBeCloseTo(2 / 3);
+  });
+
   it('deja pointShare en 0 cuando no hay goles', () => {
     const data = buildTrainingPerformance(session([
       event('p1-defended', 'shot_defended', 'team-a', 'p1', { defendingTeamId: 'team-b', defenderPlayerId: 'p4' }),
@@ -139,6 +153,7 @@ describe('training performance', () => {
 
     expect(data.totalPoints).toBe(0);
     expect(data.attackRows.find((row) => row.playerId === 'p1')?.pointShare).toBe(0);
+    expect(data.attackRows.find((row) => row.playerId === 'p1')?.potentialShare).toBe(0);
   });
 
   it('sorts defense rows by defenses and share', () => {

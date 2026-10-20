@@ -81,6 +81,7 @@ export type TrainingReportPlayerDetail = {
   ownPointsAgainst: number;
   effectiveness: number;
   pointShare: number;
+  potentialShare: number;
   defenses: number;
   defenseShare: number;
   errors: number;
@@ -265,6 +266,7 @@ export function buildTrainingReportData(session: TrainingSession, players: Playe
       ownPointsAgainst: row.ownPointsAgainst,
       effectiveness: row.effectiveness ?? 0,
       pointShare: row.pointShare,
+      potentialShare: row.potentialShare,
       defenses: defenseRow?.defenses ?? 0,
       defenseShare: defenseRow?.defenseShare ?? 0,
       errors: playerStats?.errors ?? 0,

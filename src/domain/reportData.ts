@@ -90,6 +90,9 @@ export type ReportPlayerPerformanceRow = {
   effectiveness?: number;
   defenses: number;
   attackShare: number;
+  // Aporte posible (tiros generados / goles del equipo) en la misma escala
+  // que attackShare; puede superar 1 y los renderers lo recortan a 100%.
+  potentialShare: number;
   defenseShare: number;
 };
 
@@ -113,6 +116,7 @@ export type ReportPlayerDetail = {
   ownPointsAgainst: number;
   effectiveness?: number;
   attackShare: number;
+  potentialShare: number;
   defenses: number;
   defenseShare: number;
   errors: number;
@@ -342,6 +346,7 @@ const mapPerformanceRow = (row: PlayerPerformanceRow): ReportPlayerPerformanceRo
   effectiveness: row.effectiveness,
   defenses: row.defenses,
   attackShare: row.pointShare,
+  potentialShare: row.potentialShare,
   defenseShare: row.defenseShare,
 });
 
@@ -510,6 +515,7 @@ export function buildMatchReportData(match: Match, players: Player[]): MatchRepo
     ownPointsAgainst: row.ownPointsAgainst,
     effectiveness: row.effectiveness,
     attackShare: row.pointShare,
+    potentialShare: row.potentialShare,
     defenses: row.defenses,
     defenseShare: row.defenseShare,
     errors: errorsByPlayer.get(row.playerId) ?? 0,

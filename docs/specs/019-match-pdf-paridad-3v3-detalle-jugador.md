@@ -4,6 +4,8 @@
 
 Implemented
 
+> Ajuste 2026-07-06 (pedido de Mauro): se devolvió la barra celeste de "aporte posible" que esta spec había quitado de los PDF. La barra fuerte sigue midiendo `attackShare`/`pointShare` (las barras suman el total de goles del equipo) y la barra celeste (`potentialShare` = tiros generados / goles del equipo, recortada a 100%) muestra hasta dónde llegaba el jugador si también convertía los tiros atajados/errados. Aplica al PDF formal (`reportHtml.ts`, filas y detalle por jugador, colores #9dcff0/#075ca8) y al PDF 3v3 (`trainingReportHtml.ts`, #8bd3ff/#0b6bcb). Las barras in-app no cambian.
+
 ## Contexto
 
 Pedido explícito de Mauro: comparar el export PDF del 3v3 (spec 017/012) con el del partido vs rival y portar todas las mejoras del 3v3 al modo formal, más un desglose individual por jugador participante.

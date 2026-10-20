@@ -5,6 +5,10 @@ export type PlayerPerformanceRow = {
   playerName: string;
   points: number;
   pointShare: number;
+  // Aporte posible en la misma escala que pointShare: tiros generados / goles
+  // del equipo. Puede superar 1 si generó más tiros que goles tuvo el equipo;
+  // los renderers lo recortan a 100%.
+  potentialShare: number;
   rivalDefensesAgainst: number;
   ownPointsAgainst: number;
   shotAttempts: number;
@@ -137,6 +141,7 @@ export function buildPlayerPerformance(
         playerName: getPlayerLabel(players, playerId),
         points,
         pointShare: totalTeamPoints > 0 ? points / totalTeamPoints : 0,
+        potentialShare: totalTeamPoints > 0 ? shotAttempts / totalTeamPoints : 0,
         rivalDefensesAgainst,
         ownPointsAgainst,
         shotAttempts,

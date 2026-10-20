@@ -88,6 +88,21 @@ describe('playerPerformance', () => {
     expect(data.rows.find((row) => row.playerId === 'p2')).toMatchObject({ points: 1, pointShare: 1 / 3 });
   });
 
+  it('calculates potential share from shot attempts over team points', () => {
+    const data = buildPlayerPerformance([
+      point({ id: 'p1-a', playerId: 'p1' }),
+      point({ id: 'p1-b', playerId: 'p1' }),
+      point({ id: 'p2-a', playerId: 'p2' }),
+      opponentDefense({ id: 'p2-blocked', playerId: 'p2' }),
+      ownPointAgainst({ id: 'p2-own', playerId: 'p2' }),
+    ], players);
+
+    expect(data.totalTeamPoints).toBe(3);
+    // p1: 2 tiros / 3 goles del equipo; p2: 1 gol + 1 atajado + 1 errado = 3 tiros / 3 goles.
+    expect(data.rows.find((row) => row.playerId === 'p1')?.potentialShare).toBeCloseTo(2 / 3);
+    expect(data.rows.find((row) => row.playerId === 'p2')?.potentialShare).toBeCloseTo(1);
+  });
+
   it('calculates defense share from Uruguay defenses by player', () => {
     const data = buildPlayerPerformance([
       defense({ id: 'p1-d', playerId: 'p1' }),

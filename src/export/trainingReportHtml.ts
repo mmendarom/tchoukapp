@@ -118,8 +118,10 @@ const renderAttackRows = (report: TrainingReportData) => {
 };
 
 const renderAttackRow = (row: TrainingPerformanceAttackRow, isTop: boolean) => {
-  // El ancho representa la participación del jugador en el total de goles.
+  // Barra fuerte: participación del jugador en el total de goles. Barra
+  // celeste: aporte posible si también convertía los atajados/errados.
   const pointWidth = Math.min(row.pointShare, 1) * 100;
+  const potentialWidth = Math.min(row.potentialShare, 1) * 100;
   const misses = [row.shotsDefended ? plural(row.shotsDefended, 'atajado', 'atajados') : '', row.ownPointsAgainst ? plural(row.ownPointsAgainst, 'errado', 'errados') : '']
     .filter(Boolean)
     .join(' · ');
@@ -133,6 +135,7 @@ const renderAttackRow = (row: TrainingPerformanceAttackRow, isTop: boolean) => {
       ${row.teamName ? `<p>${escapeHtml(row.teamName)}</p>` : ''}
       ${misses ? `<p>${escapeHtml(misses)}</p>` : ''}
       <div class="bar-track attack-track">
+        <span class="attempt-bar" style="width:${potentialWidth}%"></span>
         <span class="point-bar" style="width:${pointWidth}%"></span>
       </div>
       <p class="bar-share">${formatPercent(row.pointShare)} de los goles</p>
@@ -342,8 +345,10 @@ const renderPlayerMetricCards = (player: TrainingReportPlayerDetail) => `
 `;
 
 const renderPlayerPerformance = (player: TrainingReportPlayerDetail) => {
-  // El ancho de la barra de ataque es la participación en el total de goles.
+  // Barra fuerte: participación en el total de goles. Barra celeste: aporte
+  // posible si también convertía los atajados/errados.
   const attackWidth = Math.min(player.pointShare, 1) * 100;
+  const potentialWidth = Math.min(player.potentialShare, 1) * 100;
   const defenseWidth = Math.min(player.defenseShare, 1) * 100;
   const breakdown = [
     player.shotsDefended ? plural(player.shotsDefended, 'atajado', 'atajados') : '',
@@ -360,6 +365,7 @@ const renderPlayerPerformance = (player: TrainingReportPlayerDetail) => {
         </div>
         ${breakdown ? `<p>${escapeHtml(breakdown)}</p>` : '<p>Sin atajados ni errados.</p>'}
         <div class="bar-track attack-track">
+          <span class="attempt-bar" style="width:${potentialWidth}%"></span>
           <span class="point-bar" style="width:${attackWidth}%"></span>
         </div>
         <p>${formatPercent(player.pointShare)} de los goles</p>
@@ -517,7 +523,7 @@ export function buildTrainingReportHtml(report: TrainingReportData) {
     }
     .attack-track { background: #d9ebff; }
     .defense-track { background: #ccfbf1; }
-    .point-bar, .defense-bar {
+    .attempt-bar, .point-bar, .defense-bar {
       border-radius: 999px;
       bottom: 0;
       display: block;
@@ -525,6 +531,7 @@ export function buildTrainingReportHtml(report: TrainingReportData) {
       position: absolute;
       top: 0;
     }
+    .attempt-bar { background: #8bd3ff; }
     .point-bar { background: #0b6bcb; min-width: 6px; }
     .defense-bar { background: #0f766e; min-width: 6px; }
     .mini-list { display: grid; gap: 8px; }

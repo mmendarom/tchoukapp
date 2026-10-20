@@ -151,13 +151,17 @@ describe('training report html', () => {
     expect(html).toContain('.summary-card, .team-card, .mini-card, .bar-row, .alert-grid article, tr {');
   });
 
-  it('dibuja las barras de ataque según el porcentaje de goles', () => {
+  it('dibuja las barras de ataque según el porcentaje de goles con aporte posible celeste', () => {
     const html = richHtml();
 
-    // En richHtml solo p1 convierte, así que su barra ocupa el 100% de los goles.
+    // En richHtml solo p1 convierte, así que su barra fuerte ocupa el 100% de los goles.
     expect(html).toContain('de los goles');
-    expect(html).toContain('width:100%');
-    expect(html).not.toContain('attempt-bar');
+    expect(html).toContain('class="point-bar" style="width:100%"');
+    // La barra celeste marca el aporte posible (tiros generados / goles totales).
+    expect(html).toContain('class="attempt-bar" style="width:100%"');
+    // p2 no convirtió: barra fuerte en 0 pero celeste visible por su tiro atajado.
+    expect(html).toContain('class="point-bar" style="width:0%"');
+    expect(html).toContain('.attempt-bar { background: #8bd3ff; }');
   });
 
   it('shows empty map states safely', () => {

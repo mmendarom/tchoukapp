@@ -13,6 +13,9 @@ export type TrainingPerformanceAttackRow = {
   effectiveness: number | undefined;
   // Participación en el total de goles de la práctica (puntos / totalPoints).
   pointShare: number;
+  // Aporte posible en la misma escala: tiros generados / totalPoints. Puede
+  // superar 1; los renderers lo recortan a 100%.
+  potentialShare: number;
 };
 
 export type TrainingPerformanceDefenseRow = {
@@ -133,6 +136,7 @@ export function buildTrainingPerformance(session: TrainingSession, players: Play
       ownPointsAgainst: playerStats.ownPointsAgainst,
       effectiveness,
       pointShare: totalPoints > 0 ? playerStats.points / totalPoints : 0,
+      potentialShare: totalPoints > 0 ? playerStats.attempts / totalPoints : 0,
     };
   }));
   const defenseRows = sortTrainingDefenseRows(stats.playerStats.map((playerStats) => {
