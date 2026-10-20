@@ -272,7 +272,8 @@ export const hasActiveAccess = (
 export type AccessNoticeLevel =
   | 'none' // sin aviso visible
   | 'warning' // la gracia normal se está agotando
-  | 'critical'; // el servidor no responde y hay un techo corriendo
+  | 'critical' // el servidor no responde y hay un techo corriendo
+  | 'relogin'; // la sesión venció: hay que reloguear, conectarse no alcanza
 
 export type AccessNotice = {
   level: AccessNoticeLevel;
@@ -280,18 +281,44 @@ export type AccessNotice = {
   daysLeft?: number;
 };
 
+/**
+ * @param lastFailureKind motivo del último intento fallido de verificar la
+ *   licencia, si lo hay. Viene del store (no se persiste en el perfil) y es lo
+ *   que permite distinguir "sesión vencida" de "sin conexión".
+ */
 export const getAccessNotice = (
   profile: UserProfile | undefined,
   nowIso: string = new Date().toISOString(),
+  lastFailureKind?: AccountFailureKind,
 ): AccessNotice => {
   const access = evaluateAccess(profile, nowIso);
 
-  if (access === 'unreachable') {
-    return { level: 'critical', daysLeft: getUnreachableDaysLeft(profile, nowIso) ?? 0 };
+  // Solo hay algo que avisar mientras la app todavía da acceso. Si ya bloqueó,
+  // de explicarlo se encarga AccessBlockedScreen.
+  if (access !== 'active' && access !== 'unreachable') {
+    return { level: 'none' };
   }
 
-  if (access !== 'active') {
-    return { level: 'none' };
+  // Sesión vencida (spec 021, P3). Va antes que los otros dos niveles por dos
+  // razones:
+  // - Con la sesión muerta la licencia no se puede reverificar, así que la
+  //   gracia corre hacia el bloqueo sin vuelta. Hay que avisar apenas se sabe,
+  //   no recién en los últimos GRACE_WARNING_DAYS.
+  // - El texto de 'warning' dice "conectate a internet", que acá es falso:
+  //   conectarse no arregla una sesión vencida, hay que reloguear.
+  // Si el acceso venía por fail-open, un fallo 'auth' además prueba que el
+  // servidor respondió, así que el 'critical' por inalcanzable quedó viejo.
+  if (lastFailureKind === 'auth' || lastFailureKind === 'no-session') {
+    const daysLeft =
+      access === 'unreachable'
+        ? (getUnreachableDaysLeft(profile, nowIso) ?? 0)
+        : (getGraceDaysLeft(profile, nowIso) ?? 0);
+
+    return { level: 'relogin', daysLeft };
+  }
+
+  if (access === 'unreachable') {
+    return { level: 'critical', daysLeft: getUnreachableDaysLeft(profile, nowIso) ?? 0 };
   }
 
   const graceDaysLeft = getGraceDaysLeft(profile, nowIso);

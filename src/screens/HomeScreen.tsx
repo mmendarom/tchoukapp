@@ -7,7 +7,7 @@ import { PlayerManagerModal } from '../components/PlayerManagerModal';
 import { Screen } from '../components/Screen';
 import { TeamPoolManagerModal } from '../components/TeamPoolManagerModal';
 import { AppBackupData, buildBackupData } from '../domain/backup';
-import { getAccessNotice } from '../domain/session';
+import { AccessNoticeLevel, getAccessNotice } from '../domain/session';
 import { exportBackupJson } from '../export/exportBackup';
 import { pickAndParseBackupJson } from '../export/importBackup';
 import { STORE_DATA_VERSION, useMatchStore } from '../store/useMatchStore';
@@ -22,6 +22,33 @@ import { APP_NAME, APP_TAGLINE } from '../utils/theme';
 type Props = NativeStackScreenProps<RootStackParamList, 'Home'>;
 
 const appLogo = require('../../assets/logo.png');
+
+// El nivel del aviso lo decide `getAccessNotice` en el dominio; acá solo se
+// elige el texto (spec 021). Ningún nivel culpa a la conexión del usuario
+// cuando el problema es otro: es el tipo de mensaje falso que la decisión 010
+// se propuso eliminar.
+const accessNoticeLabel = (level: AccessNoticeLevel, daysLeft: number): string => {
+  const remaining = daysLeft === 1 ? 'Queda 1 día' : `Quedan ${daysLeft} días`;
+
+  switch (level) {
+    case 'relogin':
+      // Conectarse no alcanza: con la sesión vencida la licencia no se puede
+      // reverificar, así que hay que reloguear antes de que se agote la gracia.
+      return daysLeft === 0
+        ? 'Tu sesión en el servidor venció y el acceso se bloquea hoy. Cerrá sesión desde Perfil y volvé a entrar con tu email.'
+        : `Tu sesión en el servidor venció. ${remaining} antes de que la app se bloquee: cerrá sesión desde Perfil y volvé a entrar con tu email.`;
+    case 'critical':
+      return daysLeft === 0
+        ? 'No podemos contactar el servidor de licencias y el margen se agota hoy. Avisale a Mauro.'
+        : `No podemos contactar el servidor de licencias. ${remaining} antes de que la app se bloquee. Avisale a Mauro.`;
+    case 'warning':
+      return daysLeft === 0
+        ? 'La verificación de tu licencia vence hoy. Conectate a internet para renovar el acceso.'
+        : `${remaining} de uso sin conexión. Conectate a internet para renovar el acceso.`;
+    case 'none':
+      return '';
+  }
+};
 
 export function HomeScreen({ navigation }: Props) {
   const [poolManagerVisible, setPoolManagerVisible] = useState(false);
@@ -43,6 +70,7 @@ export function HomeScreen({ navigation }: Props) {
   const statsMatches = useStatsMatchStore((state) => state.statsMatches);
   const restoreStatsMatches = useStatsMatchStore((state) => state.restoreStatsMatches);
   const profile = useSessionStore((state) => state.profile);
+  const lastFailure = useSessionStore((state) => state.lastVerificationFailure);
 
   const entitlement = profile?.accountId ? profile.entitlement : undefined;
   const verifiedMs = entitlement ? Date.parse(entitlement.verifiedAt) : Number.NaN;
@@ -65,25 +93,10 @@ export function HomeScreen({ navigation }: Props) {
         .filter(Boolean)
         .join(' · ')
     : '';
-  // El nivel del aviso lo decide `getAccessNotice` en el dominio; acá solo se
-  // elige el texto (spec 021). El nivel 'critical' no culpa a la conexión del
-  // usuario: en ese caso el que no responde es el servidor de licencias.
-  const accessNotice = getAccessNotice(profile);
-  const noticeDaysLeft = accessNotice.daysLeft ?? 0;
-  const graceWarningLabel =
-    accessNotice.level === 'none'
-      ? ''
-      : accessNotice.level === 'critical'
-        ? noticeDaysLeft === 0
-          ? 'No podemos contactar el servidor de licencias y el margen se agota hoy. Avisale a Mauro.'
-          : noticeDaysLeft === 1
-            ? 'No podemos contactar el servidor de licencias. Queda 1 día antes de que la app se bloquee. Avisale a Mauro.'
-            : `No podemos contactar el servidor de licencias. Quedan ${noticeDaysLeft} días antes de que la app se bloquee. Avisale a Mauro.`
-        : noticeDaysLeft === 0
-          ? 'La verificación de tu licencia vence hoy. Conectate a internet para renovar el acceso.'
-          : noticeDaysLeft === 1
-            ? 'Queda 1 día de uso sin conexión. Conectate a internet para renovar el acceso.'
-            : `Quedan ${noticeDaysLeft} días de uso sin conexión. Conectate a internet para renovar el acceso.`;
+  // El motivo del último fallo es lo que distingue "sesión vencida" de "sin
+  // conexión": sin él, una sesión muerta recibía el aviso de conectarse.
+  const accessNotice = getAccessNotice(profile, undefined, lastFailure?.kind);
+  const graceWarningLabel = accessNoticeLabel(accessNotice.level, accessNotice.daysLeft ?? 0);
   const activeMatch = matches.find((match) => match.status === 'live' || match.status === 'period_break');
   const visibleMatchCount = matches.filter((match) => match.status !== 'cancelled').length;
   const backupStatusLabel =

@@ -1,5 +1,33 @@
 # Implementation Log
 
+## 2026-10-20 - Auditoria de P3: la sesion muerta ahora es visible en Inicio (spec 021)
+
+Mauro pidio implementar P3, que ya estaba implementado y pusheado (`6762515`). En vez de rehacerlo se audito contra los objetivos de la spec 021, y aparecio un hueco real.
+
+El hueco: el objetivo de la spec es "que la sesion muerta sea visible y recuperable (reloguear) en vez de silenciosa". El commit de P3 hacia que la app *detectara* la sesion muerta, pero mientras todavia daba acceso, ese estado solo aparecia en la fila "Servidor" del Perfil. Y era peor que invisible:
+
+- Con la sesion vencida la licencia no se puede reverificar, asi que la gracia de 14 dias corre hacia el bloqueo **sin vuelta**. Hay que avisar apenas se sabe.
+- Al llegar a los ultimos `GRACE_WARNING_DAYS`, el banner de Inicio decia "Conectate a internet para renovar el acceso". **Falso**: conectarse no arregla una sesion vencida, hay que reloguear. Es el mismo tipo de mensaje mentiroso que la decision 010 se propuso eliminar.
+
+Archivos cambiados:
+
+- `src/domain/session.ts`: nivel `relogin` en `AccessNoticeLevel`; `getAccessNotice` recibe un tercer parametro opcional `lastFailureKind`. Con `auth` o `no-session` y la app todavia dando acceso, devuelve `relogin` con los dias que quedan antes del bloqueo.
+- `src/screens/HomeScreen.tsx`: pasa el motivo del ultimo fallo y muestra el texto de `relogin`. La cadena de ternarios anidados (tres niveles por tres variantes de dias) se reemplazo por `accessNoticeLabel`, una funcion con `switch`: un cuarto nivel la volvia ilegible.
+- `src/domain/session.test.ts`: +5.
+- `docs/specs/021-resiliencia-backend-licencias.md`: el nivel nuevo en "Avisos escalonados" y en la UI de `HomeScreen`, el porque, y un item nuevo en la checklist. La constitution pide actualizar la spec si cambia el enfoque durante la implementacion.
+
+Decisiones de implementacion:
+
+- **`relogin` tiene prioridad sobre `warning` y `critical`.** Sobre `warning` porque su texto seria falso; sobre `critical` porque un fallo `auth` prueba que el servidor respondio, asi que la alarma de inalcanzable quedo vieja. Es el unico de los tres que el usuario puede arreglar el solo.
+- **El parametro es opcional**, asi que todas las llamadas existentes y los tests previos de `getAccessNotice` siguen igual sin tocarse.
+- **El motivo viene del store y no del perfil** porque `lastVerificationFailure` no se persiste: al arrancar, `App.tsx` reintenta y lo vuelve a poblar. Con la sesion muerta, `getSession()` devuelve null y el motivo queda en `no-session`.
+
+Verificacion del refactor de `HomeScreen`: se comparo mecanicamente la logica vieja (desde `HEAD`) contra `accessNoticeLabel` para `none`, `warning` y `critical` con 0 a 21 dias: **66 combinaciones, 0 diferencias**. Los textos existentes quedaron identicos. El primer intento de esa comparacion dio 66 diferencias falsas por un bug del script (el `return` seguido de salto de linea cayo en la insercion automatica de punto y coma de JavaScript); se corrigio y se le agrego un control que aborta si el harness devuelve algo que no es texto.
+
+Validacion: `npx tsc --noEmit` exit 0; `npm test` 40 archivos y **511 tests en verde** (eran 506).
+
+QA manual sugerida: con cuenta vinculada y la sesion invalidada desde el dashboard de Supabase, abrir la app. Inicio debe mostrar "Tu sesion en el servidor vencio. Quedan N dias antes de que la app se bloquee: cerra sesion desde Perfil y volve a entrar con tu email.", con N igual a los dias de gracia que quedan. No debe aparecer "Conectate a internet".
+
 ## 2026-10-20 - Sesion muerta detectada y refresh de tokens arreglado (spec 021, P3)
 
 Implementa P3 de la spec 021 (paso 3 del plan). Cierra el ultimo frente de codigo de esa spec: hasta ahora, si supabase-js invalidaba la sesion por su cuenta, la app no se enteraba.

@@ -102,12 +102,18 @@ Los pasos 3, 4 y 5 van **antes** del 6 y 7 a propósito: es lo que garantiza que
 `getGraceDaysLeft` se mantiene. Se agrega una función pura que decide el aviso a mostrar en Inicio y Perfil, para no poner esa lógica en los componentes:
 
 ```ts
-getAccessNotice(profile, nowIso): { level: 'none' | 'info' | 'warning' | 'critical'; daysLeft?: number }
+getAccessNotice(profile, nowIso, lastFailureKind?): { level: 'none' | 'warning' | 'critical' | 'relogin'; daysLeft?: number }
 ```
 
 - `none`: gracia normal corriendo con margen → sin aviso visible (equivale a hoy).
 - `warning`: quedan `GRACE_WARNING_DAYS` o menos de gracia normal.
 - `critical`: estado `unreachable` → el servidor no responde y hay un techo corriendo; se muestran los días restantes.
+- `relogin` *(agregado el 2026-10-20 al auditar P3)*: el último fallo fue `auth` o `no-session` y la app todavía da acceso. Tiene prioridad sobre `warning` y `critical`.
+
+Dos cambios respecto del borrador original de esta spec:
+
+- **Se quitó `info`.** La spec la describía como "sin aviso visible", o sea que era redundante con `none`.
+- **Se agregó `relogin` y el parámetro `lastFailureKind`.** La auditoría de P3 encontró que la sesión muerta no era visible en Inicio, lo que incumplía el objetivo "que la sesión muerta sea visible y recuperable". Y era peor que invisible: con la sesión vencida la licencia no se puede reverificar, así que la gracia corre hacia el bloqueo sin vuelta, y al llegar a `GRACE_WARNING_DAYS` el aviso `warning` decía "conectate a internet", que no arregla una sesión vencida. `relogin` avisa apenas se sabe —no recién en los últimos días— y dice lo que de verdad hay que hacer. Desplaza a `critical` porque un fallo `auth` prueba que el servidor respondió, así que la alarma de inalcanzable quedó vieja. `lastFailureKind` viene del store y no del perfil porque el último fallo no se persiste.
 
 ## Estado y persistencia
 
@@ -129,6 +135,7 @@ Todo el texto visible en español.
 ### `HomeScreen`
 
 - El aviso existente de gracia pasa a usar `getAccessNotice`. En nivel `critical` el texto dice que el servidor no responde y cuántos días quedan antes de que la app se bloquee.
+- En nivel `relogin` el texto dice que la sesión venció, cuántos días quedan, y que hay que cerrar sesión desde Perfil y volver a entrar con el email. No dice "conectate a internet".
 
 ### `ProfileScreen`
 
@@ -213,4 +220,5 @@ Ver `docs/plans/021-resiliencia-backend-licencias-plan.md`.
 - [x] Copys corregidos en `AccessBlockedScreen`, `HomeScreen` y `ProfileScreen`; ninguno culpa a la conexión del usuario por un fallo del servidor.
 - [ ] Workflow de keep-alive **corriendo**, con secrets cargados y falla ruidosa. El archivo está escrito y validado a mano en los tres caminos (200 con apikey, `000` con host inalcanzable, error distinto con secrets ausentes), pero el criterio pide que corra: faltan los secrets y el merge a `main` (los crons solo corren en la rama default). Se deja sin marcar a propósito — el criterio no se baja para poder tildarlo.
 - [x] Caveat de los 60 días anotado en `supabase/README.md`.
-- [x] `npx tsc --noEmit` y `npm test` en verde (40 archivos, 506 tests al 2026-10-20).
+- [x] La sesión muerta es visible en Inicio mientras la app todavía da acceso (nivel `relogin`), y el aviso nunca le dice a quien tiene la sesión vencida que se conecte a internet. *(Agregado al auditar P3 contra los objetivos.)*
+- [x] `npx tsc --noEmit` y `npm test` en verde (40 archivos, 511 tests al 2026-10-20).

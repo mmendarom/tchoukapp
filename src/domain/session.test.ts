@@ -313,5 +313,49 @@ describe('evaluateAccess y hasActiveAccess', () => {
       expect(getAccessNotice(blocked, now)).toEqual({ level: 'none' });
       expect(getAccessNotice(pending, now)).toEqual({ level: 'none' });
     });
+
+    // Sesion vencida (spec 021, P3): con la sesion muerta la licencia no se
+    // puede reverificar y la gracia corre hacia el bloqueo sin vuelta.
+    describe('relogin', () => {
+      it('avisa apenas se sabe, con la gracia todavia holgada', () => {
+        const fresh = accountProfile(activeEntitlement(now)); // quedan 14
+
+        expect(getAccessNotice(fresh, now, 'auth')).toEqual({ level: 'relogin', daysLeft: 14 });
+        expect(getAccessNotice(fresh, now, 'no-session')).toEqual({ level: 'relogin', daysLeft: 14 });
+      });
+
+      // El bug que motivo este nivel: con la sesion vencida y pocos dias de
+      // gracia, el aviso decia "conectate a internet", que no arregla nada.
+      it('desplaza al warning, que le diria al usuario algo falso', () => {
+        const almost = accountProfile(activeEntitlement('2026-06-21T12:00:00.000Z')); // quedan 4
+
+        expect(getAccessNotice(almost, now)).toEqual({ level: 'warning', daysLeft: 4 });
+        expect(getAccessNotice(almost, now, 'auth')).toEqual({ level: 'relogin', daysLeft: 4 });
+      });
+
+      it('desplaza al critical: si el servidor respondio auth, esta vivo', () => {
+        const failOpen = accountProfile({
+          ...activeEntitlement('2026-06-01T12:00:00.000Z'),
+          unreachableSince: '2026-06-30T12:00:00.000Z',
+        });
+
+        expect(getAccessNotice(failOpen, now, 'auth')).toEqual({ level: 'relogin', daysLeft: 20 });
+      });
+
+      it('no aparece si ya esta bloqueado ni en modo local', () => {
+        const blocked = accountProfile(activeEntitlement('2026-06-01T12:00:00.000Z'));
+
+        expect(getAccessNotice(blocked, now, 'auth')).toEqual({ level: 'none' });
+        expect(getAccessNotice(localProfile, now, 'auth')).toEqual({ level: 'none' });
+      });
+
+      it('los demas motivos de fallo no lo disparan', () => {
+        const fresh = accountProfile(activeEntitlement(now));
+
+        expect(getAccessNotice(fresh, now, 'unreachable')).toEqual({ level: 'none' });
+        expect(getAccessNotice(fresh, now, 'server')).toEqual({ level: 'none' });
+        expect(getAccessNotice(fresh, now, 'backend-unavailable')).toEqual({ level: 'none' });
+      });
+    });
   });
 });
