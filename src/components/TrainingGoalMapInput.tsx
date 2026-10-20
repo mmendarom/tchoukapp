@@ -146,7 +146,7 @@ export function TrainingGoalMapInput({
               accessibilityRole="button"
               disabled={!selectedLocation}
               onPress={onConfirm}
-              style={[styles.button, styles.primaryButton, !selectedLocation && styles.buttonDisabled]}
+              style={[styles.button, styles.confirmButton, styles.primaryButton, !selectedLocation && styles.buttonDisabled]}
             >
               <Text style={styles.primaryText}>Confirmar ubicación</Text>
             </Pressable>
@@ -278,14 +278,20 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     gap: spacing.sm,
   },
+  // Mismo criterio que CourtMapInput del partido vs rival: confirmar domina
+  // la fila (base 260 vs 180) y ambos botones son altos para uso en cancha.
   button: {
     flexGrow: 1,
     flexBasis: 180,
-    minHeight: 72,
+    minHeight: 92,
     borderRadius: 8,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: spacing.md,
+  },
+  confirmButton: {
+    flexGrow: 2,
+    flexBasis: 260,
   },
   primaryButton: {
     backgroundColor: '#0b6bcb',
