@@ -147,4 +147,86 @@ describe('useSessionStore', () => {
       entitlement: { plan: 'suscripcion', status: 'active' },
     });
   });
+
+  // Fail-open acotado (spec 021, decision 010).
+  describe('recordVerificationFailure', () => {
+    const loginWithActiveLicense = () => {
+      useSessionStore.getState().loginWithAccount({
+        name: 'Mauro',
+        email: 'mauro@example.com',
+        accountId: 'account-1',
+        entitlement: { plan: 'cortesia', status: 'active', verifiedAt: '2026-06-01T12:00:00.000Z' },
+      });
+    };
+
+    it('marca el primer fallo de inalcanzable en la licencia', () => {
+      loginWithActiveLicense();
+      useSessionStore.getState().recordVerificationFailure('unreachable', '2026-06-30T12:00:00.000Z');
+
+      expect(useSessionStore.getState().profile?.entitlement?.unreachableSince).toBe('2026-06-30T12:00:00.000Z');
+      expect(useSessionStore.getState().lastVerificationFailure).toEqual({
+        kind: 'unreachable',
+        at: '2026-06-30T12:00:00.000Z',
+      });
+    });
+
+    // Si cada intento pisara la marca, el techo nunca venceria.
+    it('NO pisa la marca en fallos posteriores', () => {
+      loginWithActiveLicense();
+      useSessionStore.getState().recordVerificationFailure('unreachable', '2026-06-30T12:00:00.000Z');
+      useSessionStore.getState().recordVerificationFailure('unreachable', '2026-07-05T12:00:00.000Z');
+
+      expect(useSessionStore.getState().profile?.entitlement?.unreachableSince).toBe('2026-06-30T12:00:00.000Z');
+      // El ultimo fallo si se actualiza: es para el diagnostico, no para el techo.
+      expect(useSessionStore.getState().lastVerificationFailure?.at).toBe('2026-07-05T12:00:00.000Z');
+    });
+
+    it('los motivos que no son inalcanzable no arrancan el techo', () => {
+      loginWithActiveLicense();
+      useSessionStore.getState().recordVerificationFailure('auth', '2026-06-30T12:00:00.000Z');
+      useSessionStore.getState().recordVerificationFailure('no-session', '2026-06-30T12:00:00.000Z');
+      useSessionStore.getState().recordVerificationFailure('server', '2026-06-30T12:00:00.000Z');
+
+      expect(useSessionStore.getState().profile?.entitlement?.unreachableSince).toBeUndefined();
+      expect(useSessionStore.getState().lastVerificationFailure?.kind).toBe('server');
+    });
+
+    it('no explota en modo local ni sin licencia', () => {
+      useSessionStore.getState().login({ name: 'Mauro' });
+      useSessionStore.getState().recordVerificationFailure('unreachable', '2026-06-30T12:00:00.000Z');
+
+      expect(useSessionStore.getState().profile?.entitlement).toBeUndefined();
+
+      useSessionStore.getState().loginWithAccount({ name: 'Mauro', email: 'mauro@example.com', accountId: 'account-1' });
+      useSessionStore.getState().recordVerificationFailure('unreachable', '2026-06-30T12:00:00.000Z');
+
+      expect(useSessionStore.getState().profile?.entitlement).toBeUndefined();
+    });
+
+    it('una verificacion exitosa limpia la marca y el ultimo fallo', () => {
+      loginWithActiveLicense();
+      useSessionStore.getState().recordVerificationFailure('unreachable', '2026-06-30T12:00:00.000Z');
+      useSessionStore.getState().updateEntitlement({
+        plan: 'cortesia',
+        status: 'active',
+        verifiedAt: '2026-07-01T12:00:00.000Z',
+      });
+
+      expect(useSessionStore.getState().profile?.entitlement?.unreachableSince).toBeUndefined();
+      expect(useSessionStore.getState().lastVerificationFailure).toBeUndefined();
+    });
+
+    it('no toca los datos deportivos ni el perfil mas alla de la licencia', () => {
+      loginWithActiveLicense();
+      const before = useSessionStore.getState().profile!;
+      useSessionStore.getState().recordVerificationFailure('unreachable', '2026-06-30T12:00:00.000Z');
+      const after = useSessionStore.getState().profile!;
+
+      expect(after.name).toBe(before.name);
+      expect(after.accountId).toBe(before.accountId);
+      expect(after.lastLoginAt).toBe(before.lastLoginAt);
+      expect(after.entitlement?.status).toBe('active');
+      expect(after.entitlement?.verifiedAt).toBe(before.entitlement?.verifiedAt);
+    });
+  });
 });

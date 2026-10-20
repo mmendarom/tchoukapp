@@ -5,7 +5,13 @@ import { adminListEntitlements, adminSetEntitlementStatus, fetchEntitlement, sig
 import { isBackendConfigured } from '../backend/config';
 import { ActionButton } from '../components/ActionButton';
 import { Screen } from '../components/Screen';
-import { AdminEntitlementRow, EntitlementStatus, getGraceDaysLeft, isAdminProfile } from '../domain/session';
+import {
+  AdminEntitlementRow,
+  EntitlementStatus,
+  getGraceDaysLeft,
+  getUnreachableDaysLeft,
+  isAdminProfile,
+} from '../domain/session';
 import { useMatchStore } from '../store/useMatchStore';
 import { useSessionStore } from '../store/useSessionStore';
 import { fontSize, spacing } from '../utils/responsive';
@@ -17,6 +23,8 @@ export function ProfileScreen() {
   const profile = useSessionStore((state) => state.profile);
   const updateProfileName = useSessionStore((state) => state.updateProfileName);
   const updateEntitlement = useSessionStore((state) => state.updateEntitlement);
+  const recordVerificationFailure = useSessionStore((state) => state.recordVerificationFailure);
+  const lastFailure = useSessionStore((state) => state.lastVerificationFailure);
   const logout = useSessionStore((state) => state.logout);
   const resetDemoData = useMatchStore((state) => state.resetDemoData);
   const [nameInput, setNameInput] = useState(profile?.name ?? '');
@@ -93,6 +101,33 @@ export function ProfileScreen() {
   const expiryLabel = Number.isFinite(expiryMs)
     ? new Intl.DateTimeFormat('es-UY', { day: '2-digit', month: 'long', year: 'numeric' }).format(new Date(expiryMs))
     : '';
+  // Diagnóstico del servidor de licencias (spec 021). Es la información que no
+  // existía durante el incidente del 2026-10-18: con el proyecto pausado, la
+  // app no mostraba en ningún lado que el problema era del backend.
+  const unreachableSince = entitlement?.unreachableSince;
+  const unreachableDaysLeft = getUnreachableDaysLeft(profile);
+  const shortDate = (iso: string) => {
+    const ms = Date.parse(iso);
+
+    return Number.isFinite(ms)
+      ? new Intl.DateTimeFormat('es-UY', { day: '2-digit', month: '2-digit' }).format(new Date(ms))
+      : '';
+  };
+  const serverLabel = unreachableSince
+    ? `sin contacto desde el ${shortDate(unreachableSince)}${
+        unreachableDaysLeft !== undefined
+          ? unreachableDaysLeft === 1
+            ? ' (queda 1 día)'
+            : ` (quedan ${unreachableDaysLeft} días)`
+          : ''
+      }`
+    : lastFailure?.kind === 'auth' || lastFailure?.kind === 'no-session'
+      ? 'sesión vencida: volvé a iniciar sesión'
+      : lastFailure?.kind === 'unreachable'
+        ? 'sin respuesta en el último intento'
+        : lastFailure
+          ? 'error en el último intento'
+          : 'responde con normalidad';
   const initial = profile?.name?.trim().charAt(0).toUpperCase() || '?';
   const nameDirty = nameInput.trim() !== (profile?.name ?? '') && nameInput.trim().length > 0;
 
@@ -121,6 +156,9 @@ export function ProfileScreen() {
     setLicenseBusy(false);
 
     if (!result.success) {
+      // Registrar el motivo mantiene el diagnóstico de la fila "Servidor" al
+      // día y arranca el techo del fail-open si el servidor no responde.
+      recordVerificationFailure(result.kind);
       setLicenseStatus(result.error);
       return;
     }
@@ -203,6 +241,7 @@ export function ProfileScreen() {
             />
           ) : null}
           {expiryLabel ? <ProfileRow label="Válida hasta" value={expiryLabel} /> : null}
+          <ProfileRow label="Servidor" value={serverLabel} />
           {licenseStatus ? <Text style={styles.muted}>{licenseStatus}</Text> : null}
           <ActionButton
             disabled={licenseBusy}

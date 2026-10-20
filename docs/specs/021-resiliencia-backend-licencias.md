@@ -2,7 +2,11 @@
 
 ## Estado
 
-In progress — **Paso 1 (keep-alive, P2) implementado el 2026-10-19**. Pasos 2 a 7 (P1 y P3) pendientes.
+In progress.
+
+- **P2 (keep-alive)** — implementado el 2026-10-19. Escrito y validado a mano; **no activo todavía**: faltan los secrets y el merge a `main`.
+- **P1 (fail-open acotado y mensajes honestos)** — implementado el 2026-10-20 (pasos 2, 4, 5 y 6 del plan).
+- **P3 (sesión muerta)** — parcial. El motivo de fallo tipado y la corrección de `getSession` están hechos; falta el paso 3 (`AppState` + `startAutoRefresh`, `subscribeToAuthState`).
 
 ## Contexto
 
@@ -196,15 +200,15 @@ Ver `docs/plans/021-resiliencia-backend-licencias-plan.md`.
 
 ## Checklist de aceptación
 
-- [ ] `AccountFailureKind` en `src/domain/session.ts` y `AccountResult` devolviendo el motivo.
-- [ ] Clasificador de errores puro con tests.
-- [ ] `unreachableSince` en `AccountEntitlement`, con semántica de "no pisar".
-- [ ] `UNREACHABLE_CEILING_DAYS`, estado `unreachable` y `getAccessNotice` con tests por rama.
-- [ ] `App.tsx` usa `hasActiveAccess` como único corte y registra los fallos en vez de descartarlos.
-- [ ] `AppState` enganchado a `startAutoRefresh` / `stopAutoRefresh`.
-- [ ] `subscribeToAuthState` con eventos de dominio, sin filtrar tipos de Supabase.
-- [ ] `fetchEntitlement` distingue sesión ausente de servidor inalcanzable.
-- [ ] Copys corregidos en `AccessBlockedScreen`, `HomeScreen` y `ProfileScreen`; ninguno culpa a la conexión del usuario por un fallo del servidor.
-- [x] Workflow de keep-alive escrito con falla ruidosa y pre-flight de secrets, validado a mano en los tres caminos (200 con apikey, `000` con host inalcanzable, error distinto con secrets ausentes). **Pendiente de Mauro**: cargar los dos secrets y mergear a `main` — los crons solo corren en la rama default.
+- [x] `AccountFailureKind` en `src/domain/session.ts` y `AccountResult` devolviendo el motivo.
+- [x] Clasificador de errores puro con tests (`src/backend/accountErrors.ts`, 11 tests).
+- [x] `unreachableSince` en `AccountEntitlement`, con semántica de "no pisar".
+- [x] `UNREACHABLE_CEILING_DAYS`, estado `unreachable` y `getAccessNotice` con tests por rama.
+- [x] `App.tsx` usa `hasActiveAccess` como único corte y registra los fallos en vez de descartarlos.
+- [ ] `AppState` enganchado a `startAutoRefresh` / `stopAutoRefresh`. **(P3, paso 3 — pendiente)**
+- [ ] `subscribeToAuthState` con eventos de dominio, sin filtrar tipos de Supabase. **(P3, paso 3 — pendiente)**
+- [x] `fetchEntitlement` distingue sesión ausente de servidor inalcanzable.
+- [x] Copys corregidos en `AccessBlockedScreen`, `HomeScreen` y `ProfileScreen`; ninguno culpa a la conexión del usuario por un fallo del servidor.
+- [ ] Workflow de keep-alive **corriendo**, con secrets cargados y falla ruidosa. El archivo está escrito y validado a mano en los tres caminos (200 con apikey, `000` con host inalcanzable, error distinto con secrets ausentes), pero el criterio pide que corra: faltan los secrets y el merge a `main` (los crons solo corren en la rama default). Se deja sin marcar a propósito — el criterio no se baja para poder tildarlo.
 - [x] Caveat de los 60 días anotado en `supabase/README.md`.
-- [ ] `npx tsc --noEmit` y `npm test` en verde.
+- [x] `npx tsc --noEmit` y `npm test` en verde (39 archivos, 498 tests al 2026-10-20).

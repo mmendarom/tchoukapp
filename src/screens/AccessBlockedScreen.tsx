@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { fetchEntitlement, signOutAccount } from '../backend/accountService';
-import { AccessEvaluation } from '../domain/session';
+import { AccessEvaluation, AccountFailureKind } from '../domain/session';
 import { useSessionStore } from '../store/useSessionStore';
 import { fontSize, spacing } from '../utils/responsive';
 import { APP_NAME, colors } from '../utils/theme';
@@ -30,14 +30,44 @@ const MESSAGES: Record<string, { title: string; copy: string }> = {
   },
 };
 
+// Mensajes por causa real del fallo (spec 021). El copy de 'expired' asume que
+// el usuario estuvo sin internet; cuando el que no responde es el servidor, o
+// cuando lo que venció es la sesión, decir eso es mentirle y mandarlo a
+// revisar su wifi o a reintentar algo que va a fallar igual.
+const FAILURE_MESSAGES: Partial<Record<AccountFailureKind, { title: string; copy: string }>> = {
+  unreachable: {
+    title: 'Servidor sin responder',
+    copy: 'No pudimos contactar el servidor de licencias para revalidar tu acceso. Si tenés internet, no es un problema tuyo: avisale a Mauro.',
+  },
+  auth: {
+    title: 'Sesión vencida',
+    copy: 'Tu sesión en el servidor venció. Volvé a iniciar sesión con tu email para seguir usando la app.',
+  },
+  'no-session': {
+    title: 'Sesión vencida',
+    copy: 'No hay una sesión activa en este dispositivo. Volvé a iniciar sesión con tu email para seguir usando la app.',
+  },
+};
+
+// Motivos en los que reintentar la verificación no puede funcionar: hay que
+// reloguear. Se muestra esa acción como principal en vez del reintento.
+const NEEDS_RELOGIN: AccountFailureKind[] = ['auth', 'no-session'];
+
 export function AccessBlockedScreen({ access }: Props) {
   const profile = useSessionStore((state) => state.profile);
   const updateEntitlement = useSessionStore((state) => state.updateEntitlement);
+  const recordVerificationFailure = useSessionStore((state) => state.recordVerificationFailure);
+  const lastFailure = useSessionStore((state) => state.lastVerificationFailure);
   const logout = useSessionStore((state) => state.logout);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
 
-  const message = MESSAGES[access] ?? MESSAGES.pending;
+  // El motivo del fallo solo manda cuando el bloqueo es por verificación
+  // vencida. Si el servidor dijo `pending`, `revoked` o `lapsed`, esa respuesta
+  // es autoritativa y su mensaje es el correcto.
+  const failureKind = access === 'expired' ? lastFailure?.kind : undefined;
+  const message = (failureKind && FAILURE_MESSAGES[failureKind]) ?? MESSAGES[access] ?? MESSAGES.pending;
+  const needsRelogin = failureKind ? NEEDS_RELOGIN.includes(failureKind) : false;
 
   const handleRetry = async () => {
     if (busy) {
@@ -52,6 +82,9 @@ export function AccessBlockedScreen({ access }: Props) {
     setBusy(false);
 
     if (!result.success) {
+      // Se registra también acá para que el mensaje de arriba se actualice
+      // con la causa del intento más reciente, no la del arranque.
+      recordVerificationFailure(result.kind);
       setError(result.error);
       return;
     }
@@ -76,17 +109,37 @@ export function AccessBlockedScreen({ access }: Props) {
         <Text style={styles.copy}>{message.copy}</Text>
         {profile?.email ? <Text style={styles.account}>Cuenta: {profile.email}</Text> : null}
         {error ? <Text style={styles.error}>{error}</Text> : null}
-        <Pressable
-          accessibilityRole="button"
-          disabled={busy}
-          onPress={handleRetry}
-          style={({ pressed }) => [styles.retry, busy && styles.disabled, pressed && styles.retryPressed]}
-        >
-          <Text style={styles.retryLabel}>{busy ? 'Verificando...' : 'Reintentar verificación'}</Text>
-        </Pressable>
-        <Pressable accessibilityRole="button" disabled={busy} onPress={handleLogout} style={styles.logout}>
-          <Text style={styles.logoutLabel}>Cerrar sesión</Text>
-        </Pressable>
+        {/* Con la sesión vencida, reintentar la verificación no puede
+            funcionar: la acción principal pasa a ser reloguear. */}
+        {needsRelogin ? (
+          <>
+            <Pressable
+              accessibilityRole="button"
+              disabled={busy}
+              onPress={handleLogout}
+              style={({ pressed }) => [styles.retry, busy && styles.disabled, pressed && styles.retryPressed]}
+            >
+              <Text style={styles.retryLabel}>Volver a iniciar sesión</Text>
+            </Pressable>
+            <Pressable accessibilityRole="button" disabled={busy} onPress={handleRetry} style={styles.logout}>
+              <Text style={styles.logoutLabel}>{busy ? 'Verificando...' : 'Reintentar verificación'}</Text>
+            </Pressable>
+          </>
+        ) : (
+          <>
+            <Pressable
+              accessibilityRole="button"
+              disabled={busy}
+              onPress={handleRetry}
+              style={({ pressed }) => [styles.retry, busy && styles.disabled, pressed && styles.retryPressed]}
+            >
+              <Text style={styles.retryLabel}>{busy ? 'Verificando...' : 'Reintentar verificación'}</Text>
+            </Pressable>
+            <Pressable accessibilityRole="button" disabled={busy} onPress={handleLogout} style={styles.logout}>
+              <Text style={styles.logoutLabel}>Cerrar sesión</Text>
+            </Pressable>
+          </>
+        )}
       </View>
     </View>
   );

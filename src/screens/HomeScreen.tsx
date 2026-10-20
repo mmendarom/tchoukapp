@@ -7,7 +7,7 @@ import { PlayerManagerModal } from '../components/PlayerManagerModal';
 import { Screen } from '../components/Screen';
 import { TeamPoolManagerModal } from '../components/TeamPoolManagerModal';
 import { AppBackupData, buildBackupData } from '../domain/backup';
-import { GRACE_WARNING_DAYS, getGraceDaysLeft } from '../domain/session';
+import { getAccessNotice } from '../domain/session';
 import { exportBackupJson } from '../export/exportBackup';
 import { pickAndParseBackupJson } from '../export/importBackup';
 import { STORE_DATA_VERSION, useMatchStore } from '../store/useMatchStore';
@@ -65,15 +65,25 @@ export function HomeScreen({ navigation }: Props) {
         .filter(Boolean)
         .join(' · ')
     : '';
-  const graceDaysLeft = getGraceDaysLeft(profile);
+  // El nivel del aviso lo decide `getAccessNotice` en el dominio; acá solo se
+  // elige el texto (spec 021). El nivel 'critical' no culpa a la conexión del
+  // usuario: en ese caso el que no responde es el servidor de licencias.
+  const accessNotice = getAccessNotice(profile);
+  const noticeDaysLeft = accessNotice.daysLeft ?? 0;
   const graceWarningLabel =
-    graceDaysLeft === undefined || graceDaysLeft > GRACE_WARNING_DAYS
+    accessNotice.level === 'none'
       ? ''
-      : graceDaysLeft === 0
-        ? 'La verificación de tu licencia vence hoy. Conectate a internet para renovar el acceso.'
-        : graceDaysLeft === 1
-          ? 'Queda 1 día de uso sin conexión. Conectate a internet para renovar el acceso.'
-          : `Quedan ${graceDaysLeft} días de uso sin conexión. Conectate a internet para renovar el acceso.`;
+      : accessNotice.level === 'critical'
+        ? noticeDaysLeft === 0
+          ? 'No podemos contactar el servidor de licencias y el margen se agota hoy. Avisale a Mauro.'
+          : noticeDaysLeft === 1
+            ? 'No podemos contactar el servidor de licencias. Queda 1 día antes de que la app se bloquee. Avisale a Mauro.'
+            : `No podemos contactar el servidor de licencias. Quedan ${noticeDaysLeft} días antes de que la app se bloquee. Avisale a Mauro.`
+        : noticeDaysLeft === 0
+          ? 'La verificación de tu licencia vence hoy. Conectate a internet para renovar el acceso.'
+          : noticeDaysLeft === 1
+            ? 'Queda 1 día de uso sin conexión. Conectate a internet para renovar el acceso.'
+            : `Quedan ${noticeDaysLeft} días de uso sin conexión. Conectate a internet para renovar el acceso.`;
   const activeMatch = matches.find((match) => match.status === 'live' || match.status === 'period_break');
   const visibleMatchCount = matches.filter((match) => match.status !== 'cancelled').length;
   const backupStatusLabel =

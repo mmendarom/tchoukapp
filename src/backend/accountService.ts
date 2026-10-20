@@ -1,11 +1,23 @@
-import { AccountEntitlement, AdminEntitlementRow, EntitlementStatus, UserPlan } from '../domain/session';
+import {
+  AccountEntitlement,
+  AccountFailureKind,
+  AdminEntitlementRow,
+  EntitlementStatus,
+  UserPlan,
+} from '../domain/session';
+import { classifyAccountError } from './accountErrors';
 import { getSupabaseClient } from './supabaseClient';
 
 const BACKEND_UNAVAILABLE_ERROR = 'El servidor no está configurado en esta versión de la app.';
-const NETWORK_ERROR = 'No se pudo conectar. Revisá tu conexión e intentá de nuevo.';
+// No culpa a la conexión del usuario: con el proyecto pausado el usuario tiene
+// internet y el mensaje viejo ("Revisá tu conexión") lo mandaba a buscar el
+// problema donde no estaba (spec 021).
+const UNREACHABLE_ERROR =
+  'No se pudo contactar el servidor de licencias. Revisá tu conexión; si tenés internet, el servidor puede estar caído.';
 const SEND_CODE_ERROR = 'No se pudo enviar el código.';
 const INVALID_CODE_ERROR = 'El código no es válido o expiró. Pedí uno nuevo.';
 const NO_SESSION_ERROR = 'No hay una sesión activa en el servidor.';
+const SESSION_EXPIRED_ERROR = 'Tu sesión en el servidor venció. Volvé a iniciar sesión con tu email.';
 const ADMIN_ERROR = 'No se pudo completar la acción de administración.';
 
 // El detalle técnico de Supabase (en inglés) se anexa para poder diagnosticar
@@ -15,7 +27,33 @@ const withDetail = (message: string, detail?: string) =>
 
 export type AccountResult<T> =
   | ({ success: true } & T)
-  | { success: false; error: string };
+  | { success: false; error: string; kind: AccountFailureKind };
+
+// Arma el caso de error con el motivo ya clasificado. El mensaje visible se
+// elige por motivo para que nunca diga algo falso sobre la causa.
+const failure = (
+  error: unknown,
+  fallbackMessage: string,
+  fallbackKind: AccountFailureKind = 'server',
+): { success: false; error: string; kind: AccountFailureKind } => {
+  const kind = classifyAccountError(error, fallbackKind);
+  const detail = typeof (error as { message?: string } | undefined)?.message === 'string'
+    ? (error as { message: string }).message
+    : undefined;
+
+  if (kind === 'unreachable') {
+    return { success: false, error: withDetail(UNREACHABLE_ERROR, detail), kind };
+  }
+
+  if (kind === 'auth') {
+    return { success: false, error: withDetail(SESSION_EXPIRED_ERROR, detail), kind };
+  }
+
+  return { success: false, error: withDetail(fallbackMessage, detail), kind };
+};
+
+const backendUnavailable = () =>
+  ({ success: false, error: BACKEND_UNAVAILABLE_ERROR, kind: 'backend-unavailable' }) as const;
 
 const isPlan = (value: unknown): value is UserPlan => value === 'cortesia' || value === 'suscripcion';
 
@@ -26,7 +64,7 @@ export const requestEmailOtp = async (email: string): Promise<AccountResult<obje
   const supabase = getSupabaseClient();
 
   if (!supabase) {
-    return { success: false, error: BACKEND_UNAVAILABLE_ERROR };
+    return backendUnavailable();
   }
 
   try {
@@ -36,12 +74,13 @@ export const requestEmailOtp = async (email: string): Promise<AccountResult<obje
     });
 
     if (error) {
-      return { success: false, error: withDetail(SEND_CODE_ERROR, error.message) };
+      return failure(error, SEND_CODE_ERROR);
     }
 
     return { success: true };
-  } catch {
-    return { success: false, error: NETWORK_ERROR };
+  } catch (thrown) {
+    // Si fetch tiró, lo normal es que no se haya llegado al servidor.
+    return failure(thrown, SEND_CODE_ERROR, 'unreachable');
   }
 };
 
@@ -52,7 +91,7 @@ export const verifyEmailOtp = async (
   const supabase = getSupabaseClient();
 
   if (!supabase) {
-    return { success: false, error: BACKEND_UNAVAILABLE_ERROR };
+    return backendUnavailable();
   }
 
   try {
@@ -63,12 +102,14 @@ export const verifyEmailOtp = async (
     });
 
     if (error || !data.user) {
-      return { success: false, error: withDetail(INVALID_CODE_ERROR, error?.message) };
+      // Un 400 con mensaje de OTP se clasifica 'invalid-code'; un servidor
+      // caído durante la verificación no debe reportarse como código inválido.
+      return failure(error, INVALID_CODE_ERROR, 'invalid-code');
     }
 
     return { success: true, accountId: data.user.id };
-  } catch {
-    return { success: false, error: NETWORK_ERROR };
+  } catch (thrown) {
+    return failure(thrown, INVALID_CODE_ERROR, 'unreachable');
   }
 };
 
@@ -76,24 +117,34 @@ export const fetchEntitlement = async (): Promise<AccountResult<{ entitlement: A
   const supabase = getSupabaseClient();
 
   if (!supabase) {
-    return { success: false, error: BACKEND_UNAVAILABLE_ERROR };
+    return backendUnavailable();
   }
 
   try {
-    const { data: userData, error: userError } = await supabase.auth.getUser();
+    // getSession() lee la sesión guardada en el dispositivo (sin red). Antes
+    // se usaba getUser(), que SÍ hace red: con el proyecto pausado devolvía
+    // "no hay sesión activa", un diagnóstico equivocado que mandaba al usuario
+    // a reloguear cuando el problema era del servidor (spec 021).
+    const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
 
-    if (userError || !userData.user) {
-      return { success: false, error: NO_SESSION_ERROR };
+    if (sessionError) {
+      return failure(sessionError, NO_SESSION_ERROR, 'unreachable');
+    }
+
+    const session = sessionData.session;
+
+    if (!session) {
+      return { success: false, error: NO_SESSION_ERROR, kind: 'no-session' };
     }
 
     const { data, error } = await supabase
       .from('entitlements')
       .select('plan, status, expires_at')
-      .eq('user_id', userData.user.id)
+      .eq('user_id', session.user.id)
       .maybeSingle();
 
     if (error) {
-      return { success: false, error: withDetail(NETWORK_ERROR, error.message) };
+      return failure(error, UNREACHABLE_ERROR, 'unreachable');
     }
 
     // Fila ausente (registro anterior al trigger): tratar como pendiente.
@@ -105,8 +156,8 @@ export const fetchEntitlement = async (): Promise<AccountResult<{ entitlement: A
       success: true,
       entitlement: { plan, status, verifiedAt: new Date().toISOString(), expiresAt },
     };
-  } catch {
-    return { success: false, error: NETWORK_ERROR };
+  } catch (thrown) {
+    return failure(thrown, UNREACHABLE_ERROR, 'unreachable');
   }
 };
 
@@ -116,14 +167,14 @@ export const adminListEntitlements = async (): Promise<AccountResult<{ entitleme
   const supabase = getSupabaseClient();
 
   if (!supabase) {
-    return { success: false, error: BACKEND_UNAVAILABLE_ERROR };
+    return backendUnavailable();
   }
 
   try {
     const { data, error } = await supabase.rpc('admin_list_entitlements');
 
     if (error) {
-      return { success: false, error: withDetail(ADMIN_ERROR, error.message) };
+      return failure(error, ADMIN_ERROR);
     }
 
     const entitlements: AdminEntitlementRow[] = (data ?? []).map((row: Record<string, unknown>) => ({
@@ -136,8 +187,8 @@ export const adminListEntitlements = async (): Promise<AccountResult<{ entitleme
     }));
 
     return { success: true, entitlements };
-  } catch {
-    return { success: false, error: NETWORK_ERROR };
+  } catch (thrown) {
+    return failure(thrown, ADMIN_ERROR, 'unreachable');
   }
 };
 
@@ -148,7 +199,7 @@ export const adminSetEntitlementStatus = async (
   const supabase = getSupabaseClient();
 
   if (!supabase) {
-    return { success: false, error: BACKEND_UNAVAILABLE_ERROR };
+    return backendUnavailable();
   }
 
   try {
@@ -158,12 +209,12 @@ export const adminSetEntitlementStatus = async (
     });
 
     if (error) {
-      return { success: false, error: withDetail(ADMIN_ERROR, error.message) };
+      return failure(error, ADMIN_ERROR);
     }
 
     return { success: true };
-  } catch {
-    return { success: false, error: NETWORK_ERROR };
+  } catch (thrown) {
+    return failure(thrown, ADMIN_ERROR, 'unreachable');
   }
 };
 

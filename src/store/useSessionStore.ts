@@ -3,6 +3,7 @@ import { createJSONStorage, persist } from 'zustand/middleware';
 
 import {
   AccountEntitlement,
+  AccountFailureKind,
   SESSION_STORE_DATA_VERSION,
   SessionProfileInput,
   UserProfile,
@@ -22,6 +23,14 @@ type AccountLoginInput = {
   entitlement?: AccountEntitlement;
 };
 
+// Último intento fallido de verificar la licencia (spec 021). No se persiste:
+// al arrancar, `App.tsx` reintenta enseguida y lo vuelve a poblar. Sirve para
+// que la UI pueda decir la verdad sobre la causa del problema.
+export type VerificationFailure = {
+  kind: AccountFailureKind;
+  at: string;
+};
+
 type SessionState = {
   hasHydrated: boolean;
   profile?: UserProfile;
@@ -29,10 +38,12 @@ type SessionState = {
   // prellenar la portada en el próximo login.
   lastLoginName?: string;
   lastLoginEmail?: string;
+  lastVerificationFailure?: VerificationFailure;
   setHasHydrated: (hasHydrated: boolean) => void;
   login: (input: SessionProfileInput) => LoginResult;
   loginWithAccount: (input: AccountLoginInput) => LoginResult;
   updateEntitlement: (entitlement: AccountEntitlement) => boolean;
+  recordVerificationFailure: (kind: AccountFailureKind, atIso?: string) => void;
   updateProfileName: (name: string) => LoginResult;
   logout: () => void;
 };
@@ -123,14 +134,44 @@ export const useSessionStore = create<SessionState>()(
           profile: {
             ...profile,
             plan: entitlement.plan,
-            entitlement,
+            entitlement: {
+              // Una verificación exitosa borra el rastro del fallo anterior:
+              // el techo del fail-open se cuenta desde el primer fallo NUEVO.
+              ...entitlement,
+              unreachableSince: undefined,
+            },
             lastLoginAt: entitlement.verifiedAt,
           },
+          lastVerificationFailure: undefined,
         });
 
         return true;
       },
-      logout: () => set({ profile: undefined }),
+      recordVerificationFailure: (kind, atIso) => {
+        const at = atIso ?? new Date().toISOString();
+        const profile = get().profile;
+
+        set({ lastVerificationFailure: { kind, at } });
+
+        // Solo 'unreachable' arranca el techo del fail-open (decisión 010).
+        if (kind !== 'unreachable' || !profile?.accountId || !profile.entitlement) {
+          return;
+        }
+
+        // Clave: si ya hay un primer fallo registrado NO se pisa. Pisarlo en
+        // cada intento reiniciaría el techo y nunca vencería.
+        if (profile.entitlement.unreachableSince) {
+          return;
+        }
+
+        set({
+          profile: {
+            ...profile,
+            entitlement: { ...profile.entitlement, unreachableSince: at },
+          },
+        });
+      },
+      logout: () => set({ profile: undefined, lastVerificationFailure: undefined }),
     }),
     {
       name: STORAGE_KEYS.sessionState,

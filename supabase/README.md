@@ -110,7 +110,7 @@ Ambos estan en `eas.json`. Hasta que se carguen, el workflow falla con un mensaj
 Tres advertencias importantes:
 
 - **Los workflows programados corren solo en la rama default.** Mientras el archivo viva en una rama de feature, el cron no se dispara: recien arranca cuando se mergea a `main`. Se puede probar antes con `workflow_dispatch` desde la pestana Actions (tambien solo en la rama default).
-- **GitHub deshabilita los crons en repos sin actividad por 60 dias.** Si el repo queda quieto dos meses, el keep-alive se apaga solo y hay que reactivarlo desde la pestana Actions. El fail-open acotado de la app (21 dias, spec 021) es la red de seguridad si eso pasa.
+- **GitHub deshabilita los crons en repos sin actividad por 60 dias.** Si el repo queda quieto dos meses, el keep-alive se apaga solo y hay que reactivarlo desde la pestana Actions. **Hoy no hay red de seguridad detras de esto**: el fail-open acotado de 21 dias esta especificado en la spec 021 pero NO esta implementado, asi que lo unico que hay es la gracia offline de 14 dias desde la ultima verificacion de cada dispositivo. Actualizar esta linea cuando el paso 4 del plan 021 este en verde.
 - **Falta confirmar en la practica** que los requests REST cuenten como actividad para la politica de pausado. Revisar el dashboard despues de dos o tres semanas de cron corriendo. Si no alcanzara, la alternativa es un ping que escriba (una tabla `heartbeat` con una fila), que necesita su propia migracion.
 
 ## Como funciona el acceso en la app
