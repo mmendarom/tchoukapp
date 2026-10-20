@@ -1,0 +1,110 @@
+# Keep-alive del proyecto de Supabase.
+#
+# Por que existe: el proyecto esta en la capa gratuita, que pausa los proyectos
+# tras ~7 dias de inactividad. El unico uso de red de la app es verificar
+# licencias (spec 015), asi que una semana entre torneos alcanza para que se
+# pause. El 2026-10-18 paso exactamente eso: la lista de administracion no
+# cargaba y nadie podia registrarse.
+#
+# Como la app NO ofrece modo local cuando el backend esta configurado
+# (decision 010, punto 4), este ping es lo que evita el brick: no es una
+# optimizacion, es load-bearing.
+#
+# El job falla ruidosamente a proposito. GitHub manda email ante un workflow
+# fallido, asi que esto tambien es monitoreo gratuito del backend.
+#
+# Spec:      docs/specs/021-resiliencia-backend-licencias.md (paso 1)
+# Decision:  docs/decisions/010-acceso-con-backend-licencias-inalcanzable.md
+
+name: Supabase keep-alive
+
+on:
+  schedule:
+    # Lunes y jueves 12:00 UTC (09:00 en Uruguay, UTC-3). La brecha mas larga
+    # es jueves -> lunes = 4 dias, con margen comodo bajo la ventana de ~7 dias.
+    - cron: '0 12 * * 1,4'
+  # Permite correrlo a mano desde la pestana Actions para verificarlo.
+  workflow_dispatch:
+
+# Sin permisos de escritura: este workflow solo hace un GET saliente.
+permissions:
+  contents: read
+
+# Si un run manual coincide con el del cron, no hace falta que corran los dos.
+concurrency:
+  group: supabase-keepalive
+  cancel-in-progress: false
+
+jobs:
+  ping:
+    name: Ping al proyecto de Supabase
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+    steps:
+      # Pre-flight separado para que "falta configurar los secrets" no se
+      # confunda nunca con "el proyecto esta caido". Son dos problemas
+      # distintos con dos arreglos distintos.
+      - name: Verificar secrets
+        run: |
+          set -uo pipefail
+          missing=''
+          [ -n "${SUPABASE_URL}" ] || missing="${missing} SUPABASE_URL"
+          [ -n "${SUPABASE_ANON_KEY}" ] || missing="${missing} SUPABASE_ANON_KEY"
+          if [ -n "${missing}" ]; then
+            echo "::error title=Secrets sin configurar::Faltan:${missing}"
+            echo 'Cargalos en Settings > Secrets and variables > Actions > New repository secret.'
+            echo 'Los valores son los mismos que estan en eas.json (EXPO_PUBLIC_SUPABASE_URL / _ANON_KEY).'
+            exit 1
+          fi
+          echo 'Secrets presentes.'
+
+      - name: Ping al endpoint REST
+        run: |
+          set -uo pipefail
+
+          # Se consulta una tabla real en vez de un endpoint de health: PostgREST
+          # no cachea filas, asi que el [] que vuelve (la RLS filtra todo para el
+          # rol anonimo) prueba que hubo round-trip a Postgres. Eso es lo que
+          # cuenta como actividad del proyecto. Verificado a mano el 2026-10-19:
+          # 200 con apikey, 401 sin apikey.
+          #
+          # Los reintentos evitan que un blip de red de GitHub se reporte como
+          # proyecto caido. Si el proyecto esta realmente pausado, los tres
+          # intentos fallan y el job falla, que es lo que queremos.
+          code="$(curl \
+            --silent --show-error \
+            --max-time 30 \
+            --retry 3 --retry-delay 10 --retry-connrefused --retry-all-errors \
+            --output /tmp/keepalive-body.txt \
+            --write-out '%{http_code}' \
+            "${SUPABASE_URL}/rest/v1/entitlements?select=user_id&limit=1" \
+            --header "apikey: ${SUPABASE_ANON_KEY}" \
+            --header "Authorization: Bearer ${SUPABASE_ANON_KEY}")" || code='000'
+
+          # El body es [] en el caso exitoso. Se trunca por si un error devuelve
+          # algo largo; no contiene secretos (y GitHub enmascara los secrets).
+          body="$(head -c 500 /tmp/keepalive-body.txt 2>/dev/null || true)"
+
+          echo "HTTP ${code}"
+          echo "Body: ${body}"
+
+          if [ "${code}" != '200' ]; then
+            {
+              echo '### Supabase keep-alive: FALLO'
+              echo ''
+              echo "- HTTP: \`${code}\` (000 = no se pudo conectar)"
+              echo "- Body: \`${body}\`"
+              echo '- Accion: revisar el dashboard de Supabase y reanudar el proyecto si esta pausado.'
+            } >> "${GITHUB_STEP_SUMMARY}"
+            echo "::error title=Supabase no responde::HTTP ${code}. El proyecto puede estar pausado: entra al dashboard y reanudalo."
+            exit 1
+          fi
+
+          {
+            echo '### Supabase keep-alive: OK'
+            echo ''
+            echo '- El proyecto respondio 200. Queda marcado como activo.'
+          } >> "${GITHUB_STEP_SUMMARY}"

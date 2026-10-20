@@ -90,6 +90,29 @@ set expires_at = '2028-01-01T00:00:00Z'
 where plan = 'cortesia';
 ```
 
+## Mantener el proyecto activo (keep-alive)
+
+**La capa gratuita de Supabase pausa los proyectos tras ~7 dias de inactividad.** Un proyecto pausado no responde nada: no se puede registrar nadie, el panel de administracion no lista y la verificacion de licencias falla. Hay que reanudarlo a mano desde el dashboard.
+
+Esto es un riesgo ciclico, no un evento raro: el unico uso de red de la app es verificar licencias, asi que una semana entre torneos alcanza para que el proyecto se pause. Paso el 2026-10-18.
+
+Para evitarlo hay un cron en `.github/workflows/supabase-keepalive.yml` que pinguea el proyecto **lunes y jueves 12:00 UTC** (brecha maxima de 4 dias). Hace un `GET` a `/rest/v1/entitlements?select=user_id&limit=1` con la anon key: la RLS devuelve `[]`, pero la query igual toca Postgres, que es lo que cuenta como actividad.
+
+El job **falla a proposito** si no recibe un 200, asi que GitHub manda un email. Es tambien el monitoreo del backend: si llega ese email, el proyecto esta pausado o caido.
+
+Setup (una sola vez), en **Settings > Secrets and variables > Actions**:
+
+- `SUPABASE_URL`: mismo valor que `EXPO_PUBLIC_SUPABASE_URL`.
+- `SUPABASE_ANON_KEY`: mismo valor que `EXPO_PUBLIC_SUPABASE_ANON_KEY`.
+
+Ambos estan en `eas.json`. Hasta que se carguen, el workflow falla con un mensaje explicito de "secrets sin configurar", que es un fallo distinto de "el proyecto no responde".
+
+Tres advertencias importantes:
+
+- **Los workflows programados corren solo en la rama default.** Mientras el archivo viva en una rama de feature, el cron no se dispara: recien arranca cuando se mergea a `main`. Se puede probar antes con `workflow_dispatch` desde la pestana Actions (tambien solo en la rama default).
+- **GitHub deshabilita los crons en repos sin actividad por 60 dias.** Si el repo queda quieto dos meses, el keep-alive se apaga solo y hay que reactivarlo desde la pestana Actions. El fail-open acotado de la app (21 dias, spec 021) es la red de seguridad si eso pasa.
+- **Falta confirmar en la practica** que los requests REST cuenten como actividad para la politica de pausado. Revisar el dashboard despues de dos o tres semanas de cron corriendo. Si no alcanzara, la alternativa es un ping que escriba (una tabla `heartbeat` con una fila), que necesita su propia migracion.
+
 ## Como funciona el acceso en la app
 
 - Login por email + codigo OTP (6 a 10 digitos segun la config del proyecto). El nombre se pide en el mismo formulario.
