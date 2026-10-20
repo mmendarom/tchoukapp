@@ -33,6 +33,14 @@ export type AccountFailureKind =
   | 'server' // el servidor respondió con error (RLS, SQL, 4xx)
   | 'invalid-code'; // código OTP incorrecto o vencido
 
+// Eventos de sesión del backend, traducidos a términos de dominio (spec 021).
+// La app los necesita para enterarse de que supabase-js invalidó la sesión en
+// background, en vez de descubrirlo recién en el siguiente arranque.
+export type AuthStateEvent =
+  | 'signed-in' // hay sesión nueva (login o recuperación al hidratar)
+  | 'signed-out' // la sesión dejó de existir: refresh rechazado o logout
+  | 'token-refreshed'; // el token se renovó solo: la sesión sigue viva
+
 export type AccountEntitlement = {
   plan: UserPlan;
   status: EntitlementStatus;

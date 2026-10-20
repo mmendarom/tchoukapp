@@ -6,7 +6,9 @@ In progress.
 
 - **P2 (keep-alive)** — implementado el 2026-10-19. Escrito y validado a mano; **no activo todavía**: faltan los secrets y el merge a `main`.
 - **P1 (fail-open acotado y mensajes honestos)** — implementado el 2026-10-20 (pasos 2, 4, 5 y 6 del plan).
-- **P3 (sesión muerta)** — parcial. El motivo de fallo tipado y la corrección de `getSession` están hechos; falta el paso 3 (`AppState` + `startAutoRefresh`, `subscribeToAuthState`).
+- **P3 (sesión muerta)** — implementado el 2026-10-20 (paso 3 del plan).
+
+Queda pendiente de Mauro, no de código: cargar los dos secrets de GitHub y mergear a `main` para que el cron del keep-alive arranque. La QA manual en dispositivo también está pendiente.
 
 ## Contexto
 
@@ -205,10 +207,10 @@ Ver `docs/plans/021-resiliencia-backend-licencias-plan.md`.
 - [x] `unreachableSince` en `AccountEntitlement`, con semántica de "no pisar".
 - [x] `UNREACHABLE_CEILING_DAYS`, estado `unreachable` y `getAccessNotice` con tests por rama.
 - [x] `App.tsx` usa `hasActiveAccess` como único corte y registra los fallos en vez de descartarlos.
-- [ ] `AppState` enganchado a `startAutoRefresh` / `stopAutoRefresh`. **(P3, paso 3 — pendiente)**
-- [ ] `subscribeToAuthState` con eventos de dominio, sin filtrar tipos de Supabase. **(P3, paso 3 — pendiente)**
+- [x] `AppState` enganchado a `startAutoRefresh` / `stopAutoRefresh`, una sola vez al crear el cliente y arrancando el ticker si la app ya está en foreground.
+- [x] `subscribeToAuthState` con eventos de dominio, sin filtrar tipos de Supabase. El mapeo vive en `src/backend/authEvents.ts` como función pura con tests; el cableado se valida a mano en dispositivo.
 - [x] `fetchEntitlement` distingue sesión ausente de servidor inalcanzable.
 - [x] Copys corregidos en `AccessBlockedScreen`, `HomeScreen` y `ProfileScreen`; ninguno culpa a la conexión del usuario por un fallo del servidor.
 - [ ] Workflow de keep-alive **corriendo**, con secrets cargados y falla ruidosa. El archivo está escrito y validado a mano en los tres caminos (200 con apikey, `000` con host inalcanzable, error distinto con secrets ausentes), pero el criterio pide que corra: faltan los secrets y el merge a `main` (los crons solo corren en la rama default). Se deja sin marcar a propósito — el criterio no se baja para poder tildarlo.
 - [x] Caveat de los 60 días anotado en `supabase/README.md`.
-- [x] `npx tsc --noEmit` y `npm test` en verde (39 archivos, 498 tests al 2026-10-20).
+- [x] `npx tsc --noEmit` y `npm test` en verde (40 archivos, 506 tests al 2026-10-20).

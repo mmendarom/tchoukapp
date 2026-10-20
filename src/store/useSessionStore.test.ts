@@ -216,6 +216,50 @@ describe('useSessionStore', () => {
       expect(useSessionStore.getState().lastVerificationFailure).toBeUndefined();
     });
 
+    it('markSessionInvalid deja el motivo auth sin tocar el techo ni el perfil', () => {
+      loginWithActiveLicense();
+      const before = useSessionStore.getState().profile!;
+      useSessionStore.getState().markSessionInvalid('2026-07-01T12:00:00.000Z');
+      const after = useSessionStore.getState().profile!;
+
+      expect(useSessionStore.getState().lastVerificationFailure).toEqual({
+        kind: 'auth',
+        at: '2026-07-01T12:00:00.000Z',
+      });
+      // Una sesion vencida no es un servidor inalcanzable: no extiende acceso.
+      expect(after.entitlement?.unreachableSince).toBeUndefined();
+      expect(after.entitlement?.status).toBe('active');
+      expect(after.name).toBe(before.name);
+      expect(after.accountId).toBe(before.accountId);
+    });
+
+    // Si marcara igual, el proximo login arrancaria con un "sesion vencida"
+    // fantasma: signOutAccount y logout corren juntos y el evento del backend
+    // puede llegar despues de que el perfil ya se limpio.
+    it('markSessionInvalid es no-op tras un logout o en modo local', () => {
+      useSessionStore.getState().markSessionInvalid('2026-07-01T12:00:00.000Z');
+
+      expect(useSessionStore.getState().lastVerificationFailure).toBeUndefined();
+
+      useSessionStore.getState().login({ name: 'Mauro' });
+      useSessionStore.getState().markSessionInvalid('2026-07-01T12:00:00.000Z');
+
+      expect(useSessionStore.getState().lastVerificationFailure).toBeUndefined();
+    });
+
+    it('volver a entrar limpia el motivo del fallo anterior', () => {
+      loginWithActiveLicense();
+      useSessionStore.getState().markSessionInvalid('2026-07-01T12:00:00.000Z');
+      useSessionStore.getState().logout();
+      useSessionStore.getState().loginWithAccount({
+        name: 'Mauro',
+        email: 'mauro@example.com',
+        accountId: 'account-1',
+      });
+
+      expect(useSessionStore.getState().lastVerificationFailure).toBeUndefined();
+    });
+
     it('no toca los datos deportivos ni el perfil mas alla de la licencia', () => {
       loginWithActiveLicense();
       const before = useSessionStore.getState().profile!;

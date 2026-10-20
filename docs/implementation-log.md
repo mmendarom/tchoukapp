@@ -1,5 +1,44 @@
 # Implementation Log
 
+## 2026-10-20 - Sesion muerta detectada y refresh de tokens arreglado (spec 021, P3)
+
+Implementa P3 de la spec 021 (paso 3 del plan). Cierra el ultimo frente de codigo de esa spec: hasta ahora, si supabase-js invalidaba la sesion por su cuenta, la app no se enteraba.
+
+Dos problemas distintos, los dos arreglados:
+
+1. **El refresh de tokens no sobrevivia al background.** `createClient` tenia `autoRefreshToken: true` a secas, pero en React Native ese refresh corre sobre un timer que el sistema suspende con la app en background. Al volver, el access token podia estar vencido y el refresh token quedar rechazado ("already used"), con lo que supabase-js desloguea del lado del cliente. La guia de supabase-js para React Native pide enganchar el ticker a `AppState`, que es lo que faltaba.
+2. **Nadie escuchaba el deslogueo.** No habia `onAuthStateChange` en todo el proyecto, asi que el perfil local seguia diciendo que la cuenta estaba activa y la app recien se enteraba en el siguiente arranque.
+
+Archivos cambiados:
+
+- `src/backend/supabaseClient.ts`: `bindAutoRefreshToAppState` engancha `AppState` a `startAutoRefresh()` / `stopAutoRefresh()`. Se llama una sola vez, al crear el cliente, y es idempotente para no acumular listeners. Arranca el ticker a mano si la app ya esta en foreground, porque `AppState` no emite evento inicial.
+- `src/backend/authEvents.ts` (nuevo): `toAuthStateEvent`, funcion pura que traduce los eventos de Supabase a terminos de dominio. `INITIAL_SESSION` se trata igual que `SIGNED_IN`; los eventos que no cambian el estado de acceso devuelven `undefined` y el suscriptor los descarta.
+- `src/domain/session.ts`: tipo `AuthStateEvent` (`signed-in` / `signed-out` / `token-refreshed`).
+- `src/backend/accountService.ts`: `subscribeToAuthState(listener)` envuelve `onAuthStateChange` y emite solo eventos de dominio, sin filtrar tipos de `@supabase/supabase-js` fuera de `src/backend` (constitution). Devuelve la funcion de desuscripcion; en modo local es un no-op, asi el consumidor no tiene que preguntar si hay backend.
+- `src/store/useSessionStore.ts`: accion `markSessionInvalid`. `login` y `loginWithAccount` limpian `lastVerificationFailure`.
+- `App.tsx`: se suscribe y llama `markSessionInvalid()` en `signed-out`. La UI de P1 ya sabe mostrar "Sesion vencida" con la accion de relogueo para el motivo `auth`, asi que no hubo que tocar pantallas.
+- Tests: `src/backend/authEvents.test.ts` (nuevo, 5) y `src/store/useSessionStore.test.ts` (+3).
+
+Decisiones de implementacion:
+
+- **El mapeo de eventos se extrajo a un modulo puro.** `subscribeToAuthState` no se puede testear sin la libreria (ningun test del repo puede importar `accountService.ts` por los polyfills de React Native), pero la parte con reglas si. Mismo criterio que `accountErrors.ts` en P1: la logica testeable se separa del cableado.
+- **`markSessionInvalid` es no-op sin perfil con cuenta.** `handleLogout` hace `signOutAccount()` y `logout()` casi a la vez, y el evento del backend puede llegar despues de que el perfil ya se limpio. Sin esa guarda, un logout deliberado dejaria un "sesion vencida" fantasma para el proximo login. Hay un test explicito.
+- **Una sesion vencida no extiende el acceso.** `markSessionInvalid` registra motivo `auth`, que no toca `unreachableSince`: el servidor respondio, asi que esta vivo y el arreglo esta en manos del usuario (reloguear). Es el punto 3 de la decision 010 y tiene test.
+- **No se desengancha el listener de `AppState`.** El cliente es un singleton que vive lo que vive el proceso. Agregar una API de cleanup que nadie llama seria superficie muerta.
+
+Validacion: `npx tsc --noEmit` exit 0; `npm test` 40 archivos y **506 tests en verde** (eran 498).
+
+Limitaciones conocidas:
+
+- El cableado (`AppState` y la suscripcion en `App.tsx`) no tiene test automatico: necesitaria un renderer de React y un doble del cliente de Supabase. Es QA manual, y el plan 021 ya lo anticipaba.
+- `AppState` se comporta distinto en web que en nativo. Hay que probarlo en dispositivo real, no en Expo Go web.
+
+QA manual sugerida:
+
+- Abrir la app con cuenta vinculada, dejarla en background varias horas (mas de una, para que el access token venza) y volver: deberia seguir funcionando sin reloguear. Antes de este cambio era el escenario que mataba la sesion.
+- Forzar el deslogueo del lado del servidor (revocar la sesion desde el dashboard de Supabase) y volver a la app: deberia mostrar "Sesion vencida" con "Volver a iniciar sesion" como accion principal, y la fila "Servidor" del Perfil deberia decir "sesion vencida: volve a iniciar sesion".
+- Cerrar sesion a mano y volver a entrar: NO deberia aparecer ningun aviso de sesion vencida.
+
 ## 2026-10-20 - Fail-open acotado y mensajes honestos de licencia (spec 021, P1)
 
 Implementa P1 de la spec 021 (pasos 2, 4, 5 y 6 del plan) y la parte de P3 que P1 necesitaba. Resuelve el problema de fondo del incidente del 2026-10-18: con el proyecto de Supabase pausado, la app trataba "no pude verificar" igual que "no tenés licencia", y además culpaba a la conexión del usuario.

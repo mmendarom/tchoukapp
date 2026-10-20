@@ -44,6 +44,7 @@ type SessionState = {
   loginWithAccount: (input: AccountLoginInput) => LoginResult;
   updateEntitlement: (entitlement: AccountEntitlement) => boolean;
   recordVerificationFailure: (kind: AccountFailureKind, atIso?: string) => void;
+  markSessionInvalid: (atIso?: string) => void;
   updateProfileName: (name: string) => LoginResult;
   logout: () => void;
 };
@@ -69,7 +70,13 @@ export const useSessionStore = create<SessionState>()(
           return { success: false, error: 'No se pudo crear el perfil.' };
         }
 
-        set({ profile, lastLoginName: profile.name, lastLoginEmail: profile.email });
+        set({
+          profile,
+          lastLoginName: profile.name,
+          lastLoginEmail: profile.email,
+          // Entrar de nuevo deja atrás el motivo del fallo anterior.
+          lastVerificationFailure: undefined,
+        });
 
         return { success: true };
       },
@@ -97,6 +104,7 @@ export const useSessionStore = create<SessionState>()(
           },
           lastLoginName: base.name,
           lastLoginEmail: base.email,
+          lastVerificationFailure: undefined,
         });
 
         return { success: true };
@@ -170,6 +178,20 @@ export const useSessionStore = create<SessionState>()(
             entitlement: { ...profile.entitlement, unreachableSince: at },
           },
         });
+      },
+      // El backend invalidó la sesión por su cuenta (refresh token rechazado):
+      // hay que reloguear. No borra el perfil ni los datos deportivos, solo
+      // deja el motivo para que la UI lo explique y ofrezca el relogueo.
+      markSessionInvalid: (atIso) => {
+        const profile = get().profile;
+
+        // Tras un logout deliberado el perfil ya se limpió. Marcar igual
+        // dejaría un "sesión vencida" fantasma para el próximo login.
+        if (!profile?.accountId) {
+          return;
+        }
+
+        get().recordVerificationFailure('auth', atIso);
       },
       logout: () => set({ profile: undefined, lastVerificationFailure: undefined }),
     }),

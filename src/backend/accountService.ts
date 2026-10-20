@@ -2,10 +2,12 @@ import {
   AccountEntitlement,
   AccountFailureKind,
   AdminEntitlementRow,
+  AuthStateEvent,
   EntitlementStatus,
   UserPlan,
 } from '../domain/session';
 import { classifyAccountError } from './accountErrors';
+import { toAuthStateEvent } from './authEvents';
 import { getSupabaseClient } from './supabaseClient';
 
 const BACKEND_UNAVAILABLE_ERROR = 'El servidor no está configurado en esta versión de la app.';
@@ -216,6 +218,41 @@ export const adminSetEntitlementStatus = async (
   } catch (thrown) {
     return failure(thrown, ADMIN_ERROR, 'unreachable');
   }
+};
+
+/**
+ * Avisa cuando el backend cambia el estado de la sesión (spec 021, paso 3).
+ *
+ * Existe porque supabase-js puede invalidar la sesión por su cuenta —si el
+ * refresh token es rechazado emite `SIGNED_OUT`— y hasta ahora nadie escuchaba
+ * ese evento: el perfil local seguía diciendo que la cuenta estaba activa y la
+ * app solo se enteraba en el siguiente arranque.
+ *
+ * Emite eventos de dominio y no tipos de `@supabase/supabase-js`, para no
+ * filtrar la librería fuera de `src/backend` (constitution).
+ *
+ * @returns función para desuscribirse. En modo local (sin backend) es un no-op,
+ *   así el consumidor no necesita preguntar si hay backend configurado.
+ */
+export const subscribeToAuthState = (
+  listener: (event: AuthStateEvent) => void,
+): (() => void) => {
+  const supabase = getSupabaseClient();
+
+  if (!supabase) {
+    return () => undefined;
+  }
+
+  const { data } = supabase.auth.onAuthStateChange((supabaseEvent) => {
+    const event = toAuthStateEvent(supabaseEvent);
+
+    // Los eventos que no cambian el estado de acceso se descartan acá.
+    if (event) {
+      listener(event);
+    }
+  });
+
+  return () => data.subscription.unsubscribe();
 };
 
 export const signOutAccount = async (): Promise<void> => {

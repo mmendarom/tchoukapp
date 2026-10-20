@@ -5,7 +5,7 @@ import { useEffect } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
-import { fetchEntitlement } from './src/backend/accountService';
+import { fetchEntitlement, subscribeToAuthState } from './src/backend/accountService';
 import { isBackendConfigured } from './src/backend/config';
 import { evaluateAccess, hasActiveAccess } from './src/domain/session';
 import { AccessBlockedScreen } from './src/screens/AccessBlockedScreen';
@@ -42,6 +42,7 @@ export default function App() {
   const profile = useSessionStore((state) => state.profile);
   const updateEntitlement = useSessionStore((state) => state.updateEntitlement);
   const recordVerificationFailure = useSessionStore((state) => state.recordVerificationFailure);
+  const markSessionInvalid = useSessionStore((state) => state.markSessionInvalid);
   const accountId = profile?.accountId;
 
   // Refresca la licencia en background al abrir con cuenta vinculada.
@@ -74,6 +75,22 @@ export default function App() {
       cancelled = true;
     };
   }, [sessionHydrated, accountId, updateEntitlement, recordVerificationFailure]);
+
+  // Escucha los cambios de sesión del backend (spec 021, paso 3). supabase-js
+  // puede invalidar la sesión por su cuenta cuando le rechazan el refresh
+  // token; sin esto, el perfil local seguía diciendo que la cuenta estaba
+  // activa y la app recién se enteraba en el siguiente arranque.
+  useEffect(() => {
+    if (!sessionHydrated || !isBackendConfigured()) {
+      return;
+    }
+
+    return subscribeToAuthState((event) => {
+      if (event === 'signed-out') {
+        markSessionInvalid();
+      }
+    });
+  }, [sessionHydrated, markSessionInvalid]);
 
   // Una sola lectura del reloj para que la evaluación y el corte coincidan.
   const nowIso = new Date().toISOString();
