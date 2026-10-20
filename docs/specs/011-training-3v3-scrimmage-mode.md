@@ -346,6 +346,8 @@ Formula MVP:
 
 ## UX propuesta
 
+> Actualizacion 2026-07-06: la UI de la seccion se reestructuro en 3 pantallas (`TrainingSessionsScreen` como home/lista, `TrainingSetupScreen` como asistente de creacion por pasos y `TrainingSessionDetailScreen` con enfoque "jugar primero"). Ver `docs/specs/020-training-3v3-ui-restructure.md`.
+
 ### Home
 
 Agregar accion de nivel app:

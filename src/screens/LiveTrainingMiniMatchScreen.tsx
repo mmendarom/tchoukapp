@@ -305,7 +305,11 @@ export function LiveTrainingMiniMatchScreen({ navigation, route }: Props) {
         {targetReached && miniMatch.status === 'live' && (
           <ActionButton label="Finalizar mini partido" onPress={handleFinishMiniMatch} />
         )}
-        <ActionButton label="Volver a la sesión" onPress={() => navigation.navigate('TrainingSessions')} variant="secondary" />
+        <ActionButton
+          label="Volver a la sesión"
+          onPress={() => navigation.navigate('TrainingSessionDetail', { sessionId: session.id })}
+          variant="secondary"
+        />
       </View>
       {feedback ? <Text style={styles.feedback}>{feedback}</Text> : null}
 

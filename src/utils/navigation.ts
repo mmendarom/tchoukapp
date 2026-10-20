@@ -11,6 +11,8 @@ export type RootStackParamList = {
   Fixtures: undefined;
   PracticeSessions: undefined;
   TrainingSessions: undefined;
+  TrainingSetup: undefined;
+  TrainingSessionDetail: { sessionId: string };
   LiveTrainingMiniMatch: { sessionId: string; miniMatchId: string };
   StatsMatches: { openCreate?: boolean } | undefined;
   LiveStatsMatch: { matchId: string };

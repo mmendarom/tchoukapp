@@ -23,7 +23,9 @@ import { LiveStatsMatchScreen } from './src/screens/LiveStatsMatchScreen';
 import { PracticeSessionsScreen } from './src/screens/PracticeSessionsScreen';
 import { StatsMatchSummaryScreen } from './src/screens/StatsMatchSummaryScreen';
 import { StatsMatchesScreen } from './src/screens/StatsMatchesScreen';
+import { TrainingSessionDetailScreen } from './src/screens/TrainingSessionDetailScreen';
 import { TrainingSessionsScreen } from './src/screens/TrainingSessionsScreen';
+import { TrainingSetupScreen } from './src/screens/TrainingSetupScreen';
 import { WelcomeScreen } from './src/screens/WelcomeScreen';
 import { useMatchStore } from './src/store/useMatchStore';
 import { useSessionStore } from './src/store/useSessionStore';
@@ -123,6 +125,8 @@ export default function App() {
                 <Stack.Screen name="StatsMatchSummary" component={StatsMatchSummaryScreen} options={{ title: 'Resumen del partido' }} />
                 <Stack.Screen name="PracticeSessions" component={PracticeSessionsScreen} options={{ title: 'Entrenamiento' }} />
                 <Stack.Screen name="TrainingSessions" component={TrainingSessionsScreen} options={{ title: 'Práctica 3v3' }} />
+                <Stack.Screen name="TrainingSetup" component={TrainingSetupScreen} options={{ title: 'Nueva práctica' }} />
+                <Stack.Screen name="TrainingSessionDetail" component={TrainingSessionDetailScreen} options={{ title: 'Detalle de práctica' }} />
                 <Stack.Screen name="LiveTrainingMiniMatch" component={LiveTrainingMiniMatchScreen} options={{ title: 'Mini partido' }} />
               </>
             )}
