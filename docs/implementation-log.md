@@ -1,5 +1,173 @@
 # Implementation Log
 
+## 2026-10-20 - Fail-open acotado y mensajes honestos de licencia (spec 021, P1)
+
+Implementa P1 de la spec 021 (pasos 2, 4, 5 y 6 del plan) y la parte de P3 que P1 necesitaba. Resuelve el problema de fondo del incidente del 2026-10-18: con el proyecto de Supabase pausado, la app trataba "no pude verificar" igual que "no tenés licencia", y además culpaba a la conexión del usuario.
+
+Archivos cambiados:
+
+- `src/domain/session.ts`: `AccountFailureKind`; `UNREACHABLE_CEILING_DAYS = 21`; `unreachableSince` en `AccountEntitlement`; estado `unreachable` en `AccessEvaluation`; `getUnreachableDaysLeft`; `getAccessNotice`; `evaluateAccess` reescrita y `hasActiveAccess` ampliada.
+- `src/backend/accountErrors.ts` (nuevo): `classifyAccountError`, función pura que traduce un error de Supabase o una excepción de red a un `AccountFailureKind`.
+- `src/backend/accountService.ts`: `AccountResult` ahora devuelve `kind` en el caso de error; helpers `failure` y `backendUnavailable`; mensajes nuevos (`UNREACHABLE_ERROR`, `SESSION_EXPIRED_ERROR`) y eliminación del viejo `NETWORK_ERROR` que culpaba a la conexión; `fetchEntitlement` pasa de `getUser()` a `getSession()`.
+- `src/store/useSessionStore.ts`: `lastVerificationFailure` (no persistido) y acción `recordVerificationFailure`; `updateEntitlement` limpia `unreachableSince`; `logout` limpia el último fallo.
+- `App.tsx`: deja de descartar el error de `fetchEntitlement` y lo registra; usa `hasActiveAccess` como único corte en vez de recalcularlo a mano; una sola lectura del reloj para evaluación y corte.
+- `src/screens/AccessBlockedScreen.tsx`: mensajes por causa real (`FAILURE_MESSAGES`), y con la sesión vencida la acción principal pasa a ser reloguear en vez de un reintento que no puede funcionar.
+- `src/screens/HomeScreen.tsx`: el aviso de gracia pasa a `getAccessNotice`, con nivel crítico que no culpa a la conexión del usuario.
+- `src/screens/ProfileScreen.tsx`: fila nueva "Servidor" con el diagnóstico de la última verificación; `handleRefreshLicense` registra el motivo del fallo.
+- Tests: `src/domain/session.test.ts` (+13), `src/backend/accountErrors.test.ts` (nuevo, 11), `src/store/useSessionStore.test.ts` (+6).
+
+Decisiones de implementación:
+
+- **El techo se ancla en `unreachableSince`, no en `verifiedAt`.** Es lo que hace que la regla sirva en el escenario real: si nadie abrió la app en tres meses, la gracia venció hace mucho y un techo medido desde la última verificación bloquearía el primer día del torneo. Medido desde el primer fallo observado, concede 21 días desde que la app detecta el problema.
+- **El primer fallo no se pisa.** Si cada intento reescribiera `unreachableSince`, el techo nunca vencería y el fail-open sería infinito. Hay un test explícito para esto.
+- **Los casos autoritativos se evalúan ANTES del fail-open.** `revoked`, `lapsed` y `pending` siguen bloqueando con el servidor caído. Es la propiedad que cumple el pedido explícito de Mauro de que no entre gente sin permiso, y tiene un test por caso.
+- **Datos corruptos no habilitan fail-open**: una `verifiedAt` o `unreachableSince` inválida cae a `expired`. Sin una fecha confiable no se puede afirmar que la licencia estuvo activa.
+- **El clasificador vive en su propio módulo** (`accountErrors.ts`) y no importa `@supabase/supabase-js`. Así se puede testear sin red ni polyfills de React Native: hoy ningún test del repo puede importar `src/backend/accountService.ts` por esa razón.
+- **`getSession()` en vez de `getUser()`**: `getUser()` hace red, así que con el proyecto pausado el error se reportaba como "no hay sesión activa" y mandaba al usuario a reloguear cuando el problema era del servidor.
+- Desvío menor respecto de la spec: `AccessNoticeLevel` quedó en `none | warning | critical`. La spec listaba también `info`, pero describía que no muestra nada, o sea que era redundante con `none`.
+
+Validación: `npx tsc --noEmit` exit 0; `npm test` 39 archivos y **498 tests en verde** (eran 468). Los 25 tests que ya existían de `evaluateAccess` pasan sin modificarse, que era la red de seguridad que pedía el plan.
+
+Rama descartada: durante la implementación apareció `origin/feature/scouting-rosters-torneo` (2026-07-23, nunca mergeada), que resolvía lo mismo con modo local en la portada, `ACCESS_GRACE_DAYS` en 730 y **auto-activación de licencias nuevas**. Mauro la descartó el 2026-10-20: la auto-activación contradice el objetivo de que nadie entre sin aprobación. No se borra la rama, solo no se mergea; sus números (specs 020/021/022, decisión 010, migración 0004) quedan libres, así que no se renumeró nada. Detalle en la sección "Alternativas consideradas" de la decisión 010.
+
+Limitaciones conocidas:
+
+- **El iPad que nunca se conecta en un torneo sigue sin solución.** Sin un login online inicial no hay sesión, así que no hay acceso, y el fail-open no ayuda porque necesita una licencia `active` ya verificada. Era lo único valioso de la rama descartada. Si el caso aparece en la práctica, necesita una decisión nueva.
+- El techo se mide con el reloj del dispositivo: atrasarlo extiende el acceso. Ya pasaba con la gracia de 14 días; aceptado en la decisión 010.
+- El cableado de `App.tsx` no tiene test automático (necesitaría un renderer de React); queda como QA manual.
+- Falta el paso 3 del plan (P3): `AppState` + `startAutoRefresh` y `subscribeToAuthState`. Sin eso, una sesión que supabase-js invalida en background se detecta en el siguiente arranque, no en el momento.
+
+QA manual sugerida:
+
+- Apuntar `EXPO_PUBLIC_SUPABASE_URL` a una URL inexistente y abrir la app con licencia activa y `verifiedAt` viejo (más de 14 días): debe entrar, con el banner crítico en Inicio y los días restantes.
+- Con la misma URL mala y licencia `pending`: debe seguir bloqueada con "Acceso pendiente".
+- Perfil > Licencia: la fila "Servidor" debe decir "sin contacto desde el DD/MM (quedan N días)".
+- Restaurar la URL buena y tocar "Verificar licencia ahora": el aviso y la fila deben volver a normal.
+- Con la gracia vencida más de 21 días desde el primer fallo: debe bloquear con "Servidor sin responder", sin culpar a la conexión.
+
+## 2026-10-19 - Keep-alive del proyecto de Supabase (spec 021, paso 1)
+
+Primer paso implementado de la spec 021. Ataca la causa raíz del incidente del 2026-10-18: el proyecto de Supabase se había pausado (capa gratuita, ~7 días de inactividad) y hubo que reanudarlo a mano. Con la decisión 010 punto 4 (no hay salida a modo local con backend configurado), este ping es lo que evita el brick, así que no es un extra: es load-bearing.
+
+Archivos cambiados:
+
+- `.github/workflows/supabase-keepalive.yml` (nuevo): cron lunes y jueves 12:00 UTC más `workflow_dispatch`. Dos steps: pre-flight de secrets y ping REST. `permissions: contents: read`, `concurrency` para no duplicar runs, `timeout-minutes: 5`. Escribe a `GITHUB_STEP_SUMMARY` en éxito y en fallo.
+- `supabase/README.md`: sección nueva "Mantener el proyecto activo (keep-alive)" con el porqué, el setup de secrets y las tres advertencias operativas.
+- `docs/specs/021-resiliencia-backend-licencias.md`: estado a `In progress`, checklist del keep-alive marcada con lo que queda pendiente de Mauro.
+
+Decisiones de implementación:
+
+- **Ping contra una tabla real, no un endpoint de health.** PostgREST no cachea filas, así que el `[]` que devuelve `/rest/v1/entitlements?select=user_id&limit=1` (la RLS filtra todo para el rol anónimo) prueba que hubo round-trip a Postgres, que es lo que cuenta como actividad. Un endpoint de health podría responder sin tocar la base.
+- **Pre-flight de secrets separado del ping.** "Falta configurar los secrets" y "el proyecto está caído" son dos problemas con dos arreglos distintos; mezclarlos en un solo fallo haría que el monitoreo mienta.
+- **Secrets en vez de valores literales**, aunque la URL y la publishable key ya estén commiteadas en `eas.json`: es lo único que compone con la automatización de CI que Mauro quiere más adelante y sobrevive a una rotación de key.
+- **Reintentos (`--retry 3 --retry-connrefused --retry-all-errors`)** para que un blip de red del runner no se reporte como proyecto caído. Si el proyecto está realmente pausado, los tres intentos fallan y el job falla.
+
+Validación manual contra el proyecto real (ya reanudado), los tres caminos ejecutados:
+
+- Camino feliz: `GET /rest/v1/entitlements?select=user_id&limit=1` con header `apikey` devuelve **HTTP 200** con body `[]`. El step pasa.
+- Control de falso positivo: la misma request **sin** `apikey` devuelve 401, y una tabla inexistente devuelve 404 `PGRST205`. O sea que el 200 es señal real.
+- Camino de fallo: host inalcanzable (simula proyecto pausado) produce `code=000` y el step sale con exit 1, que es lo que dispara el email de GitHub.
+- Pre-flight: con los dos secrets vacíos sale con exit 1 y mensaje propio.
+
+Validación del repo: `npx tsc --noEmit` exit 0 y `npm test` con 468 tests en verde (38 archivos). Este paso no toca código de la app (solo YAML de CI y markdown), así que el resultado era esperado, pero se corrió igual por la regla de la constitution.
+
+Pendiente de Mauro, sin lo cual el keep-alive NO está activo:
+
+1. Cargar `SUPABASE_URL` y `SUPABASE_ANON_KEY` en Settings > Secrets and variables > Actions.
+2. Mergear a `main`: **los workflows programados solo corren en la rama default**, así que mientras viva en la rama de feature el cron no se dispara.
+3. Correr una vez con `workflow_dispatch` para confirmarlo end-to-end.
+4. A las dos o tres semanas, confirmar en el dashboard que el proyecto no se pausó (supuesto sin verificar: que los requests REST cuenten como actividad).
+
+## 2026-10-19 - Relevamiento y planificación: resiliencia del backend de licencias (solo docs)
+
+Entrada de **planificación**: no hay cambios de código todavía. Disparador: el 2026-10-18 un compañero pidió activación de licencia, la lista de Administración no se actualizó desde el teléfono y la causa real fue que **el proyecto de Supabase estaba pausado** (capa gratuita, ~7 días de inactividad); hubo que reanudarlo a mano desde el dashboard.
+
+Revisión completa de `src/backend`, el corte de acceso y el panel admin. Hallazgos, en orden de prioridad:
+
+- **P1** - `App.tsx:55-59` descarta en silencio los errores de `fetchEntitlement`, y `evaluateAccess` trata "no pude verificar" igual que "no tenés licencia". Los copys de bloqueo culpan a la conexión del usuario cuando el servidor está caído. Agravante: `WelcomeScreen.tsx:352` no renderiza el modo local con backend configurado, así que una pausa de más de 14 días deja a todo el cuerpo técnico **sin ningún camino de vuelta** a una app offline-first con los datos intactos en el teléfono.
+- **P2** - Nada evitaba que el proyecto se volviera a pausar. Es un fallo cíclico, no un evento raro: el único uso de red es verificar licencias.
+- **P3** - `supabaseClient.ts:16-24` usa `autoRefreshToken: true` sin engancharlo a `AppState` (lo que supabase-js pide en React Native), no hay `onAuthStateChange`, y `fetchEntitlement` reporta cualquier fallo de red de `getUser()` como "no hay sesión activa": diagnóstico equivocado con el proyecto pausado.
+- **P4** - `0003_admin_entitlements.sql:39` usa inner join desde `entitlements`: un usuario sin fila es invisible en el panel, y el `UPDATE` de la línea 64 tampoco lo puede activar. `accountService.ts:98` ya contempla ese estado del lado del cliente. Además `0001_entitlements.sql:31` inserta sin `on conflict`, y como el trigger es `after insert` sobre `auth.users`, un fallo ahí hace fracasar el alta entera.
+- **P5** - `ProfileScreen.tsx:56-60` carga la lista con `useEffect` en vez de `useFocusEffect` (volver a la pantalla no refresca), y en caso de error las filas viejas quedan en pantalla sin marcarse.
+
+Decisiones de producto tomadas con Mauro:
+
+- Fail-open **acotado** cuando el servidor es inalcanzable, anclado en el primer fallo observado y no en la última verificación (anclar en `verifiedAt` bloquearía justo el primer día de un torneo). Aplica **solo** a licencia `active`: `pending`, `revoked` y `lapsed` siguen bloqueando, inalcanzable o no.
+- **No** se agrega salida a modo local con backend configurado: autenticarse y tener licencia es obligatorio. Consecuencia aceptada: el keep-alive del proyecto pasa a ser load-bearing.
+
+Documentos creados:
+
+- `docs/decisions/010-acceso-con-backend-licencias-inalcanzable.md`
+- `docs/specs/021-resiliencia-backend-licencias.md` + `docs/plans/021-resiliencia-backend-licencias-plan.md` (P1 + P2 + P3)
+- `docs/specs/022-panel-admin-altas-incompletas.md` + `docs/plans/022-panel-admin-altas-incompletas-plan.md` (P4 + P5)
+
+Riesgo de calendario detectado y registrado en la decisión 010: la migración 0002 puso `expires_at = '2027-01-01'` a todas las cortesías y `lapsed` es autoritativo y local. El 1/1/2027 **todos** los usuarios de cortesía quedan bloqueados sin importar la conectividad, hasta que se corra un UPDATE y cada usuario reverifique.
+
+Validación del estado del repo al momento del relevamiento: `npx tsc --noEmit` OK; `npm test` 468 tests en verde (38 archivos).
+
+
+## 2026-07-07 - Los planteles fijos vuelven a ser editables (bugfix)
+
+Reporte de Mauro: no se podian editar los planteles ya armados; incluso creando un jugador nuevo y agregandolo, la edicion se perdia. Causa: `ensureDefaultTeamPool` pisaba nombre y jugadores de los pools fijos (`mayores`, `plus40`, `femenino`) con la composicion de `mockData` en cada operacion del store (updateTeamPool devolvia `true` pero la edicion se revertia en silencio; tambien en createPlayer, restore, reset demo e hidratacion). Era una normalizacion anti-datos-viejos documentada en tests.
+
+- `src/domain/teamPools.ts`: `ensureDefaultTeamPool` deja de sobrescribir pools existentes; ahora solo hace trim del nombre, filtra jugadores inexistentes, descarta pools invalidos y siembra los fijos que falten. Decision registrada en `docs/decisions/009-planteles-fijos-editables.md`.
+- Tests actualizados: `teamPools.test.ts` (edicion de fijos persiste; re-siembra solo cuando un fijo desaparece) y `useMatchStore.test.ts` (editar Mayores persiste sin mutar snapshots de partidos; jugador nuevo agregado a un pool fijo sobrevive operaciones posteriores del store).
+- Sin cambios de UI: `TeamPoolManagerModal` ya permitia editar; ahora el guardado es real.
+
+Validacion: `npx tsc --noEmit` OK; `npm test` 468 tests en verde.
+
+QA manual sugerida:
+
+- Abrir Planteles, editar `Mayores` (sacar/agregar jugadores), cerrar y reabrir la app: la edicion persiste.
+- Crear un jugador nuevo desde el modal y agregarlo a un plantel fijo: queda guardado.
+- Borrar el unico jugador de un plantel custom: el pool desaparece; los fijos se re-siembran si faltan.
+
+## 2026-07-06 - Boton de confirmar ubicacion mas grande en el mapa 3v3
+
+En `TrainingGoalMapInput` (mapa one-frame de Practica 3v3) los botones `Cancelar` y `Confirmar ubicacion` compartian el mismo tamano, y el de confirmar podia quedar chico frente al de cancelar. Se igualo al criterio de `CourtMapInput` del partido vs rival: ambos botones pasan a minHeight 92 y el de confirmar domina la fila (flexBasis 260 y flexGrow 2 contra 180/1 del cancelar). Sin cambios de logica ni de captura de coordenadas.
+
+Validacion: `npx tsc --noEmit` OK; `npm test` 466 tests en verde. QA manual: registrar un punto en 3v3 y confirmar que el boton azul de confirmar es claramente mas grande que cancelar, en vertical y horizontal.
+
+## 2026-07-06 - Barra celeste de aporte posible en los PDF (ajuste spec 019)
+
+El cambio 019 dejo las barras de ataque de los PDF midiendo solo `attackShare`/`pointShare` (participacion en los goles del equipo) y elimino la barra celeste de tiros generados. Pedido de Mauro: mantener la barra fuerte como esta (sumadas dan el total de goles del equipo) y devolver la barra celeste mostrando cuanto podia aportar el jugador si tambien convertia los tiros atajados/errados.
+
+- Nuevo campo `potentialShare` en la misma escala que el share de goles: tiros generados / goles del equipo (puede superar 1; los renderers lo recortan a 100%). Agregado en `playerPerformance.ts`, `reportData.ts` (filas y `playerDetails`), `trainingPerformance.ts` y `trainingReportData.ts`.
+- PDF formal (`reportHtml.ts`): la fila de ataque y el detalle por jugador vuelven a anidar `attempt-bar` celeste (#9dcff0) con la `converted-bar` oscura (#075ca8) adentro, con anchos absolutos exactos; leyenda actualizada con "Aporte posible sin atajados/errados"; CSS de `.attempt-bar` y `.legend-attempt` restaurado.
+- PDF 3v3 (`trainingReportHtml.ts`): `attempt-bar` celeste (#8bd3ff) restaurada detras de la `point-bar` en Rendimiento jugadores y en el detalle por jugador.
+- El PDF 7v7 (`statsMatchReportHtml.ts`) no tiene barras de rendimiento, asi que no requiere cambios.
+- Las barras in-app (`PlayerPerformanceBars`, `TrainingPerformanceBars`) quedan como estaban (solo share de goles), segun el alcance pedido.
+
+Validacion: `npx tsc --noEmit` OK; `npm test` 466 tests en verde (nuevos: `potentialShare` en dominio formal y training; asserts de `attempt-bar` con anchos y colores en ambos PDF).
+
+QA manual sugerida:
+
+- Exportar PDF de un partido formal con jugadores con tiros atajados/errados y confirmar barra celeste detras de la oscura, con la oscura sumando el total de goles.
+- Confirmar la leyenda de ataque con los dos colores.
+- Exportar PDF de una practica 3v3 y confirmar lo mismo en Rendimiento jugadores y en el detalle por jugador.
+- Confirmar que un jugador con mas tiros que goles del equipo muestra la celeste al 100% sin desbordar.
+
+## 2026-07-06 - Reestructura UI de la seccion Practica 3v3 (020)
+
+Se separo la seccion `Practica 3v3` (antes una sola pantalla de ~1600 lineas con lista + detalle + formulario de creacion apilados) en 3 pantallas con navegacion propia (spec/plan 020, decisiones de UX confirmadas con Mauro).
+
+- `TrainingSessionsScreen` reescrita como home de la seccion: CTA prominente `+ Nueva practica`, tarjeta destacada `Practica en curso` (sesion live no archivada) que abre el detalle, filtros + lista de tarjetas navegables, y estado vacio que explica el flujo en 3 pasos para usuarios nuevos.
+- Nueva `TrainingSetupScreen`: asistente de 3 pasos con barra de progreso (1: plantel y presentes, 2: cantidad de equipos + asignacion + preview, 3: reglas + resumen + crear). Validacion por paso reutilizando `trainingSetup.ts` sin cambios; al crear navega con `replace` al detalle.
+- Nueva `TrainingSessionDetailScreen` con orden "jugar primero": header compacto de sesion, mini partido en vivo o proximo sugerido (la eleccion manual A/B queda plegada detras de `Elegir otro cruce manualmente`), cola, equipos, estadisticas (resumen, tabla, tops, alertas, barras de rendimiento), historial y al final `Gestion de la practica` (compartir, PDF, editar, archivar/restaurar, eliminar). Archivar o eliminar vuelve a la lista.
+- Rutas nuevas `TrainingSetup` y `TrainingSessionDetail: { sessionId }` en `navigation.ts` y `App.tsx`; `LiveTrainingMiniMatchScreen` ahora vuelve al detalle de la sesion (fallback a la lista solo si la sesion no existe).
+- Sin cambios de dominio, store, scoring, persistencia, backup ni export.
+
+Validacion: `npx tsc --noEmit` OK; `npm test` 464 tests en verde.
+
+QA manual sugerida:
+
+- Abrir `Practica 3v3` sin sesiones y confirmar la explicacion de 3 pasos.
+- Crear una practica con el asistente (validaciones de cada paso) y confirmar que cae en el detalle.
+- Iniciar el sugerido, volver desde el mini partido y confirmar que vuelve al detalle correcto.
+- Con una sesion live, confirmar la tarjeta `Practica en curso` en la home de la seccion.
+- Archivar y eliminar desde el detalle y confirmar que vuelve a la lista.
+- Compartir resumen, exportar PDF y editar nombres de equipos desde `Gestion de la practica`.
+
 ## 2026-07-05 - PDF del partido vs rival: paridad con 3v3 y detalle por jugador (019)
 
 Se comparó el export PDF del 3v3 (spec 017) con el del partido vs rival y se portaron las mejoras, más el desglose individual pedido por Mauro (spec/plan 019).

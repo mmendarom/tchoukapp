@@ -7,7 +7,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { fetchEntitlement } from './src/backend/accountService';
 import { isBackendConfigured } from './src/backend/config';
-import { evaluateAccess } from './src/domain/session';
+import { evaluateAccess, hasActiveAccess } from './src/domain/session';
 import { AccessBlockedScreen } from './src/screens/AccessBlockedScreen';
 import { FinalSummaryScreen } from './src/screens/FinalSummaryScreen';
 import { FixturesScreen } from './src/screens/FixturesScreen';
@@ -41,10 +41,10 @@ export default function App() {
   const sessionHydrated = useSessionStore((state) => state.hasHydrated);
   const profile = useSessionStore((state) => state.profile);
   const updateEntitlement = useSessionStore((state) => state.updateEntitlement);
+  const recordVerificationFailure = useSessionStore((state) => state.recordVerificationFailure);
   const accountId = profile?.accountId;
 
-  // Refresca la licencia en background al abrir con cuenta vinculada; si falla
-  // (sin conexión), la gracia offline de evaluateAccess decide.
+  // Refresca la licencia en background al abrir con cuenta vinculada.
   useEffect(() => {
     if (!sessionHydrated || !accountId || !isBackendConfigured()) {
       return;
@@ -53,20 +53,36 @@ export default function App() {
     let cancelled = false;
 
     void fetchEntitlement().then((result) => {
-      if (!cancelled && result.success) {
-        updateEntitlement(result.entitlement);
+      if (cancelled) {
+        return;
       }
+
+      if (result.success) {
+        updateEntitlement(result.entitlement);
+        return;
+      }
+
+      // Antes este error se descartaba en silencio: una sesión muerta o un
+      // proyecto pausado eran invisibles hasta que la gracia vencía y la app
+      // bloqueaba culpando a la conexión del usuario (spec 021). Registrarlo
+      // es lo que arranca el techo del fail-open y lo que permite que la UI
+      // diga la verdad sobre la causa.
+      recordVerificationFailure(result.kind);
     });
 
     return () => {
       cancelled = true;
     };
-  }, [sessionHydrated, accountId, updateEntitlement]);
+  }, [sessionHydrated, accountId, updateEntitlement, recordVerificationFailure]);
 
-  const access = evaluateAccess(profile);
+  // Una sola lectura del reloj para que la evaluación y el corte coincidan.
+  const nowIso = new Date().toISOString();
+  const access = evaluateAccess(profile, nowIso);
   const hasLiveMatch = matches.some((match) => match.status === 'live' || match.status === 'period_break');
+  // `hasActiveAccess` es el único punto de corte (constitution): antes acá se
+  // recalculaba a mano, lo que obligaba a mantener dos reglas en sincronía.
   // Nunca se bloquea un partido en vivo ya iniciado (spec 015).
-  const isBlocked = Boolean(profile) && access !== 'local' && access !== 'active' && !hasLiveMatch;
+  const isBlocked = Boolean(profile) && !hasActiveAccess(profile, nowIso) && !hasLiveMatch;
 
   return (
     <SafeAreaProvider>
